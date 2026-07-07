@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BrambleDNS</title>
+  <style>
+    :root { color-scheme: light dark; --gap: 12px; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 900px; margin-inline: auto; }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    .sub { opacity: 0.7; margin: 0 0 24px; font-size: 0.9rem; }
+    h2 { font-size: 1.1rem; margin: 28px 0 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(128,128,128,0.3); }
+    th { font-weight: 600; font-size: 0.85rem; opacity: 0.7; }
+    input, select, button { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4); background: transparent; color: inherit; }
+    button { cursor: pointer; }
+    button.primary { background: #2d6cdf; color: #fff; border-color: #2d6cdf; }
+    button.danger { border-color: #c0392b; color: #c0392b; }
+    form.row { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: end; margin-top: 16px; }
+    .field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+    #msg { margin-top: 16px; padding: 10px 12px; border-radius: 6px; display: none; white-space: pre-wrap; }
+    #msg.ok { display: block; background: rgba(46,160,67,0.15); border: 1px solid rgba(46,160,67,0.5); }
+    #msg.err { display: block; background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.5); }
+    .mono { font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <h1>BrambleDNS</h1>
+  <p class="sub">Local records for <span class="mono">home.arpa</span> — saved to <span class="mono">records.yaml</span> and applied with no restart.</p>
+
+  <div id="msg"></div>
+
+  <h2>Records</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Value</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <form class="row" id="add">
+    <label class="field">Name<input id="name" placeholder="nas.home.arpa" required></label>
+    <label class="field">Type
+      <select id="type">
+        <option>A</option><option>AAAA</option><option>CNAME</option>
+      </select>
+    </label>
+    <label class="field">Value<input id="value" placeholder="192.168.10.20" required></label>
+    <button class="primary" type="submit">Add record</button>
+  </form>
+
+  <h2>Settings</h2>
+  <form class="row" id="settings">
+    <label class="field">Upstream DNS<input id="upstream" placeholder="192.168.10.5:53"></label>
+    <label class="field">Plain port<input id="plainPort" type="number"></label>
+    <label class="field">DoT port<input id="dotPort" type="number"></label>
+    <button class="primary" type="submit">Save settings</button>
+  </form>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const msg = $("msg");
+    function show(text, ok) { msg.textContent = text; msg.className = ok ? "ok" : "err"; }
+
+    async function api(method, path, body) {
+      const res = await fetch(path, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (res.status === 204) return null;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    function valueOf(r) {
+      if (r.default) return r.default;
+      if (r.vlan_overrides && r.vlan_overrides.length) return "(per-VLAN)";
+      return "";
+    }
+
+    async function loadRecords() {
+      const data = await api("GET", "/api/records");
+      const rows = $("rows");
+      rows.innerHTML = "";
+      for (const r of (data.records || [])) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="mono">${r.name}</td><td>${r.type}</td><td class="mono">${valueOf(r)}</td>`;
+        const td = document.createElement("td");
+        const del = document.createElement("button");
+        del.className = "danger"; del.textContent = "Delete";
+        del.onclick = async () => {
+          try {
+            await api("DELETE", `/api/records/${encodeURIComponent(r.name)}/${r.type}`);
+            show(`Deleted ${r.type} ${r.name}`, true);
+            loadRecords();
+          } catch (e) { show(e.message, false); }
+        };
+        td.appendChild(del); tr.appendChild(td); rows.appendChild(tr);
+      }
+    }
+
+    async function loadSettings() {
+      const s = await api("GET", "/api/settings");
+      $("upstream").value = (s.upstream_dns && s.upstream_dns.address) || "";
+      $("plainPort").value = (s.listeners && s.listeners.plain && s.listeners.plain.port) || "";
+      $("dotPort").value = (s.listeners && s.listeners.dot && s.listeners.dot.port) || "";
+      window._settings = s;
+    }
+
+    $("add").onsubmit = async (e) => {
+      e.preventDefault();
+      const rec = { name: $("name").value.trim(), type: $("type").value, default: $("value").value.trim() };
+      try {
+        await api("POST", "/api/records", rec);
+        show(`Added ${rec.type} ${rec.name} → ${rec.default}. Resolvable now, no restart.`, true);
+        $("name").value = ""; $("value").value = "";
+        loadRecords();
+      } catch (err) { show(err.message, false); }
+    };
+
+    $("settings").onsubmit = async (e) => {
+      e.preventDefault();
+      const s = window._settings || {};
+      s.upstream_dns = s.upstream_dns || {};
+      s.upstream_dns.address = $("upstream").value.trim();
+      s.listeners = s.listeners || {};
+      s.listeners.plain = s.listeners.plain || {};
+      s.listeners.dot = s.listeners.dot || {};
+      s.listeners.plain.port = Number($("plainPort").value) || s.listeners.plain.port;
+      s.listeners.dot.port = Number($("dotPort").value) || s.listeners.dot.port;
+      try {
+        await api("PUT", "/api/settings", s);
+        show("Settings saved and applied.", true);
+      } catch (err) { show(err.message, false); }
+    };
+
+    loadRecords().catch((e) => show(e.message, false));
+    loadSettings().catch((e) => show(e.message, false));
+  </script>
+</body>
+</html>

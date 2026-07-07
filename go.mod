@@ -2,7 +2,10 @@ module github.com/mallardduck/BrambleDNS
 
 go 1.25.0
 
-require github.com/mallardduck/BrambleDNS/engine v0.0.0
+require (
+	github.com/go-chi/chi/v5 v5.3.1
+	github.com/mallardduck/BrambleDNS/engine v0.0.0
+)
 
 require gopkg.in/yaml.v3 v3.0.1 // indirect
 
@@ -23,7 +26,7 @@ require (
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mallardduck/BrambleDNS/configgen v0.0.0
-	github.com/mallardduck/BrambleDNS/model v0.0.0 // indirect
+	github.com/mallardduck/BrambleDNS/model v0.0.0
 	github.com/mallardduck/BrambleDNS/plugins/localrecords v0.0.0 // indirect
 	github.com/mallardduck/BrambleDNS/store v0.0.0
 	github.com/mdlayher/socket v0.5.1 // indirect
