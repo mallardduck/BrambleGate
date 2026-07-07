@@ -1,0 +1,22 @@
+# Build output
+/out/
+*.exe
+brambledns
+
+# Go workspace sum (kept? — committed once deps exist; ignore local cache only)
+go.work.sum
+
+# Node / frontend
+web/frontend/node_modules/
+web/frontend/dist/
+
+# Runtime config volume (regenerated; never committed)
+/config/.runtime/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

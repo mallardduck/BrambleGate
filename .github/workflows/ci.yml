@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    # Build in plain module mode, not workspace mode: the root module resolves its
+    # sibling modules through committed `replace` directives (see root go.mod), and
+    # every other module is self-contained. This mirrors the Docker build exactly
+    # and avoids needing a committed go.work.sum. go.work stays for local IDE use.
+    env:
+      GOWORK: off
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      # No single `go build ./...` at the workspace root: this is a multi-module
+      # workspace (docs/repo-layout.md) and the root is not itself a module, so a
+      # package pattern can't span the sibling modules. Iterate each module found
+      # via its go.mod — this auto-discovers modules as they are added.
+      - name: Build and test all modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r mod; do
+            dir=$(dirname "$mod")
+            echo "::group::$dir"
+            ( cd "$dir" && go build ./... && go test ./... ) || fail=1
+            echo "::endgroup::"
+          done < <(find . -name go.mod -not -path './web/*')
+          exit $fail
+
+      - name: Vet all modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r mod; do
+            dir=$(dirname "$mod")
+            ( cd "$dir" && go vet ./... )
+          done < <(find . -name go.mod -not -path './web/*')
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f deploy/Dockerfile -t brambledns:ci .

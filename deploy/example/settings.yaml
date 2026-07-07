@@ -1,0 +1,23 @@
+# Example BrambleDNS settings.yaml — Phase 1 (forward-only) subset.
+# Mount this at /config/custom/settings.yaml (see docs/architecture.md volume layout).
+# The full schema (VLANs, records, ACME, mDNS) lands in later phases;
+# see docs/config-schema.md.
+
+upstream_dns:
+  # host:port of your existing ad-block resolver (PiHole/Technitium/AdGuard Home).
+  # Nothing about this is compiled in — it is read from this file at startup.
+  address: 192.168.10.5:53
+  protocol: plain # plain | dot
+
+listeners:
+  plain:
+    enabled: true
+    port: 53
+  dot:
+    enabled: true
+    port: 853
+
+acme:
+  # In Phase 1 this hostname is only used as the self-signed certificate's name.
+  # Phase 4 uses it to obtain a real, publicly-trusted cert via ACME DNS-01.
+  domain: dns.example.com

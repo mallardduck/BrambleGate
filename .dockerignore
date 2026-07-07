@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.junie
+docs
+# Build the image in plain module mode via the root go.mod's replace directives,
+# not workspace mode — keeps the container build deterministic without go.work.sum.
+go.work
+go.work.sum
+**/*_test.go
+web/frontend/node_modules
+web/frontend/dist
