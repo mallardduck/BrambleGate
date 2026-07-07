@@ -2,10 +2,9 @@ module github.com/mallardduck/BrambleDNS
 
 go 1.25.0
 
-require (
-	github.com/mallardduck/BrambleDNS/engine v0.0.0
-	gopkg.in/yaml.v3 v3.0.1
-)
+require github.com/mallardduck/BrambleDNS/engine v0.0.0
+
+require gopkg.in/yaml.v3 v3.0.1 // indirect
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
@@ -23,6 +22,10 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/mallardduck/BrambleDNS/configgen v0.0.0
+	github.com/mallardduck/BrambleDNS/model v0.0.0 // indirect
+	github.com/mallardduck/BrambleDNS/plugins/localrecords v0.0.0 // indirect
+	github.com/mallardduck/BrambleDNS/store v0.0.0
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mdlayher/vsock v1.2.1 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
@@ -59,3 +62,11 @@ require (
 // without relying on go.work being active. replace applies only to this main
 // module, so it does not affect anyone who imports the sub-modules on their own.
 replace github.com/mallardduck/BrambleDNS/engine => ./engine
+
+replace github.com/mallardduck/BrambleDNS/configgen => ./configgen
+
+replace github.com/mallardduck/BrambleDNS/store => ./store
+
+replace github.com/mallardduck/BrambleDNS/model => ./model
+
+replace github.com/mallardduck/BrambleDNS/plugins/localrecords => ./plugins/localrecords

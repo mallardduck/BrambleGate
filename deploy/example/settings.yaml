@@ -1,5 +1,5 @@
 # Example BrambleDNS settings.yaml — Phase 1 (forward-only) subset.
-# Mount this at /config/custom/settings.yaml (see docs/architecture.md volume layout).
+# Mount this at /config/settings.yaml (see docs/architecture.md volume layout).
 # The full schema (VLANs, records, ACME, mDNS) lands in later phases;
 # see docs/config-schema.md.
 

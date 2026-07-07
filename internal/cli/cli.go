@@ -13,16 +13,18 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/mallardduck/BrambleDNS/configgen"
 	"github.com/mallardduck/BrambleDNS/engine"
+	"github.com/mallardduck/BrambleDNS/store"
 )
 
 // Run executes the brambledns command and returns a process exit code.
 //
-// Phase 1: load a minimal settings.yaml, ensure a (throwaway, self-signed) cert
-// for the DoT listener, render a forward-only Corefile, start the engine, and
-// shut it down gracefully on SIGINT/SIGTERM. No GUI goroutine yet — that arrives
-// in Phase 2 (see docs/roadmap.md). The engine and GUI will share this same
-// process context and *engine.Engine reference.
+// Phase 2: load settings.yaml + records.yaml via store, render the Corefile via
+// configgen (which validates and emits the localrecords records inline), start
+// the engine, and shut down gracefully on SIGINT/SIGTERM. The DoT listener still
+// uses a throwaway self-signed cert (Phase 4 replaces it). No GUI goroutine yet;
+// that lands next, sharing this same process context and *engine.Engine.
 func Run(args []string) int {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -40,22 +42,31 @@ func Run(args []string) int {
 }
 
 func run(log *slog.Logger, configDir string) error {
-	settings, err := LoadSettings(configDir)
+	st := store.New(configDir)
+
+	settings, err := st.LoadSettings()
+	if err != nil {
+		return err
+	}
+	records, err := st.LoadRecords()
 	if err != nil {
 		return err
 	}
 
-	certFile, keyFile := "", ""
-	if settings.Listeners.DoT.Enabled {
-		certFile, keyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
+	var opts configgen.Options
+	if settings.EncryptedListenerEnabled() {
+		opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
 		if err != nil {
-			return fmt.Errorf("prepare DoT certificate: %w", err)
+			return fmt.Errorf("prepare certificate: %w", err)
 		}
-		log.Warn("using a self-signed certificate for DoT — strict clients (e.g. Android Private DNS) will reject it until Phase 4 issues a real ACME cert",
-			"cert", certFile, "cn", settings.ACME.Domain)
+		log.Warn("using a self-signed certificate for encrypted listeners — strict clients (e.g. Android Private DNS) will reject it until Phase 4 issues a real ACME cert",
+			"cert", opts.CertFile, "cn", settings.ACME.Domain)
 	}
 
-	corefile := renderCorefile(settings, certFile, keyFile)
+	corefile, err := configgen.Render(settings, records, opts)
+	if err != nil {
+		return fmt.Errorf("render config: %w", err)
+	}
 
 	// Write the rendered Corefile to .runtime/ for operator visibility only — it
 	// is not the reload mechanism (docs/architecture.md). Best-effort.
@@ -74,7 +85,8 @@ func run(log *slog.Logger, configDir string) error {
 	if settings.Listeners.DoT.Enabled {
 		log.Info("DoT listener up", "port", settings.Listeners.DoT.Port)
 	}
-	log.Info("forwarding unmatched queries upstream", "target", settings.forwardTarget())
+	log.Info("serving local records and forwarding the rest upstream",
+		"records", len(records.Records), "upstream", settings.UpstreamDNS.Address)
 
 	// One shared shutdown context for the whole process (the GUI goroutine will
 	// select on this same context once it exists).

@@ -15,8 +15,10 @@ import (
 	_ "github.com/coredns/coredns/plugin/log"
 	_ "github.com/coredns/coredns/plugin/tls"
 	_ "github.com/coredns/coredns/plugin/whoami"
-	// Phase 2+ blank-imports localrecords and mdnsbridge here; they already have
-	// their slots reserved in Directives below.
+
+	// BrambleDNS custom plugins. Blank-importing registers them under their
+	// directive names (reserved in Directives below). mdnsbridge joins in Phase 5.
+	_ "github.com/mallardduck/BrambleDNS/plugins/localrecords"
 
 	"github.com/coredns/coredns/core/dnsserver"
 )

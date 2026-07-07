@@ -16,16 +16,16 @@ import (
 )
 
 // ensureSelfSignedCert makes sure a cert/key pair exists under
-// <configDir>/custom/certs/ for the DoT listener, generating a throwaway
-// self-signed pair if absent. Returns the cert and key file paths.
+// <configDir>/certs/ for the DoT listener, generating a throwaway self-signed
+// pair if absent. Returns the cert and key file paths.
 //
 // PHASE 1 ONLY: a self-signed cert is enough to prove the DoT listener works,
 // but strict clients (Android Private DNS) will reject it — Phase 4 replaces
 // this with a real ACME DNS-01 certificate (see docs/certificates.md). The files
-// are written into custom/certs/ so that Phase 4's real cert lands in the same
-// place and this generator simply stops running once a real cert is present.
+// are written into certs/ so that Phase 4's real cert lands in the same place and
+// this generator simply stops running once a real cert is present.
 func ensureSelfSignedCert(configDir, hostname string) (certFile, keyFile string, err error) {
-	certDir := filepath.Join(configDir, "custom", "certs")
+	certDir := filepath.Join(configDir, "certs")
 	certFile = filepath.Join(certDir, "cert.pem")
 	keyFile = filepath.Join(certDir, "key.pem")
 
