@@ -80,6 +80,23 @@ type MDNS struct {
 	Naming []NamingRule `yaml:"naming,omitempty" json:"naming,omitempty"`
 }
 
+// DefaultSettings returns a minimal, immediately-usable configuration seeded on
+// first run when no settings.yaml exists yet (see internal/cli). It brings the
+// container up as a working plain-DNS front door that forwards to a public
+// resolver, so a fresh user gets a resolving server out of the box and can then
+// point upstream_dns at their own ad-block resolver (PiHole/AdGuard/Technitium)
+// and add VLANs/records. Encrypted listeners, ACME, and mDNS stay off until
+// deliberately enabled — they need user-supplied domains/credentials.
+func DefaultSettings() Settings {
+	return Settings{
+		UpstreamDNS: UpstreamTarget{Address: "1.1.1.1:53", Protocol: "plain"},
+		Listeners: Listeners{
+			Plain: Listener{Enabled: true, Port: 53},
+		},
+		ACME: ACME{RenewBeforeDays: 30},
+	}
+}
+
 // EncryptedListenerEnabled reports whether any transport that needs a
 // certificate (DoT/DoH/DoQ) is turned on — used by configgen to require ACME
 // settings / a cert.

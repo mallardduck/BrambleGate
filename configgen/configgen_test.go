@@ -23,6 +23,23 @@ func baseSettings() model.Settings {
 	}
 }
 
+// The onboarding defaults seeded on first run (model.DefaultSettings) must render
+// a valid Corefile with no further input, otherwise a fresh container would fail
+// to start before the operator has touched anything.
+func TestDefaultSettingsRenderWithNoRecords(t *testing.T) {
+	out, err := Render(model.DefaultSettings(), model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("default settings must render cleanly: %v", err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, ".:53 {") || !strings.Contains(cf, "forward . 1.1.1.1:53") {
+		t.Errorf("default Corefile missing plain listener/forward:\n%s", cf)
+	}
+	if strings.Contains(cf, "tls://") {
+		t.Errorf("default settings should not enable an encrypted listener:\n%s", cf)
+	}
+}
+
 func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 	rs := model.RecordSet{Records: []model.Record{
 		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},

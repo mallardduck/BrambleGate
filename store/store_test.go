@@ -28,6 +28,26 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSettingsExistAndSeedDefaults(t *testing.T) {
+	s := New(t.TempDir())
+	if s.SettingsExist() {
+		t.Fatal("SettingsExist should be false before any settings.yaml is written")
+	}
+	if err := s.SaveSettings(model.DefaultSettings()); err != nil {
+		t.Fatalf("SaveSettings(defaults): %v", err)
+	}
+	if !s.SettingsExist() {
+		t.Fatal("SettingsExist should be true after seeding defaults")
+	}
+	got, err := s.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if got.UpstreamDNS.Address == "" || !got.Listeners.Plain.Enabled {
+		t.Fatalf("seeded defaults not usable: %+v", got)
+	}
+}
+
 func TestRecordsRoundTripPreservesOverrides(t *testing.T) {
 	s := New(t.TempDir())
 	in := model.RecordSet{Records: []model.Record{

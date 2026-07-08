@@ -1,0 +1,62 @@
+name: Release
+
+# Multi-arch image build + publish. Runs on a pushed version tag (e.g. v0.1.0)
+# and on manual dispatch. Produces a single multi-platform manifest for
+# linux/amd64 (x86 servers) and linux/arm64 (Raspberry Pi and friends) — the two
+# targets a homelab actually runs on. No CGO is used, so cross-compiling both
+# arches from one builder is cheap (see docs/repo-layout.md "Docker build notes").
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  # GHCR path is lowercase-only; the module is github.com/mallardduck/BrambleDNS.
+  IMAGE: ghcr.io/mallardduck/brambledns
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # push to GitHub Container Registry
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # QEMU lets a single amd64 runner emit arm64 layers; buildx drives the
+      # multi-platform build into one manifest.
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Derives tags/labels from the git ref: the version tag, a rolling
+      # major.minor, and (for the default branch) latest.
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          # workflow_dispatch has no tag to publish under, so only push for real
+          # tag builds; a manual run still exercises the full multi-arch build.
+          push: ${{ github.event_name != 'workflow_dispatch' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

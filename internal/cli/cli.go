@@ -51,6 +51,18 @@ func Run(args []string) int {
 func run(log *slog.Logger, configDir, guiAddr string) error {
 	st := store.New(configDir)
 
+	// Onboarding: a fresh install has no settings.yaml. Seed a working default
+	// (plain DNS forwarding to a public resolver) so the container comes up as a
+	// resolving front door immediately; the operator then points upstream_dns at
+	// their own ad-block resolver and adds VLANs/records via the GUI or YAML.
+	if !st.SettingsExist() {
+		if err := st.SaveSettings(model.DefaultSettings()); err != nil {
+			return fmt.Errorf("seed default settings.yaml: %w", err)
+		}
+		log.Warn("no settings.yaml found — wrote a default config; edit upstream_dns to point at your ad-block resolver",
+			"path", st.SettingsPath(), "upstream", model.DefaultSettings().UpstreamDNS.Address)
+	}
+
 	settings, err := st.LoadSettings()
 	if err != nil {
 		return err

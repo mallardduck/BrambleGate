@@ -1,0 +1,23 @@
+# BrambleDNS quickstart. Copy this file, run `docker compose up -d`, then open
+# http://localhost:8080 to manage records and point upstream_dns at your existing
+# ad-block resolver. On first run, with no settings.yaml present, BrambleDNS seeds
+# a working default that forwards to 1.1.1.1 so DNS resolves immediately.
+services:
+  brambledns:
+    image: ghcr.io/mallardduck/brambledns:latest
+    container_name: brambledns
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"     # plain DNS (point your clients/router here)
+      - "53:53/tcp"
+      - "853:853/tcp"   # DoT (only used once you enable it in settings.yaml)
+      - "8080:8080/tcp" # web GUI + JSON API
+    volumes:
+      # Persist settings.yaml, records.yaml, issued certs, and generated runtime
+      # files. A bind mount (./config) keeps them editable from the host; swap for
+      # a named volume if you prefer.
+      - ./config:/config
+    # ACME DNS-01 credentials (only when you enable acme in settings.yaml) come
+    # from the environment, never the config file — e.g.:
+    # environment:
+    #   CLOUDFLARE_DNS_API_TOKEN: ${CLOUDFLARE_DNS_API_TOKEN}

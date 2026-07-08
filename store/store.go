@@ -39,6 +39,14 @@ func (s *Store) Dir() string { return s.dir }
 func (s *Store) SettingsPath() string { return filepath.Join(s.dir, settingsFile) }
 func (s *Store) RecordsPath() string  { return filepath.Join(s.dir, recordsFile) }
 
+// SettingsExist reports whether settings.yaml is already present. A fresh install
+// has none; the CLI seeds model.DefaultSettings() on first run (onboarding) so the
+// server still comes up working.
+func (s *Store) SettingsExist() bool {
+	_, err := os.Stat(s.SettingsPath())
+	return err == nil
+}
+
 // LoadSettings reads and parses <configDir>/settings.yaml.
 func (s *Store) LoadSettings() (model.Settings, error) {
 	var out model.Settings

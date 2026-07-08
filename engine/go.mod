@@ -7,10 +7,7 @@ require (
 	github.com/coredns/coredns v1.14.4
 )
 
-require (
-	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
-	github.com/grandcat/zeroconf v1.0.0 // indirect
-)
+require github.com/joshuafuller/beacon v1.3.1 // indirect
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
