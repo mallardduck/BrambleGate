@@ -1,7 +1,8 @@
 // Package localrecords is a CoreDNS plugin serving authoritative answers for the
-// configured owned zone(s) (e.g. home.arpa). Its data is parsed once, at setup,
-// from the inline Corefile block that configgen renders from records.yaml — the
-// plugin never reads a file or persists anything at runtime (docs/plugins.md).
+// configured owned zone(s) (e.g. home.arpa), with per-VLAN split-horizon answers
+// chosen by the client's source address. Its data is loaded once, at setup, from
+// the JSON zone-data file configgen renders from records.yaml — the plugin never
+// persists anything and does no runtime refresh (docs/plugins.md).
 package localrecords
 
 import (
@@ -14,30 +15,46 @@ import (
 	"github.com/miekg/dns"
 )
 
-// entry is one record value for a name (Phase 2: a single value per (name,type);
-// per-VLAN split-horizon variants arrive in Phase 3).
-type entry struct {
-	rtype uint16
-	value string
+// vlanMatch maps a VLAN name to the subnets that identify it. Evaluated in the
+// order VLANs are declared in settings.yaml (first containing subnet wins).
+type vlanMatch struct {
+	name string
+	nets []*net.IPNet
 }
 
-// LocalRecords is authoritative for Zones and answers from an in-memory table
-// keyed by fully-qualified, lower-cased name.
+// override is a per-VLAN adjustment of a record's answer.
+type override struct {
+	value    string // "" => inherit record default
+	ttl      uint32 // 0 => inherit record's effective TTL
+	nxdomain bool   // true => no answer for this VLAN
+}
+
+// record is one (name,type) entry with its base value and per-VLAN overrides.
+type record struct {
+	rtype     uint16
+	def       string // "" => no base answer (override-only record)
+	ttl       uint32 // 0 => server default
+	overrides map[string]override
+}
+
+// LocalRecords is authoritative for Zones and answers from in-memory tables keyed
+// by fully-qualified, lower-cased name, branching on the client's VLAN.
 type LocalRecords struct {
 	Next plugin.Handler
 
-	Zones   []string // normalized, e.g. "home.arpa."
-	TTL     uint32
-	records map[string][]entry
+	Zones      []string // normalized, e.g. "home.arpa."
+	defaultTTL uint32
+	vlans      []vlanMatch
+	records    map[string][]*record
 }
 
 // Name implements plugin.Handler.
 func (lr *LocalRecords) Name() string { return "localrecords" }
 
 // ServeDNS answers authoritatively for names inside an owned zone and falls
-// through for everything else. Within an owned zone it never falls through — an
-// unknown name is NXDOMAIN, so internal zone queries never leak to the upstream
-// ad-block resolver (docs/plugins.md).
+// through for everything else. Within an owned zone it never falls through — a
+// name with no answer for the client's VLAN is NXDOMAIN, so internal zone queries
+// never leak to the upstream ad-block resolver (docs/plugins.md).
 func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
 	qname := strings.ToLower(state.Name())
@@ -47,22 +64,23 @@ func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 		return plugin.NextOrFailure(lr.Name(), lr.Next, ctx, w, r)
 	}
 
+	vlan := lr.matchVLAN(net.ParseIP(state.IP()))
+
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Authoritative = true
 
-	entries := lr.records[qname]
-	if len(entries) == 0 {
-		// Name does not exist in an owned zone → authoritative NXDOMAIN.
+	// Does the name exist at all for this client (any type not suppressed)?
+	if !lr.namePresent(qname, vlan) {
 		m.Rcode = dns.RcodeNameError
 		m.Ns = []dns.RR{lr.soa(zone)}
 		_ = w.WriteMsg(m)
 		return dns.RcodeNameError, nil
 	}
 
-	answers := lr.answer(qname, state.QType(), entries)
+	answers := lr.buildAnswers(qname, state.QType(), vlan)
 	if len(answers) == 0 {
-		// Name exists but has no record of the requested type → NODATA.
+		// Name exists for this client but has no record of the requested type.
 		m.Ns = []dns.RR{lr.soa(zone)}
 		_ = w.WriteMsg(m)
 		return dns.RcodeSuccess, nil
@@ -73,45 +91,111 @@ func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 	return dns.RcodeSuccess, nil
 }
 
-// answer builds the answer RRs for a name. A CNAME aliases the whole name, so it
-// is returned regardless of qtype; when the query is for an address type and the
-// CNAME target lives in an owned zone, the resolved address records are appended
-// so a single query is sufficient.
-func (lr *LocalRecords) answer(qname string, qtype uint16, entries []entry) []dns.RR {
-	for _, e := range entries {
-		if e.rtype == dns.TypeCNAME {
-			target := dns.CanonicalName(e.value)
-			out := []dns.RR{cnameRR(qname, target, lr.TTL)}
-			if qtype == dns.TypeA || qtype == dns.TypeAAAA {
-				out = append(out, lr.answer(target, qtype, lr.records[target])...)
+// matchVLAN returns the name of the first declared VLAN whose subnets contain ip,
+// or "" if none match (in which case records use their defaults).
+func (lr *LocalRecords) matchVLAN(ip net.IP) string {
+	if ip == nil {
+		return ""
+	}
+	for _, v := range lr.vlans {
+		for _, n := range v.nets {
+			if n.Contains(ip) {
+				return v.name
 			}
-			return out
 		}
+	}
+	return ""
+}
+
+// effective resolves a record's answer for a VLAN: the value, TTL, and whether it
+// answers at all (false = suppressed by an nxdomain override or no value to give).
+func (lr *LocalRecords) effective(rc *record, vlan string) (value string, ttl uint32, ok bool) {
+	baseTTL := rc.ttl
+	if baseTTL == 0 {
+		baseTTL = lr.defaultTTL
+	}
+	if vlan != "" {
+		if ov, has := rc.overrides[vlan]; has {
+			if ov.nxdomain {
+				return "", 0, false
+			}
+			v := ov.value
+			if v == "" {
+				v = rc.def
+			}
+			if v == "" {
+				return "", 0, false
+			}
+			t := ov.ttl
+			if t == 0 {
+				t = baseTTL
+			}
+			return v, t, true
+		}
+	}
+	if rc.def == "" {
+		return "", 0, false
+	}
+	return rc.def, baseTTL, true
+}
+
+// namePresent reports whether any record for the name answers for this VLAN.
+func (lr *LocalRecords) namePresent(qname, vlan string) bool {
+	for _, rc := range lr.records[qname] {
+		if _, _, ok := lr.effective(rc, vlan); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// buildAnswers returns the answer RRs for a name/type from the client's VLAN. A
+// CNAME aliases the whole name (returned regardless of qtype); for an address
+// query whose target is in an owned zone, the resolved address records are
+// appended so one query suffices.
+func (lr *LocalRecords) buildAnswers(qname string, qtype uint16, vlan string) []dns.RR {
+	for _, rc := range lr.records[qname] {
+		if rc.rtype != dns.TypeCNAME {
+			continue
+		}
+		target, ttl, ok := lr.effective(rc, vlan)
+		if !ok {
+			continue
+		}
+		out := []dns.RR{cnameRR(qname, target, ttl)}
+		if qtype == dns.TypeA || qtype == dns.TypeAAAA {
+			out = append(out, lr.buildAnswers(target, qtype, vlan)...)
+		}
+		return out
 	}
 
 	var out []dns.RR
-	for _, e := range entries {
-		if e.rtype != qtype {
+	for _, rc := range lr.records[qname] {
+		if rc.rtype != qtype {
 			continue
 		}
-		if rr := rrFor(qname, e, lr.TTL); rr != nil {
+		value, ttl, ok := lr.effective(rc, vlan)
+		if !ok {
+			continue
+		}
+		if rr := rrFor(qname, qtype, value, ttl); rr != nil {
 			out = append(out, rr)
 		}
 	}
 	return out
 }
 
-func rrFor(qname string, e entry, ttl uint32) dns.RR {
-	hdr := dns.RR_Header{Name: qname, Rrtype: e.rtype, Class: dns.ClassINET, Ttl: ttl}
-	switch e.rtype {
+func rrFor(qname string, rtype uint16, value string, ttl uint32) dns.RR {
+	hdr := dns.RR_Header{Name: qname, Rrtype: rtype, Class: dns.ClassINET, Ttl: ttl}
+	switch rtype {
 	case dns.TypeA:
-		ip := net.ParseIP(e.value)
+		ip := net.ParseIP(value)
 		if ip == nil || ip.To4() == nil {
 			return nil
 		}
 		return &dns.A{Hdr: hdr, A: ip.To4()}
 	case dns.TypeAAAA:
-		ip := net.ParseIP(e.value)
+		ip := net.ParseIP(value)
 		if ip == nil || ip.To4() != nil {
 			return nil
 		}
@@ -132,13 +216,13 @@ func cnameRR(qname, target string, ttl uint32) dns.RR {
 // replies, so negative answers cache correctly and dig output is well-formed.
 func (lr *LocalRecords) soa(zone string) dns.RR {
 	return &dns.SOA{
-		Hdr:     dns.RR_Header{Name: zone, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: lr.TTL},
+		Hdr:     dns.RR_Header{Name: zone, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: lr.defaultTTL},
 		Ns:      "ns." + zone,
 		Mbox:    "hostmaster." + zone,
 		Serial:  1,
 		Refresh: 7200,
 		Retry:   1800,
 		Expire:  86400,
-		Minttl:  lr.TTL,
+		Minttl:  lr.defaultTTL,
 	}
 }

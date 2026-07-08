@@ -69,8 +69,16 @@ func validateUpstream(u model.UpstreamTarget) error {
 	return nil
 }
 
+// ownedCIDR tracks a parsed CIDR back to the VLAN it belongs to, for overlap
+// error messages across every CIDR of every VLAN.
+type ownedCIDR struct {
+	vlan string
+	cidr string
+	net  *net.IPNet
+}
+
 func validateVLANs(vlans []model.VLAN) error {
-	var nets []*net.IPNet
+	var nets []ownedCIDR
 	seen := map[string]bool{}
 	for _, v := range vlans {
 		if strings.TrimSpace(v.Name) == "" {
@@ -81,16 +89,21 @@ func validateVLANs(vlans []model.VLAN) error {
 		}
 		seen[v.Name] = true
 
-		_, ipnet, err := net.ParseCIDR(v.CIDR)
-		if err != nil {
-			return fmt.Errorf("vlan %q cidr %q is invalid: %w", v.Name, v.CIDR, err)
+		if len(v.CIDRs) == 0 {
+			return fmt.Errorf("vlan %q must list at least one cidr", v.Name)
 		}
-		for i, other := range nets {
-			if netsOverlap(ipnet, other) {
-				return fmt.Errorf("vlan %q cidr %q overlaps vlan %q cidr %q", v.Name, v.CIDR, vlans[i].Name, vlans[i].CIDR)
+		for _, c := range v.CIDRs {
+			_, ipnet, err := net.ParseCIDR(c)
+			if err != nil {
+				return fmt.Errorf("vlan %q cidr %q is invalid: %w", v.Name, c, err)
 			}
+			for _, other := range nets {
+				if netsOverlap(ipnet, other.net) {
+					return fmt.Errorf("vlan %q cidr %q overlaps vlan %q cidr %q", v.Name, c, other.vlan, other.cidr)
+				}
+			}
+			nets = append(nets, ownedCIDR{vlan: v.Name, cidr: c, net: ipnet})
 		}
-		nets = append(nets, ipnet)
 	}
 	return nil
 }
@@ -127,26 +140,65 @@ func validateRecords(rs model.RecordSet, vlans []model.VLAN) error {
 		}
 		seen[key] = true
 
-		if r.Default == "" && len(r.VLANOverrides) == 0 {
-			return fmt.Errorf("record %q has no default and no vlan_overrides", r.Name)
-		}
 		if r.Default != "" {
 			if err := validateValue(r.Type, r.Default); err != nil {
 				return fmt.Errorf("record %q default: %w", r.Name, err)
 			}
 		}
-		for _, o := range r.VLANOverrides {
-			if !vlanNames[o.VLAN] {
-				return fmt.Errorf("record %q references unknown vlan %q", r.Name, o.VLAN)
-			}
-			if o.Value != nil {
-				if err := validateValue(r.Type, *o.Value); err != nil {
-					return fmt.Errorf("record %q override for vlan %q: %w", r.Name, o.VLAN, err)
-				}
-			}
+
+		if err := validateOverrides(r, vlanNames); err != nil {
+			return err
+		}
+
+		// A record must be able to answer for at least one VLAN: either it has a
+		// default, or some override supplies a value.
+		if r.Default == "" && !anyOverrideProvidesValue(r) {
+			return fmt.Errorf("record %q has no default and no vlan_override supplies a value", r.Name)
 		}
 	}
 	return nil
+}
+
+func validateOverrides(r model.Record, vlanNames map[string]bool) error {
+	seen := map[string]bool{}
+	for _, o := range r.VLANOverrides {
+		if !vlanNames[o.VLAN] {
+			return fmt.Errorf("record %q references unknown vlan %q", r.Name, o.VLAN)
+		}
+		if seen[o.VLAN] {
+			return fmt.Errorf("record %q has duplicate override for vlan %q", r.Name, o.VLAN)
+		}
+		seen[o.VLAN] = true
+
+		if o.NXDomain && (o.Value != "" || o.TTL != 0) {
+			return fmt.Errorf("record %q override for vlan %q: nxdomain cannot be combined with value/ttl", r.Name, o.VLAN)
+		}
+		// A non-nxdomain override that supplies neither a value nor a ttl is a
+		// no-op that likely masks a mistake.
+		if !o.NXDomain && o.Value == "" && o.TTL == 0 {
+			return fmt.Errorf("record %q override for vlan %q does nothing (set value, ttl, or nxdomain)", r.Name, o.VLAN)
+		}
+		if !o.NXDomain && o.Value != "" {
+			if err := validateValue(r.Type, o.Value); err != nil {
+				return fmt.Errorf("record %q override for vlan %q: %w", r.Name, o.VLAN, err)
+			}
+		}
+		// A ttl-only override (empty value) requires the record to have a default
+		// to inherit; otherwise there is nothing to answer with.
+		if !o.NXDomain && o.Value == "" && r.Default == "" {
+			return fmt.Errorf("record %q override for vlan %q is ttl-only but the record has no default value to inherit", r.Name, o.VLAN)
+		}
+	}
+	return nil
+}
+
+func anyOverrideProvidesValue(r model.Record) bool {
+	for _, o := range r.VLANOverrides {
+		if !o.NXDomain && o.Value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func validateValue(t model.RecordType, value string) error {

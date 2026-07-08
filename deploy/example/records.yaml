@@ -1,0 +1,21 @@
+# Example BrambleDNS records.yaml — authoritative records for home.arpa.
+# Mount at /config/records.yaml. Managed by the GUI, but hand-editable.
+# Full schema + override semantics: docs/config-schema.md.
+
+records:
+  - name: nas.home.arpa
+    type: A
+    default: 192.168.10.20
+    vlan_overrides:
+      # Don't expose the NAS to guest wifi at all.
+      - vlan: untrusted-wifi
+        nxdomain: true
+
+  - name: git.home.arpa
+    type: CNAME
+    default: nas.home.arpa
+
+  - name: printer.home.arpa
+    type: A
+    default: 192.168.10.30
+    ttl: 3600

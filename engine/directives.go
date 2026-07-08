@@ -66,6 +66,13 @@ func init() {
 		"chaos",
 		"loadbalance",
 		"tsig",
+		// BrambleDNS custom plugins run BEFORE cache: localrecords answers are
+		// per-VLAN (split-horizon) and must never be globally cached — the cache
+		// is not keyed by client subnet, so caching them would serve one VLAN's
+		// answer to another. They also don't need caching (in-memory, instant).
+		// Out-of-zone queries fall through past cache to forward as usual.
+		"localrecords",
+		"mdnsbridge",
 		"cache",
 		"rewrite",
 		"acl",
@@ -86,10 +93,6 @@ func init() {
 		"secondary",
 		"etcd",
 		"loop",
-		// BrambleDNS custom plugins: static records first, then mDNS-discovered
-		// names, then fall through to the upstream ad-block resolver.
-		"localrecords",
-		"mdnsbridge",
 		"forward",
 		"grpc",
 		"erratic",

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -46,8 +47,16 @@ func TestAddRecordRendersAndReloads(t *testing.T) {
 	if rl.calls != 1 {
 		t.Fatalf("reload calls = %d, want 1", rl.calls)
 	}
-	if !strings.Contains(string(rl.last), "record nas.home.arpa A 192.168.10.20") {
-		t.Fatalf("reloaded Corefile missing the record:\n%s", rl.last)
+	if !strings.Contains(string(rl.last), "zonedata") {
+		t.Fatalf("reloaded Corefile should point localrecords at zonedata:\n%s", rl.last)
+	}
+	// The record itself lives in the JSON zone data written before reload.
+	zone, err := os.ReadFile(configgen.ZoneDataPath(st.Dir()))
+	if err != nil {
+		t.Fatalf("zone data not written: %v", err)
+	}
+	if !strings.Contains(string(zone), "192.168.10.20") || !strings.Contains(string(zone), "nas.home.arpa") {
+		t.Fatalf("zone data missing the record:\n%s", zone)
 	}
 	rs, _ := st.LoadRecords()
 	if len(rs.Records) != 1 {

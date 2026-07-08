@@ -11,7 +11,7 @@ import (
 func TestSettingsRoundTrip(t *testing.T) {
 	s := New(t.TempDir())
 	in := model.Settings{
-		VLANs:       []model.VLAN{{Name: "trusted", CIDR: "192.168.10.0/24"}},
+		VLANs:       []model.VLAN{{Name: "trusted", CIDRs: []string{"192.168.10.0/24", "fd00:10::/64"}}},
 		UpstreamDNS: model.UpstreamTarget{Address: "192.168.10.5:53", Protocol: "plain"},
 		Listeners:   model.Listeners{Plain: model.Listener{Enabled: true, Port: 53}},
 		ACME:        model.ACME{Enabled: true, Domain: "dns.example.com"},
@@ -23,19 +23,18 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSettings: %v", err)
 	}
-	if got.UpstreamDNS != in.UpstreamDNS || len(got.VLANs) != 1 || got.VLANs[0].CIDR != "192.168.10.0/24" {
+	if got.UpstreamDNS != in.UpstreamDNS || len(got.VLANs) != 1 || len(got.VLANs[0].CIDRs) != 2 || got.VLANs[0].CIDRs[1] != "fd00:10::/64" {
 		t.Fatalf("round-trip mismatch:\n got=%+v\nwant=%+v", got, in)
 	}
 }
 
-func TestRecordsRoundTripPreservesNullOverride(t *testing.T) {
+func TestRecordsRoundTripPreservesOverrides(t *testing.T) {
 	s := New(t.TempDir())
-	deny := (*string)(nil) // explicit NXDOMAIN for a VLAN
-	trusted := "192.168.10.20"
 	in := model.RecordSet{Records: []model.Record{
-		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20", VLANOverrides: []model.VLANOverride{
-			{VLAN: "untrusted-wifi", Value: deny},
-			{VLAN: "trusted", Value: &trusted},
+		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20", TTL: 300, VLANOverrides: []model.VLANOverride{
+			{VLAN: "untrusted-wifi", NXDomain: true},
+			{VLAN: "smarthome", Value: "192.168.20.5", TTL: 60},
+			{VLAN: "guests", TTL: 30}, // TTL-only: inherits the default value
 		}},
 		{Name: "git.home.arpa", Type: model.TypeCNAME, Default: "nas.home.arpa"},
 	}}
@@ -49,12 +48,18 @@ func TestRecordsRoundTripPreservesNullOverride(t *testing.T) {
 	if len(got.Records) != 2 {
 		t.Fatalf("want 2 records, got %d", len(got.Records))
 	}
-	nas := got.Records[0]
-	if len(nas.VLANOverrides) != 2 || nas.VLANOverrides[0].Value != nil {
-		t.Fatalf("null override not preserved: %+v", nas.VLANOverrides)
+	o := got.Records[0].VLANOverrides
+	if len(o) != 3 {
+		t.Fatalf("want 3 overrides, got %d", len(o))
 	}
-	if nas.VLANOverrides[1].Value == nil || *nas.VLANOverrides[1].Value != "192.168.10.20" {
-		t.Fatalf("non-null override not preserved: %+v", nas.VLANOverrides[1])
+	if !o[0].NXDomain {
+		t.Fatalf("nxdomain override not preserved: %+v", o[0])
+	}
+	if o[1].Value != "192.168.20.5" || o[1].TTL != 60 {
+		t.Fatalf("value+ttl override not preserved: %+v", o[1])
+	}
+	if o[2].Value != "" || o[2].TTL != 30 {
+		t.Fatalf("ttl-only override not preserved: %+v", o[2])
 	}
 }
 

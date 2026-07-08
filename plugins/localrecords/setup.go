@@ -1,7 +1,10 @@
 package localrecords
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
 	"strings"
 
 	"github.com/coredns/caddy"
@@ -12,20 +15,19 @@ import (
 
 const defaultTTL = 300
 
-var errNonNumericTTL = errors.New("ttl must be a whole number of seconds")
-
 func init() { plugin.Register("localrecords", setup) }
 
 // setup parses the localrecords stanza and inserts the handler into the chain.
 //
-// Corefile syntax (rendered by configgen from records.yaml):
+// Corefile syntax (rendered by configgen):
 //
 //	localrecords home.arpa [more.zones ...] {
-//	    ttl 300
-//	    record nas.home.arpa      A     192.168.10.20
-//	    record git.home.arpa      CNAME nas.home.arpa
-//	    record host.home.arpa     AAAA  fd00::1
+//	    zonedata /config/.runtime/zones/records.json
 //	}
+//
+// The referenced JSON file carries the VLAN definitions and records (with per-VLAN
+// overrides); it is written by configgen before New/Reload. Loading it once, here
+// at setup, is the plugin's only file read — there is no runtime refresh.
 func setup(c *caddy.Controller) error {
 	lr, err := parse(c)
 	if err != nil {
@@ -39,7 +41,7 @@ func setup(c *caddy.Controller) error {
 }
 
 func parse(c *caddy.Controller) (*LocalRecords, error) {
-	lr := &LocalRecords{TTL: defaultTTL, records: map[string][]entry{}}
+	lr := &LocalRecords{defaultTTL: defaultTTL, records: map[string][]*record{}}
 	seen := false
 
 	for c.Next() { // "localrecords"
@@ -50,7 +52,6 @@ func parse(c *caddy.Controller) (*LocalRecords, error) {
 
 		zones := c.RemainingArgs()
 		if len(zones) == 0 {
-			// Default owned zone; configgen normally passes it explicitly.
 			zones = []string{"home.arpa"}
 		}
 		for i, z := range zones {
@@ -58,41 +59,89 @@ func parse(c *caddy.Controller) (*LocalRecords, error) {
 		}
 		lr.Zones = zones
 
+		var zonePath string
 		for c.NextBlock() {
 			switch strings.ToLower(c.Val()) {
-			case "ttl":
+			case "zonedata":
 				if !c.NextArg() {
 					return nil, c.ArgErr()
 				}
-				ttl, err := parseTTL(c.Val())
-				if err != nil {
-					return nil, c.Errf("invalid ttl %q: %v", c.Val(), err)
-				}
-				lr.TTL = ttl
-			case "record":
-				args := c.RemainingArgs()
-				if len(args) != 3 {
-					return nil, c.Errf("record needs NAME TYPE VALUE, got %d args", len(args))
-				}
-				rtype, ok := recordType(args[1])
-				if !ok {
-					return nil, c.Errf("unsupported record type %q (want A, AAAA, or CNAME)", args[1])
-				}
-				name := dns.CanonicalName(args[0])
-				value := args[2]
-				if rtype == dns.TypeCNAME {
-					value = dns.CanonicalName(value)
-				}
-				if !nameInZones(name, lr.Zones) {
-					return nil, c.Errf("record %q is outside the owned zone(s) %v", args[0], lr.Zones)
-				}
-				lr.records[name] = append(lr.records[name], entry{rtype: rtype, value: value})
+				zonePath = c.Val()
 			default:
 				return nil, c.Errf("unknown property %q", c.Val())
 			}
 		}
+		if zonePath == "" {
+			return nil, c.Err("localrecords: missing 'zonedata <path>'")
+		}
+		if err := lr.loadZoneData(zonePath); err != nil {
+			return nil, err
+		}
 	}
 	return lr, nil
+}
+
+// loadZoneData reads and indexes the JSON zone data into the in-memory tables.
+func (lr *LocalRecords) loadZoneData(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read zone data %s: %w", path, err)
+	}
+	var z wireZone
+	if err := json.Unmarshal(raw, &z); err != nil {
+		return fmt.Errorf("parse zone data %s: %w", path, err)
+	}
+
+	if z.DefaultTTL != 0 {
+		lr.defaultTTL = z.DefaultTTL
+	}
+
+	for _, v := range z.VLANs {
+		vm := vlanMatch{name: v.Name}
+		for _, c := range v.CIDRs {
+			_, ipnet, err := net.ParseCIDR(c)
+			if err != nil {
+				return fmt.Errorf("zone data vlan %q cidr %q: %w", v.Name, c, err)
+			}
+			vm.nets = append(vm.nets, ipnet)
+		}
+		lr.vlans = append(lr.vlans, vm)
+	}
+
+	for _, wr := range z.Records {
+		rtype, ok := recordType(wr.Type)
+		if !ok {
+			return fmt.Errorf("zone data record %q: unsupported type %q", wr.Name, wr.Type)
+		}
+		rc := &record{
+			rtype:     rtype,
+			def:       normalizeValue(rtype, wr.Default),
+			ttl:       wr.TTL,
+			overrides: map[string]override{},
+		}
+		for _, o := range wr.VLANOverrides {
+			rc.overrides[o.VLAN] = override{
+				value:    normalizeValue(rtype, o.Value),
+				ttl:      o.TTL,
+				nxdomain: o.NXDomain,
+			}
+		}
+		name := dns.CanonicalName(wr.Name)
+		lr.records[name] = append(lr.records[name], rc)
+	}
+	return nil
+}
+
+// normalizeValue canonicalizes CNAME targets to fqdn form; address values pass
+// through unchanged (parsed at answer time).
+func normalizeValue(rtype uint16, v string) string {
+	if v == "" {
+		return ""
+	}
+	if rtype == dns.TypeCNAME {
+		return dns.CanonicalName(v)
+	}
+	return v
 }
 
 func recordType(s string) (uint16, bool) {
@@ -106,20 +155,4 @@ func recordType(s string) (uint16, bool) {
 	default:
 		return 0, false
 	}
-}
-
-func nameInZones(name string, zones []string) bool {
-	return plugin.Zones(zones).Matches(name) != ""
-}
-
-func parseTTL(s string) (uint32, error) {
-	// Seconds only; keep it simple and explicit.
-	var n uint32
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return 0, errNonNumericTTL
-		}
-		n = n*10 + uint32(r-'0')
-	}
-	return n, nil
 }

@@ -87,14 +87,14 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	if err != nil {
 		return err
 	}
-	corefile, err := s.render(settings, rs)
+	rendered, err := s.render(settings, rs)
 	if err != nil {
 		return err
 	}
 	if err := s.store.SaveSettings(settings); err != nil {
 		return err
 	}
-	return s.reload(corefile)
+	return s.reload(rendered)
 }
 
 // AddRecord appends a record, rejecting a duplicate (same name+type).
@@ -163,30 +163,35 @@ var ErrNotFound = errors.New("record not found")
 // applyRecords renders (validating), then persists, then reloads. Validation
 // runs BEFORE the write so an invalid edit never touches the YAML on disk.
 func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) error {
-	corefile, err := s.render(settings, rs)
+	rendered, err := s.render(settings, rs)
 	if err != nil {
 		return err
 	}
 	if err := s.store.SaveRecords(rs); err != nil {
 		return err
 	}
-	return s.reload(corefile)
+	return s.reload(rendered)
 }
 
-func (s *Service) render(settings model.Settings, rs model.RecordSet) ([]byte, error) {
-	corefile, err := configgen.Render(settings, rs, s.certOpts)
+func (s *Service) render(settings model.Settings, rs model.RecordSet) (configgen.Rendered, error) {
+	rendered, err := configgen.Render(settings, rs, s.certOpts)
 	if err != nil {
-		return nil, ErrValidation{err}
+		return configgen.Rendered{}, ErrValidation{err}
 	}
-	return corefile, nil
+	return rendered, nil
 }
 
-// reload writes the runtime Corefile (best-effort, for visibility) and performs
-// the graceful engine swap. A reload failure means the new config was persisted
-// but the engine kept serving the previous config — surfaced to the caller.
-func (s *Service) reload(corefile []byte) error {
-	_ = configgen.WriteRuntimeCorefile(s.configDir, corefile)
-	if err := s.reloader.Reload(corefile); err != nil {
+// reload writes the JSON zone data (which the plugin reads at setup) and a
+// runtime Corefile copy for visibility, then performs the graceful engine swap.
+// A reload failure means the new config was persisted but the engine kept serving
+// the previous config — surfaced to the caller. The zone data is written first so
+// the reloaded plugin sees the new records.
+func (s *Service) reload(rendered configgen.Rendered) error {
+	if err := configgen.WriteZoneData(s.configDir, rendered.ZoneData); err != nil {
+		return fmt.Errorf("write zone data: %w", err)
+	}
+	_ = configgen.WriteRuntimeCorefile(s.configDir, rendered.Corefile)
+	if err := s.reloader.Reload(rendered.Corefile); err != nil {
 		return fmt.Errorf("config saved but engine reload failed (previous config still serving): %w", err)
 	}
 	return nil

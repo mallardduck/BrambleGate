@@ -27,19 +27,30 @@ const (
 type Record struct {
 	Name string     `yaml:"name" json:"name"`
 	Type RecordType `yaml:"type" json:"type"`
-	// Default is the value returned when no per-VLAN override matches. For A/AAAA
-	// it is an IP; for CNAME it is a target name. May be empty only if every
-	// relevant VLAN is covered by an override.
-	Default       string         `yaml:"default" json:"default"`
+	// Default is the base value: an IP for A/AAAA, a target name for CNAME. It may
+	// be empty only if every VLAN that should resolve this name is covered by an
+	// override that supplies its own value.
+	Default string `yaml:"default,omitempty" json:"default,omitempty"`
+	// TTL in seconds. 0 means "use the server default" (DefaultTTL). A per-VLAN
+	// override may narrow this further.
+	TTL           uint32         `yaml:"ttl,omitempty" json:"ttl,omitempty"`
 	VLANOverrides []VLANOverride `yaml:"vlan_overrides,omitempty" json:"vlan_overrides,omitempty"`
 }
 
-// VLANOverride ties a per-VLAN answer to a record (Phase 3). A nil Value is a
-// deliberate "this VLAN gets NXDOMAIN for this name" — distinct from omitting
-// the VLAN entirely (which falls back to Default). In YAML this is `value: null`.
+// VLANOverride adjusts the answer for a record when the client's source address
+// falls in the named VLAN. It is a partial override of the base record:
+//
+//   - NXDomain true  → this VLAN gets no answer for this name (authoritative miss).
+//   - Value non-empty → this VLAN gets Value instead of Record.Default.
+//   - Value empty     → this VLAN inherits Record.Default (e.g. a TTL-only override).
+//   - TTL non-zero    → this VLAN uses TTL; 0 inherits the record's effective TTL.
+//
+// NXDomain is mutually exclusive with Value/TTL (configgen enforces this).
 type VLANOverride struct {
-	VLAN  string  `yaml:"vlan" json:"vlan"`
-	Value *string `yaml:"value" json:"value"`
+	VLAN     string `yaml:"vlan" json:"vlan"`
+	Value    string `yaml:"value,omitempty" json:"value,omitempty"`
+	TTL      uint32 `yaml:"ttl,omitempty" json:"ttl,omitempty"`
+	NXDomain bool   `yaml:"nxdomain,omitempty" json:"nxdomain,omitempty"`
 }
 
 // NormalizedName returns the record name as a fully-qualified, lower-cased DNS

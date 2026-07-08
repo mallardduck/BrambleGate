@@ -11,11 +11,14 @@ type Settings struct {
 	MDNS        MDNS           `yaml:"mdns" json:"mdns"`
 }
 
-// VLAN is a named client subnet used for split-horizon matching (Phase 3) and
-// mDNS interface scoping. CIDR is a "192.168.10.0/24"-style string.
+// VLAN mirrors one of the user's real network VLANs (BrambleDNS is not the
+// authority for VLANs — the network gear is; this just lets the user declare the
+// same name→subnet mapping). Used for split-horizon matching by client source
+// address and for mDNS interface scoping. A VLAN may span more than one CIDR
+// (e.g. an IPv4 and an IPv6 prefix, or several subnets).
 type VLAN struct {
-	Name string `yaml:"name" json:"name"`
-	CIDR string `yaml:"cidr" json:"cidr"`
+	Name  string   `yaml:"name" json:"name"`
+	CIDRs []string `yaml:"cidrs" json:"cidrs"`
 }
 
 // UpstreamTarget is where anything not owned by localrecords/mdnsbridge is

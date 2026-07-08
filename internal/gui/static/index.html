@@ -6,46 +6,66 @@
   <title>BrambleDNS</title>
   <style>
     :root { color-scheme: light dark; --gap: 12px; }
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 900px; margin-inline: auto; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 960px; margin-inline: auto; }
     h1 { font-size: 1.4rem; margin: 0 0 4px; }
     .sub { opacity: 0.7; margin: 0 0 24px; font-size: 0.9rem; }
     h2 { font-size: 1.1rem; margin: 28px 0 12px; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(128,128,128,0.3); }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(128,128,128,0.3); vertical-align: top; }
     th { font-weight: 600; font-size: 0.85rem; opacity: 0.7; }
     input, select, button { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4); background: transparent; color: inherit; }
     button { cursor: pointer; }
     button.primary { background: #2d6cdf; color: #fff; border-color: #2d6cdf; }
-    button.danger { border-color: #c0392b; color: #c0392b; }
-    form.row { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: end; margin-top: 16px; }
+    button.link { border: none; background: none; color: #2d6cdf; padding: 2px 6px; }
+    button.danger { border: none; background: none; color: #c0392b; padding: 2px 6px; }
+    fieldset { border: 1px solid rgba(128,128,128,0.3); border-radius: 8px; margin: 16px 0; padding: 14px 16px; }
+    legend { font-size: 0.85rem; opacity: 0.7; padding: 0 6px; }
+    .row { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: end; }
     .field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+    .field input, .field select { min-width: 120px; }
+    .ov { display: grid; grid-template-columns: 130px 90px 1fr 90px; gap: 8px; align-items: center; margin: 6px 0; font-size: 0.85rem; }
+    .ov .name { font-family: ui-monospace, monospace; }
     #msg { margin-top: 16px; padding: 10px 12px; border-radius: 6px; display: none; white-space: pre-wrap; }
     #msg.ok { display: block; background: rgba(46,160,67,0.15); border: 1px solid rgba(46,160,67,0.5); }
     #msg.err { display: block; background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.5); }
     .mono { font-family: ui-monospace, monospace; }
+    small.hint { opacity: 0.6; }
   </style>
 </head>
 <body>
   <h1>BrambleDNS</h1>
-  <p class="sub">Local records for <span class="mono">home.arpa</span> — saved to <span class="mono">records.yaml</span> and applied with no restart.</p>
+  <p class="sub">Authoritative records for <span class="mono">home.arpa</span>, with per-VLAN split-horizon answers. Saved to <span class="mono">records.yaml</span> and applied live — no restart.</p>
 
   <div id="msg"></div>
 
   <h2>Records</h2>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Value</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Type</th><th>Default</th><th>TTL</th><th>Per-VLAN</th><th></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
 
-  <form class="row" id="add">
-    <label class="field">Name<input id="name" placeholder="nas.home.arpa" required></label>
-    <label class="field">Type
-      <select id="type">
-        <option>A</option><option>AAAA</option><option>CNAME</option>
-      </select>
-    </label>
-    <label class="field">Value<input id="value" placeholder="192.168.10.20" required></label>
-    <button class="primary" type="submit">Add record</button>
+  <form id="rec">
+    <fieldset>
+      <legend id="formTitle">Add record</legend>
+      <div class="row">
+        <label class="field">Name<input id="name" placeholder="nas.home.arpa" required></label>
+        <label class="field">Type
+          <select id="type"><option>A</option><option>AAAA</option><option>CNAME</option></select>
+        </label>
+        <label class="field">Default value<input id="value" placeholder="192.168.10.20"></label>
+        <label class="field">TTL <small class="hint">(blank = 300)</small><input id="ttl" type="number" min="1" placeholder="300"></label>
+      </div>
+
+      <fieldset>
+        <legend>Per-VLAN overrides</legend>
+        <div id="overrides"><small class="hint">Define VLANs in Settings to enable per-VLAN overrides.</small></div>
+      </fieldset>
+
+      <div class="row">
+        <button class="primary" type="submit" id="submitBtn">Add record</button>
+        <button type="button" class="link" id="cancelEdit" style="display:none">Cancel edit</button>
+      </div>
+    </fieldset>
   </form>
 
   <h2>Settings</h2>
@@ -55,10 +75,14 @@
     <label class="field">DoT port<input id="dotPort" type="number"></label>
     <button class="primary" type="submit">Save settings</button>
   </form>
+  <p><small class="hint">VLANs are edited in <span class="mono">settings.yaml</span> for now (name + cidrs); the overrides above list whatever VLANs it declares.</small></p>
 
   <script>
     const $ = (id) => document.getElementById(id);
     const msg = $("msg");
+    let vlans = [];
+    let editing = null; // {name, type} when editing an existing record
+
     function show(text, ok) { msg.textContent = text; msg.className = ok ? "ok" : "err"; }
 
     async function api(method, path, body) {
@@ -73,11 +97,62 @@
       return data;
     }
 
-    function valueOf(r) {
-      if (r.default) return r.default;
-      if (r.vlan_overrides && r.vlan_overrides.length) return "(per-VLAN)";
-      return "";
+    function renderOverrideRows(existing) {
+      const wrap = $("overrides");
+      wrap.innerHTML = "";
+      if (!vlans.length) { wrap.innerHTML = '<small class="hint">Define VLANs in settings.yaml to enable per-VLAN overrides.</small>'; return; }
+      const byVlan = {};
+      (existing || []).forEach(o => byVlan[o.vlan] = o);
+      for (const v of vlans) {
+        const o = byVlan[v.name] || {};
+        const row = document.createElement("div");
+        row.className = "ov";
+        row.innerHTML =
+          `<span class="name">${v.name}</span>` +
+          `<label><input type="checkbox" data-k="nx" data-vlan="${v.name}" ${o.nxdomain ? "checked" : ""}> NXDOMAIN</label>` +
+          `<input data-k="val" data-vlan="${v.name}" placeholder="inherit default" value="${o.value || ""}">` +
+          `<input data-k="ttl" data-vlan="${v.name}" type="number" min="1" placeholder="inherit TTL" value="${o.ttl || ""}">`;
+        wrap.appendChild(row);
+      }
     }
+
+    function collectOverrides() {
+      const out = [];
+      for (const v of vlans) {
+        const nx = document.querySelector(`[data-k=nx][data-vlan="${v.name}"]`).checked;
+        const val = document.querySelector(`[data-k=val][data-vlan="${v.name}"]`).value.trim();
+        const ttl = Number(document.querySelector(`[data-k=ttl][data-vlan="${v.name}"]`).value) || 0;
+        if (nx) { out.push({ vlan: v.name, nxdomain: true }); }
+        else if (val || ttl) { const o = { vlan: v.name }; if (val) o.value = val; if (ttl) o.ttl = ttl; out.push(o); }
+      }
+      return out;
+    }
+
+    function summarizeOverrides(r) {
+      if (!r.vlan_overrides || !r.vlan_overrides.length) return "—";
+      return r.vlan_overrides.map(o => o.nxdomain ? `${o.vlan}: ✗` : `${o.vlan}: ${o.value || "(dflt)"}${o.ttl ? " @" + o.ttl : ""}`).join(", ");
+    }
+
+    function startEdit(r) {
+      editing = { name: r.name, type: r.type };
+      $("formTitle").textContent = `Edit ${r.type} ${r.name}`;
+      $("submitBtn").textContent = "Save changes";
+      $("cancelEdit").style.display = "";
+      $("name").value = r.name; $("type").value = r.type;
+      $("value").value = r.default || ""; $("ttl").value = r.ttl || "";
+      renderOverrideRows(r.vlan_overrides);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }
+
+    function resetForm() {
+      editing = null;
+      $("formTitle").textContent = "Add record";
+      $("submitBtn").textContent = "Add record";
+      $("cancelEdit").style.display = "none";
+      $("name").value = ""; $("value").value = ""; $("ttl").value = ""; $("type").value = "A";
+      renderOverrideRows([]);
+    }
+    $("cancelEdit").onclick = resetForm;
 
     async function loadRecords() {
       const data = await api("GET", "/api/records");
@@ -85,37 +160,38 @@
       rows.innerHTML = "";
       for (const r of (data.records || [])) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td class="mono">${r.name}</td><td>${r.type}</td><td class="mono">${valueOf(r)}</td>`;
+        tr.innerHTML = `<td class="mono">${r.name}</td><td>${r.type}</td><td class="mono">${r.default || "—"}</td><td>${r.ttl || 300}</td><td>${summarizeOverrides(r)}</td>`;
         const td = document.createElement("td");
-        const del = document.createElement("button");
-        del.className = "danger"; del.textContent = "Delete";
+        const edit = document.createElement("button"); edit.className = "link"; edit.textContent = "Edit"; edit.onclick = () => startEdit(r);
+        const del = document.createElement("button"); del.className = "danger"; del.textContent = "Delete";
         del.onclick = async () => {
-          try {
-            await api("DELETE", `/api/records/${encodeURIComponent(r.name)}/${r.type}`);
-            show(`Deleted ${r.type} ${r.name}`, true);
-            loadRecords();
-          } catch (e) { show(e.message, false); }
+          try { await api("DELETE", `/api/records/${encodeURIComponent(r.name)}/${r.type}`); show(`Deleted ${r.type} ${r.name}`, true); loadRecords(); }
+          catch (e) { show(e.message, false); }
         };
-        td.appendChild(del); tr.appendChild(td); rows.appendChild(tr);
+        td.append(edit, del); tr.appendChild(td); rows.appendChild(tr);
       }
     }
 
     async function loadSettings() {
       const s = await api("GET", "/api/settings");
+      vlans = s.vlans || [];
       $("upstream").value = (s.upstream_dns && s.upstream_dns.address) || "";
       $("plainPort").value = (s.listeners && s.listeners.plain && s.listeners.plain.port) || "";
       $("dotPort").value = (s.listeners && s.listeners.dot && s.listeners.dot.port) || "";
       window._settings = s;
+      renderOverrideRows(editing ? undefined : []);
     }
 
-    $("add").onsubmit = async (e) => {
+    $("rec").onsubmit = async (e) => {
       e.preventDefault();
-      const rec = { name: $("name").value.trim(), type: $("type").value, default: $("value").value.trim() };
+      const rec = { name: $("name").value.trim(), type: $("type").value };
+      const val = $("value").value.trim(); if (val) rec.default = val;
+      const ttl = Number($("ttl").value) || 0; if (ttl) rec.ttl = ttl;
+      const ov = collectOverrides(); if (ov.length) rec.vlan_overrides = ov;
       try {
-        await api("POST", "/api/records", rec);
-        show(`Added ${rec.type} ${rec.name} → ${rec.default}. Resolvable now, no restart.`, true);
-        $("name").value = ""; $("value").value = "";
-        loadRecords();
+        if (editing) { await api("PUT", `/api/records/${encodeURIComponent(editing.name)}/${editing.type}`, rec); show(`Updated ${rec.type} ${rec.name}. Applied live.`, true); }
+        else { await api("POST", "/api/records", rec); show(`Added ${rec.type} ${rec.name}. Resolvable now, no restart.`, true); }
+        resetForm(); loadRecords();
       } catch (err) { show(err.message, false); }
     };
 
@@ -124,19 +200,17 @@
       const s = window._settings || {};
       s.upstream_dns = s.upstream_dns || {};
       s.upstream_dns.address = $("upstream").value.trim();
-      s.listeners = s.listeners || {};
-      s.listeners.plain = s.listeners.plain || {};
-      s.listeners.dot = s.listeners.dot || {};
+      s.listeners = s.listeners || {}; s.listeners.plain = s.listeners.plain || {}; s.listeners.dot = s.listeners.dot || {};
       s.listeners.plain.port = Number($("plainPort").value) || s.listeners.plain.port;
       s.listeners.dot.port = Number($("dotPort").value) || s.listeners.dot.port;
-      try {
-        await api("PUT", "/api/settings", s);
-        show("Settings saved and applied.", true);
-      } catch (err) { show(err.message, false); }
+      try { await api("PUT", "/api/settings", s); show("Settings saved and applied.", true); }
+      catch (err) { show(err.message, false); }
     };
 
-    loadRecords().catch((e) => show(e.message, false));
-    loadSettings().catch((e) => show(e.message, false));
+    (async () => {
+      try { await loadSettings(); await loadRecords(); }
+      catch (e) { show(e.message, false); }
+    })();
   </script>
 </body>
 </html>

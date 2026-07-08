@@ -1,7 +1,16 @@
-# Example BrambleDNS settings.yaml — Phase 1 (forward-only) subset.
+# Example BrambleDNS settings.yaml.
 # Mount this at /config/settings.yaml (see docs/architecture.md volume layout).
-# The full schema (VLANs, records, ACME, mDNS) lands in later phases;
-# see docs/config-schema.md.
+# Full schema reference: docs/config-schema.md. Records live in records.yaml.
+
+# Mirror your real network VLANs here (BrambleDNS is not the authority for VLANs —
+# your network gear is). Names are referenced by per-VLAN record overrides; the
+# client's source subnet selects which VLAN's answer it gets. Each VLAN may list
+# multiple CIDRs.
+vlans:
+  - name: trusted
+    cidrs: [192.168.10.0/24]
+  - name: untrusted-wifi
+    cidrs: [192.168.30.0/24]
 
 upstream_dns:
   # host:port of your existing ad-block resolver (PiHole/Technitium/AdGuard Home).

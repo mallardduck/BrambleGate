@@ -56,7 +56,7 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 		return err
 	}
 
-	var opts configgen.Options
+	opts := configgen.Options{ConfigDir: configDir}
 	if settings.EncryptedListenerEnabled() {
 		opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
 		if err != nil {
@@ -66,16 +66,20 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 			"cert", opts.CertFile, "cn", settings.ACME.Domain)
 	}
 
-	corefile, err := configgen.Render(settings, records, opts)
+	rendered, err := configgen.Render(settings, records, opts)
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
 	}
-	// Runtime copy for operator visibility only — not the reload mechanism.
-	if err := configgen.WriteRuntimeCorefile(configDir, corefile); err != nil {
+	// The localrecords plugin reads this at setup — it MUST exist before New.
+	if err := configgen.WriteZoneData(configDir, rendered.ZoneData); err != nil {
+		return fmt.Errorf("write zone data: %w", err)
+	}
+	// Runtime Corefile copy for operator visibility only — not the reload mechanism.
+	if err := configgen.WriteRuntimeCorefile(configDir, rendered.Corefile); err != nil {
 		log.Warn("could not write .runtime/Corefile for inspection", "err", err)
 	}
 
-	eng, err := engine.New(corefile)
+	eng, err := engine.New(rendered.Corefile)
 	if err != nil {
 		return fmt.Errorf("start engine: %w", err)
 	}
