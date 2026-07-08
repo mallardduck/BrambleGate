@@ -1,7 +1,7 @@
 //go:build mdns_integration
 
-// A real end-to-end mDNS test: advertise a service with zeroconf, run the
-// Listener, and confirm the discovery lands in the Table as a published,
+// A real end-to-end mDNS test: advertise a service with beacon's responder, run
+// the Listener, and confirm the discovery lands in the Table as a published,
 // resolvable entry. Multicast/mDNS is timing- and environment-sensitive, so this
 // is gated behind the mdns_integration tag rather than in the default suite.
 //
@@ -13,23 +13,30 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grandcat/zeroconf"
+	"github.com/joshuafuller/beacon/responder"
 )
 
 func TestListenerDiscovers(t *testing.T) {
 	// Advertise a fake service instance on the local network.
-	server, err := zeroconf.Register(
-		"brambletest-printer", // instance
-		"_http._tcp",          // service
-		"local.",              // domain
-		8080,
-		[]string{"txtv=1"},
-		nil, // all interfaces
-	)
+	regCtx, regCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer regCancel()
+
+	r, err := responder.New(regCtx)
 	if err != nil {
+		t.Fatalf("responder init: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	svc := &responder.Service{
+		InstanceName: "brambletest-printer",
+		ServiceType:  "_http._tcp.local",
+		Port:         8080,
+		TXTRecords:   map[string]string{"txtv": "1"},
+	}
+	if err := r.Register(svc); err != nil {
 		t.Fatalf("advertise: %v", err)
 	}
-	defer server.Shutdown()
+	defer func() { _ = r.Unregister("brambletest-printer._http._tcp.local") }()
 
 	// auto-publish everything (match-all) so any discovery is immediately servable
 	table := NewTable(Config{DefaultSuffix: "home.arpa", AutoPublish: SelectorSet{{}}}, time.Minute)
