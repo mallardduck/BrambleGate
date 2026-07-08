@@ -60,7 +60,7 @@ func NewListener(table *Table, services, ifaceNames []string, log *slog.Logger) 
 	}
 }
 
-// Run browses each service type until ctx is cancelled, expiring stale entries on
+// Run browses each service type until ctx is canceled, expiring stale entries on
 // a timer. It never returns an error — mDNS problems are logged, not fatal.
 func (l *Listener) Run(ctx context.Context) {
 	for _, svc := range l.services {
@@ -80,7 +80,7 @@ func (l *Listener) Run(ctx context.Context) {
 	}
 }
 
-// browse repeatedly discovers instances of service until ctx is cancelled.
+// browse repeatedly discovers instances of service until ctx is canceled.
 func (l *Listener) browse(ctx context.Context, service string) {
 	ticker := time.NewTicker(browseInterval)
 	defer ticker.Stop()

@@ -47,6 +47,47 @@ jobs:
             ( cd "$dir" && go vet ./... )
           done < <(find . -name go.mod -not -path './web/*')
 
+  # golangci-lint-action lints one module per invocation (working-directory), so
+  # discover the module dirs here and fan them out to a matrix below. This keeps
+  # the same auto-discovery the build-test job uses — new modules are linted the
+  # moment they have a go.mod.
+  discover-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      dirs: ${{ steps.find.outputs.dirs }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: find
+        shell: bash
+        run: |
+          dirs=$(find . -name go.mod -not -path './web/*' -printf '%h\n' \
+            | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: discover-modules
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJson(needs.discover-modules.outputs.dirs) }}
+    # Same plain-module rationale as build-test: lint each module on its own,
+    # resolving deps via replace directives, not workspace mode.
+    env:
+      GOWORK: off
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.25'
+
+      # The root .golangci.yml is schema v2; pin the golangci-lint version to match
+      # local dev. The action finds the root config by walking up from the module.
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          working-directory: ${{ matrix.dir }}
+
   docker:
     runs-on: ubuntu-latest
     steps:

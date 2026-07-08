@@ -1,0 +1,116 @@
+# golangci-lint configuration (schema v2 — https://golangci-lint.run/).
+# This repo is a multi-module Go workspace; the linter finds this file by walking
+# up from each module directory, so one root config governs every module. CI runs
+# it per module with GOWORK=off (see .github/workflows/ci.yml).
+#
+# Philosophy: enforce correctness- and clarity-oriented linters aggressively, but
+# leave out the purely subjective style/complexity linters (wsl, nlreturn,
+# varnamelen, funlen, gocognit, lll, exhaustruct, gochecknoglobals, mnd, godox…)
+# that fight this codebase's deliberate, well-documented style.
+version: "2"
+
+run:
+  # Lint test files too — they carry real logic here (integration harnesses).
+  tests: true
+
+linters:
+  # Start from the curated "standard" set (errcheck, govet, ineffassign,
+  # staticcheck, unused) and add a broad set of high-signal checks on top.
+  default: standard
+  enable:
+    - asasalint          # `any` passed to variadic ...any by mistake
+    - asciicheck         # non-ASCII identifiers
+    - bidichk            # dangerous unicode bidi sequences
+    - bodyclose          # HTTP response bodies must be closed
+    - copyloopvar        # redundant loop-var copies (Go 1.22+)
+    - durationcheck      # multiplying two durations
+    - errname            # error vars/types named correctly (ErrFoo / FooError)
+    - errorlint          # correct error wrapping and errors.Is/As usage
+    - exhaustive         # enum switches cover all cases
+    - fatcontext         # context stored/derived in a loop
+    - gocheckcompilerdirectives # malformed //go: directives
+    - gochecksumtype     # exhaustive sum-type switches
+    - gocritic           # broad opinionated-but-useful diagnostics
+    - godot              # top-level comments end in a period
+    - intrange           # prefer `for range n` (Go 1.22+)
+    - makezero           # append to a non-zero-len make() slice
+    - misspell           # comment/string typos
+    - musttag            # struct fields used with (un)marshal must be tagged
+    - nakedret           # naked returns in longer functions
+    - nilerr             # returning nil after a non-nil error check
+    - nilnesserr         # returning a nil error that was just checked non-nil
+    - noctx              # HTTP requests without a context
+    - nolintlint         # //nolint directives must be well-formed and justified
+    - perfsprint         # fmt.Sprintf where strconv/concat is cheaper
+    - predeclared        # shadowing predeclared identifiers (len, error…)
+    - reassign           # reassigning package-level vars from other packages
+    - revive             # golint successor: exported docs, naming, misc.
+    - sloglint           # consistent log/slog call style
+    - testifylint        # (no-op unless testify is used) correct assertions
+    - thelper            # test helpers should call t.Helper()
+    - tparallel          # correct t.Parallel usage
+    - unconvert          # redundant type conversions
+    - unparam            # unused function parameters / results
+    - usestdlibvars      # prefer stdlib constants (http.MethodGet, …)
+    - wastedassign       # assignments never read
+    - whitespace         # leading/trailing whitespace in funcs
+
+  settings:
+    exhaustive:
+      # A `default:` clause counts as covering the rest — we use closed sets but
+      # not always every case explicitly.
+      default-signifies-exhaustive: true
+    misspell:
+      locale: US
+    nakedret:
+      max-func-lines: 30
+    revive:
+      rules:
+        - name: exported          # exported symbols carry doc comments
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
+        - name: if-return
+        - name: indent-error-flow
+        - name: increment-decrement
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: redefines-builtin-id
+    sloglint:
+      no-mixed-args: true         # don't mix key-value pairs and attrs in one call
+    staticcheck:
+      checks:
+        - all
+
+  exclusions:
+    # Only silence findings on clearly generated files, not merely low-confidence
+    # ones — keep the default heuristic strict.
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Test files: unchecked errors are usually deliberate (t.Fatal follows), and
+      # exported-doc / naked-return rigor doesn't earn its keep in tests.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - revive
+          - unparam
+
+# v2 splits formatting out of linters. These run under `golangci-lint fmt` and are
+# also reported by `run`.
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mallardduck/BrambleDNS

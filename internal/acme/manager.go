@@ -57,7 +57,7 @@ func (m *Manager) renewBefore() time.Duration {
 	return time.Duration(d) * 24 * time.Hour
 }
 
-// Run reconciles once immediately, then on a timer until ctx is cancelled. It
+// Run reconciles once immediately, then on a timer until ctx is canceled. It
 // never returns an error — issuance problems are logged and retried, so a DNS
 // provider or connectivity hiccup can't take the whole process down (the engine
 // keeps serving whatever cert is already on disk).

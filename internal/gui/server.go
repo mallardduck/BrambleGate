@@ -2,6 +2,7 @@ package gui
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -165,7 +166,7 @@ func writeErr(w http.ResponseWriter, err error) {
 	switch {
 	case IsValidation(err):
 		writeJSON(w, http.StatusBadRequest, errBody{err.Error()})
-	case err == ErrNotFound:
+	case errors.Is(err, ErrNotFound):
 		writeJSON(w, http.StatusNotFound, errBody{err.Error()})
 	default:
 		writeJSON(w, http.StatusInternalServerError, errBody{err.Error()})

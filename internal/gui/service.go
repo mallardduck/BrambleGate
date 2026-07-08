@@ -49,7 +49,7 @@ func NewService(st *store.Store, reloader Reloader, configDir string, certOpts c
 func (s *Service) SetMDNSTable(t *mdnsbridge.Table) { s.mdns = t }
 
 // ErrMDNSDisabled is returned by the mDNS endpoints when discovery is off.
-var ErrMDNSDisabled = ErrValidation{errors.New("mDNS is disabled (set mdns.enabled: true)")}
+var ErrMDNSDisabled = ValidationError{errors.New("mDNS is disabled (set mdns.enabled: true)")}
 
 // MDNSCandidates returns the current discovery table for the GUI.
 func (s *Service) MDNSCandidates() ([]mdnsbridge.Entry, error) {
@@ -93,7 +93,7 @@ func (s *Service) PromoteMDNS(name string) error {
 
 	host := strings.TrimSuffix(entry.Host, ".")
 	if host == "" {
-		return ErrValidation{fmt.Errorf("discovered entry %q has no host to link", name)}
+		return ValidationError{fmt.Errorf("discovered entry %q has no host to link", name)}
 	}
 	rec := model.Record{
 		Name:  strings.TrimSuffix(entry.Name, "."),
@@ -121,17 +121,17 @@ func (s *Service) refreshMDNS(settings model.Settings, rs model.RecordSet) {
 	}
 }
 
-// ErrValidation marks an error caused by invalid user input (renders to HTTP
+// ValidationError marks an error caused by invalid user input (renders to HTTP
 // 400) as opposed to an internal failure. Reload failures are NOT validation
 // errors — the config was persisted but could not be applied.
-type ErrValidation struct{ err error }
+type ValidationError struct{ err error }
 
-func (e ErrValidation) Error() string { return e.err.Error() }
-func (e ErrValidation) Unwrap() error { return e.err }
+func (e ValidationError) Error() string { return e.err.Error() }
+func (e ValidationError) Unwrap() error { return e.err }
 
 // IsValidation reports whether err originated from model validation.
 func IsValidation(err error) bool {
-	var v ErrValidation
+	var v ValidationError
 	return errors.As(err, &v)
 }
 
@@ -194,7 +194,7 @@ func (s *Service) AddRecord(r model.Record) error {
 		return err
 	}
 	if idx := indexOf(rs, r.Name, r.Type); idx >= 0 {
-		return ErrValidation{fmt.Errorf("a %s record for %q already exists", r.Type, r.Name)}
+		return ValidationError{fmt.Errorf("a %s record for %q already exists", r.Type, r.Name)}
 	}
 	rs.Records = append(rs.Records, r)
 	return s.applyRecords(settings, rs)
@@ -262,7 +262,7 @@ func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) erro
 func (s *Service) render(settings model.Settings, rs model.RecordSet) (configgen.Rendered, error) {
 	rendered, err := configgen.Render(settings, rs, s.certOpts)
 	if err != nil {
-		return configgen.Rendered{}, ErrValidation{err}
+		return configgen.Rendered{}, ValidationError{err}
 	}
 	return rendered, nil
 }

@@ -99,22 +99,23 @@ func globMatch(pattern, s string) bool {
 
 func glob(p, s string) bool {
 	// Iterative matcher with backtracking on '*'.
-	var star int = -1
+	star := -1
 	var ss int
 	i, j := 0, 0
 	for j < len(s) {
-		if i < len(p) && (p[i] == '?' || p[i] == s[j]) {
+		switch {
+		case i < len(p) && (p[i] == '?' || p[i] == s[j]):
 			i++
 			j++
-		} else if i < len(p) && p[i] == '*' {
+		case i < len(p) && p[i] == '*':
 			star = i
 			ss = j
 			i++
-		} else if star >= 0 {
+		case star >= 0:
 			i = star + 1
 			ss++
 			j = ss
-		} else {
+		default:
 			return false
 		}
 	}

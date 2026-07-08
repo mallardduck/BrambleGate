@@ -15,6 +15,7 @@ func corefileOn(port string) []byte {
 // platform quirk of the caddy fork's startup, not a defect in this wrapper. The
 // deployment target is Linux (Docker), where these pass; CI runs on Linux too.
 func skipIfWindows(t *testing.T) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("engine port-binding is verified on Linux/CI; CoreDNS double-binds TCP on Windows")
 	}

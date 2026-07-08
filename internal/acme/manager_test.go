@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"io"
 	"log/slog"
 	"math/big"
 	"os"
@@ -35,7 +34,7 @@ func (s *stubIssuer) Obtain(context.Context) ([]byte, []byte, error) {
 func testManager(t *testing.T, iss Issuer) *Manager {
 	t.Helper()
 	cfg := Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "cloudflare"}
-	m := newManager(cfg, iss, func() error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m := newManager(cfg, iss, func() error { return nil }, slog.New(slog.DiscardHandler))
 	return m
 }
 
@@ -89,8 +88,8 @@ func TestNeedsIssue(t *testing.T) {
 	}
 
 	// Real CA cert, far from expiry → no issuance.
-	real, realk := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
-	writeCert(t, m, real, realk)
+	realCert, realKey := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
+	writeCert(t, m, realCert, realKey)
 	if need, reason := m.needsIssue(); need {
 		t.Fatalf("valid real cert should not need issuance, got: %s", reason)
 	}
@@ -111,8 +110,8 @@ func TestNeedsIssue(t *testing.T) {
 }
 
 func TestReconcileIssuesWritesAndReloads(t *testing.T) {
-	real, realk := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
-	iss := &stubIssuer{cert: real, key: realk}
+	realCert, realKey := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
+	iss := &stubIssuer{cert: realCert, key: realKey}
 	reloaded := 0
 	m := testManager(t, iss)
 	m.reload = func() error { reloaded++; return nil }
@@ -129,7 +128,7 @@ func TestReconcileIssuesWritesAndReloads(t *testing.T) {
 		t.Fatalf("successful reconcile should wait checkInterval, got %s", wait)
 	}
 	onDisk, _ := os.ReadFile(m.certFile())
-	if string(onDisk) != string(real) {
+	if string(onDisk) != string(realCert) {
 		t.Fatal("issued cert was not written to disk")
 	}
 
@@ -156,12 +155,12 @@ func TestReconcileFailureRetriesSoonAndKeepsServing(t *testing.T) {
 }
 
 func TestNewManagerRejectsUnknownProvider(t *testing.T) {
-	_, err := NewManager(Config{Provider: "nonesuch"}, func() error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_, err := NewManager(Config{Provider: "nonesuch"}, func() error { return nil }, slog.New(slog.DiscardHandler))
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
 	}
 	// exec/httpreq escape hatches are accepted.
-	if _, err := NewManager(Config{Provider: "exec"}, func() error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+	if _, err := NewManager(Config{Provider: "exec"}, func() error { return nil }, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatalf("exec should be accepted: %v", err)
 	}
 }
@@ -178,8 +177,8 @@ func TestCADirURL(t *testing.T) {
 	}
 }
 
-var errTest = errTestType("boom")
+var errTest = testError("boom")
 
-type errTestType string
+type testError string
 
-func (e errTestType) Error() string { return string(e) }
+func (e testError) Error() string { return string(e) }

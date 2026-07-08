@@ -1,6 +1,7 @@
 package configgen
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -23,7 +24,7 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 		return err
 	}
 	if s.EncryptedListenerEnabled() && strings.TrimSpace(s.ACME.Domain) == "" {
-		return fmt.Errorf("acme.domain is required when an encrypted listener (DoT/DoH/DoQ) is enabled")
+		return errors.New("acme.domain is required when an encrypted listener (DoT/DoH/DoQ) is enabled")
 	}
 	if err := validateACME(s.ACME); err != nil {
 		return err
@@ -84,42 +85,42 @@ func validateACME(a model.ACME) error {
 		return nil
 	}
 	if strings.TrimSpace(a.Domain) == "" {
-		return fmt.Errorf("acme.domain is required when acme.enabled is true")
+		return errors.New("acme.domain is required when acme.enabled is true")
 	}
 	if strings.TrimSpace(a.Email) == "" {
-		return fmt.Errorf("acme.email is required when acme.enabled is true")
+		return errors.New("acme.email is required when acme.enabled is true")
 	}
 	if strings.TrimSpace(a.DNSProvider) == "" {
-		return fmt.Errorf("acme.dns_provider is required when acme.enabled is true")
+		return errors.New("acme.dns_provider is required when acme.enabled is true")
 	}
 	if a.RenewBeforeDays < 0 {
-		return fmt.Errorf("acme.renew_before_days must not be negative")
+		return errors.New("acme.renew_before_days must not be negative")
 	}
 	return nil
 }
 
 func validateListeners(l model.Listeners) error {
-	any := false
+	enabled := false
 	for name, ln := range map[string]model.Listener{
 		"plain": l.Plain, "dot": l.DoT, "doh": l.DoH, "doq": l.DoQ,
 	} {
 		if !ln.Enabled {
 			continue
 		}
-		any = true
+		enabled = true
 		if ln.Port <= 0 || ln.Port > 65535 {
 			return fmt.Errorf("listeners.%s.port %d is out of range 1-65535", name, ln.Port)
 		}
 	}
-	if !any {
-		return fmt.Errorf("no listeners enabled: enable at least one of plain/dot/doh/doq")
+	if !enabled {
+		return errors.New("no listeners enabled: enable at least one of plain/dot/doh/doq")
 	}
 	return nil
 }
 
 func validateUpstream(u model.UpstreamTarget) error {
 	if strings.TrimSpace(u.Address) == "" {
-		return fmt.Errorf("upstream_dns.address is required")
+		return errors.New("upstream_dns.address is required")
 	}
 	host, port, err := net.SplitHostPort(u.Address)
 	if err != nil {
@@ -152,7 +153,7 @@ func validateVLANs(vlans []model.VLAN) error {
 	seen := map[string]bool{}
 	for _, v := range vlans {
 		if strings.TrimSpace(v.Name) == "" {
-			return fmt.Errorf("a vlan is missing a name")
+			return errors.New("a vlan is missing a name")
 		}
 		if seen[v.Name] {
 			return fmt.Errorf("duplicate vlan name %q", v.Name)
@@ -192,7 +193,7 @@ func validateRecords(rs model.RecordSet, vlans []model.VLAN) error {
 	for _, r := range rs.Records {
 		name := r.NormalizedName()
 		if strings.TrimSpace(r.Name) == "" {
-			return fmt.Errorf("a record is missing a name")
+			return errors.New("a record is missing a name")
 		}
 		if !strings.HasSuffix(name, "."+OwnedZone+".") && name != OwnedZone+"." {
 			return fmt.Errorf("record %q is outside the owned zone %q", r.Name, OwnedZone)
@@ -320,8 +321,11 @@ func validateValue(t model.RecordType, value string) error {
 		}
 	case model.TypeCNAME:
 		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("CNAME target is empty")
+			return errors.New("CNAME target is empty")
 		}
+	case model.TypeMDNS:
+		// mdns records carry no static value (it resolves live from the discovery
+		// table); they never reach here — validateRecords handles them separately.
 	}
 	return nil
 }

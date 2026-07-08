@@ -13,8 +13,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mallardduck/BrambleDNS/model"
 	"gopkg.in/yaml.v3"
+
+	"github.com/mallardduck/BrambleDNS/model"
 )
 
 const (

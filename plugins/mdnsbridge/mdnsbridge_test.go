@@ -2,8 +2,6 @@ package mdnsbridge
 
 import (
 	"context"
-	"io"
-	"log/slog"
 	"net"
 	"testing"
 	"time"
@@ -14,8 +12,6 @@ import (
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 )
-
-func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
 func mustCIDR(t *testing.T, c string) *net.IPNet {
 	t.Helper()
