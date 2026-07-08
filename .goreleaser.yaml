@@ -1,0 +1,40 @@
+version: 2
+
+project_name: bramblegate
+
+# The root module resolves its sibling library modules (engine/, plugins/*,
+# model/, store/, configgen/) via committed `replace` directives, not
+# go.work — same rationale as .github/workflows/ci.yml.
+builds:
+  - id: bramblegate
+    main: .
+    binary: bramblegate
+    env:
+      - CGO_ENABLED=0
+      - GOWORK=off
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  draft: true

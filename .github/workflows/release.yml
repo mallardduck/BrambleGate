@@ -1,10 +1,13 @@
 name: Release
 
-# Multi-arch image build + publish. Runs on a pushed version tag (e.g. v0.1.0)
-# and on manual dispatch. Produces a single multi-platform manifest for
-# linux/amd64 (x86 servers) and linux/arm64 (Raspberry Pi and friends) — the two
-# targets a homelab actually runs on. No CGO is used, so cross-compiling both
-# arches from one builder is cheap (see docs/repo-layout.md "Docker build notes").
+# Multi-arch image build + goreleaser binaries, run in parallel on a pushed
+# version tag (e.g. v0.1.0) and on manual dispatch. goreleaser (.goreleaser.yaml)
+# creates the GitHub release as a draft; once both the image and goreleaser
+# jobs succeed, `undraft` flips it live. Docker produces a single multi-platform
+# manifest for linux/amd64 (x86 servers) and linux/arm64 (Raspberry Pi and
+# friends) — the two targets a homelab actually runs on. No CGO is used, so
+# cross-compiling both arches from one builder is cheap (see
+# docs/repo-layout.md "Docker build notes").
 on:
   push:
     tags: ['v*']
@@ -15,6 +18,32 @@ env:
   IMAGE: ghcr.io/mallardduck/bramblegate
 
 jobs:
+  goreleaser:
+    # workflow_dispatch has no tag for goreleaser to release under.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the draft GitHub release
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0   # full history so goreleaser can build the changelog
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.25'
+
+      # .goreleaser.yaml has `release: draft: true` — this only publishes
+      # binaries/checksums/changelog to a draft release. `undraft` below flips
+      # it live once this and the image build both succeed.
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   image:
     runs-on: ubuntu-latest
     permissions:
@@ -60,3 +89,17 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  undraft:
+    # Only real tag pushes produce a goreleaser draft release to undraft;
+    # workflow_dispatch has no tag and no release.
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [goreleaser, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # flip the draft release live
+    steps:
+      - name: Undraft the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
