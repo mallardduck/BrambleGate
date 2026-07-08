@@ -18,6 +18,9 @@ const (
 	TypeA     RecordType = "A"
 	TypeAAAA  RecordType = "AAAA"
 	TypeCNAME RecordType = "CNAME"
+	// TypeMDNS is a live record: its value is resolved from the mDNS discovery
+	// table at query time via Match (empty when the device is absent), not stored.
+	TypeMDNS RecordType = "mdns"
 )
 
 // Record is one declarative entry. Most records have just a Default value; a
@@ -35,7 +38,13 @@ type Record struct {
 	// override may narrow this further.
 	TTL           uint32         `yaml:"ttl,omitempty" json:"ttl,omitempty"`
 	VLANOverrides []VLANOverride `yaml:"vlan_overrides,omitempty" json:"vlan_overrides,omitempty"`
+	// Match is set only for TypeMDNS records: the selector that resolves this name
+	// against the live mDNS table. Default/TTL/VLANOverrides are unused then.
+	Match *Selector `yaml:"match,omitempty" json:"match,omitempty"`
 }
+
+// IsMDNS reports whether this is a live mDNS-linked record.
+func (r Record) IsMDNS() bool { return r.Type == TypeMDNS }
 
 // VLANOverride adjusts the answer for a record when the client's source address
 // falls in the named VLAN. It is a partial override of the base record:

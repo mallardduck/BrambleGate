@@ -17,8 +17,9 @@ import (
 	_ "github.com/coredns/coredns/plugin/whoami"
 
 	// BrambleDNS custom plugins. Blank-importing registers them under their
-	// directive names (reserved in Directives below). mdnsbridge joins in Phase 5.
+	// directive names (reserved in Directives below).
 	_ "github.com/mallardduck/BrambleDNS/plugins/localrecords"
+	_ "github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
 
 	"github.com/coredns/coredns/core/dnsserver"
 )
@@ -69,10 +70,17 @@ func init() {
 		// BrambleDNS custom plugins run BEFORE cache: localrecords answers are
 		// per-VLAN (split-horizon) and must never be globally cached — the cache
 		// is not keyed by client subnet, so caching them would serve one VLAN's
-		// answer to another. They also don't need caching (in-memory, instant).
-		// Out-of-zone queries fall through past cache to forward as usual.
-		"localrecords",
+		// answer to another. mdnsbridge answers change with device liveness, so it
+		// also shouldn't be cached. Out-of-zone queries fall through past cache to
+		// forward as usual.
+		//
+		// mdnsbridge runs BEFORE localrecords: localrecords is the authoritative
+		// home.arpa NXDOMAIN emitter (no fallthrough on miss, to avoid leaking
+		// internal queries), so anything that wants to answer a home.arpa name must
+		// precede it. mdnsbridge answers published discoveries and otherwise falls
+		// through to localrecords (docs/plugins.md).
 		"mdnsbridge",
+		"localrecords",
 		"cache",
 		"rewrite",
 		"acl",

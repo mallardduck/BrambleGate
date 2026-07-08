@@ -68,6 +68,15 @@
     </fieldset>
   </form>
 
+  <section id="mdnsSection" style="display:none">
+    <h2>Discovered devices (mDNS)</h2>
+    <p><small class="hint">Names seen on the network, mapped into <span class="mono">home.arpa</span>. <b>Publish</b> serves it live; <b>Promote</b> writes a permanent record.</small></p>
+    <table>
+      <thead><tr><th>Name</th><th>Host</th><th>Service</th><th>Addresses</th><th>Served</th><th></th></tr></thead>
+      <tbody id="mdnsRows"></tbody>
+    </table>
+  </section>
+
   <h2>Settings</h2>
   <form class="row" id="settings">
     <label class="field">Upstream DNS<input id="upstream" placeholder="192.168.10.5:53"></label>
@@ -207,9 +216,39 @@
       catch (err) { show(err.message, false); }
     };
 
+    async function loadMDNS() {
+      let data;
+      try { data = await api("GET", "/api/mdns"); }
+      catch { $("mdnsSection").style.display = "none"; return; } // disabled
+      $("mdnsSection").style.display = "";
+      const rows = $("mdnsRows");
+      rows.innerHTML = "";
+      for (const e of (data.entries || [])) {
+        const addrs = [...(e.ipv4 || []), ...(e.ipv6 || [])].join(", ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="mono">${e.name}</td><td class="mono">${e.host || ""}</td><td>${e.service || ""}</td><td class="mono">${addrs}</td><td>${e.published ? "✓" : "—"}</td>`;
+        const td = document.createElement("td");
+        const toggle = document.createElement("button");
+        toggle.className = "link";
+        toggle.textContent = e.published ? "Unpublish" : "Publish";
+        toggle.onclick = async () => {
+          try { await api("POST", `/api/mdns/${encodeURIComponent(e.name)}/${e.published ? "unpublish" : "publish"}`); loadMDNS(); }
+          catch (err) { show(err.message, false); }
+        };
+        const promote = document.createElement("button");
+        promote.className = "link"; promote.textContent = "Promote";
+        promote.onclick = async () => {
+          try { await api("POST", `/api/mdns/${encodeURIComponent(e.name)}/promote`); show(`Promoted ${e.name} to a permanent record.`, true); loadMDNS(); loadRecords(); }
+          catch (err) { show(err.message, false); }
+        };
+        td.append(toggle, promote); tr.appendChild(td); rows.appendChild(tr);
+      }
+    }
+
     (async () => {
-      try { await loadSettings(); await loadRecords(); }
+      try { await loadSettings(); await loadRecords(); await loadMDNS(); }
       catch (e) { show(e.message, false); }
+      setInterval(() => loadMDNS().catch(() => {}), 5000); // mDNS is live; refresh
     })();
   </script>
 </body>

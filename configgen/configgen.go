@@ -60,11 +60,20 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 		return Rendered{}, err
 	}
 
+	// mdns-typed records are served live by the mdnsbridge plugin, not localrecords,
+	// so they are excluded from the zone data (which has no static value for them).
+	static := make([]model.Record, 0, len(rs.Records))
+	for _, r := range rs.Records {
+		if !r.IsMDNS() {
+			static = append(static, r)
+		}
+	}
+
 	zone, err := json.MarshalIndent(zoneData{
 		DefaultTTL: DefaultTTL,
 		Zones:      []string{OwnedZone},
 		VLANs:      s.VLANs,
-		Records:    rs.Records,
+		Records:    static,
 	}, "", "  ")
 	if err != nil {
 		return Rendered{}, fmt.Errorf("marshal zone data: %w", err)
@@ -88,6 +97,11 @@ func writeServerBlock(b *strings.Builder, addr string, tls bool, s model.Setting
 	fmt.Fprintf(b, "%s {\n", addr)
 	if tls {
 		fmt.Fprintf(b, "\ttls %s %s\n", opts.CertFile, opts.KeyFile)
+	}
+	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
+	// ahead of localrecords per the directive order. Only rendered when enabled.
+	if s.MDNS.Enabled {
+		b.WriteString("\tmdnsbridge\n")
 	}
 	fmt.Fprintf(b, "\tlocalrecords %s {\n", OwnedZone)
 	fmt.Fprintf(b, "\t\tzonedata %s\n", ZoneDataPath(opts.ConfigDir))

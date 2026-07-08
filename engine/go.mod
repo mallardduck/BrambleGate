@@ -8,6 +8,11 @@ require (
 )
 
 require (
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/grandcat/zeroconf v1.0.0 // indirect
+)
+
+require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -21,6 +26,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/mallardduck/BrambleDNS/plugins/localrecords v0.0.0
+	github.com/mallardduck/BrambleDNS/plugins/mdnsbridge v0.0.0
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mdlayher/vsock v1.2.1 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
@@ -52,3 +58,5 @@ require (
 )
 
 replace github.com/mallardduck/BrambleDNS/plugins/localrecords => ../plugins/localrecords
+
+replace github.com/mallardduck/BrambleDNS/plugins/mdnsbridge => ../plugins/mdnsbridge

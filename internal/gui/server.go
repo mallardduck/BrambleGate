@@ -27,6 +27,11 @@ func NewServer(svc *Service, addr string) *http.Server {
 		r.Delete("/records/{name}/{type}", h.deleteRecord)
 		r.Get("/settings", h.getSettings)
 		r.Put("/settings", h.putSettings)
+
+		r.Get("/mdns", h.listMDNS)
+		r.Post("/mdns/{name}/publish", h.publishMDNS)
+		r.Post("/mdns/{name}/unpublish", h.unpublishMDNS)
+		r.Post("/mdns/{name}/promote", h.promoteMDNS)
 	})
 
 	sub, err := fs.Sub(staticFiles, "static")
@@ -105,6 +110,39 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
+}
+
+func (h *handlers) listMDNS(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.svc.MDNSCandidates()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+}
+
+func (h *handlers) publishMDNS(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.SetMDNSPublished(chi.URLParam(r, "name"), true); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handlers) unpublishMDNS(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.SetMDNSPublished(chi.URLParam(r, "name"), false); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handlers) promoteMDNS(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.PromoteMDNS(chi.URLParam(r, "name")); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }
 
 func decodeRecord(w http.ResponseWriter, r *http.Request) (model.Record, bool) {

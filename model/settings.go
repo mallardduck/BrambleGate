@@ -63,11 +63,21 @@ type ACME struct {
 	RenewBeforeDays int    `yaml:"renew_before_days" json:"renew_before_days"`
 }
 
-// MDNS configures the mdnsbridge plugin (docs/plugins.md).
+// MDNS configures the mdnsbridge plugin (docs/plugins.md). Publishing is driven
+// by selectors, not a coarse mode: a discovery is served live when it matches any
+// AutoPublish selector; otherwise it is a candidate to approve/promote in the GUI.
 type MDNS struct {
-	Enabled            bool     `yaml:"enabled" json:"enabled"`
-	DefaultPublishMode string   `yaml:"default_publish_mode" json:"default_publish_mode"` // require-approval | auto-publish
-	Interfaces         []string `yaml:"interfaces" json:"interfaces"`
+	Enabled    bool     `yaml:"enabled" json:"enabled"`
+	Interfaces []string `yaml:"interfaces" json:"interfaces"` // [] or ["all"] = all
+	// ServiceTypes to browse (e.g. "_http._tcp"); empty uses the plugin defaults.
+	ServiceTypes []string `yaml:"service_types,omitempty" json:"service_types,omitempty"`
+	// Suffix is the default zone discovered names map into; empty → home.arpa.
+	Suffix string `yaml:"suffix,omitempty" json:"suffix,omitempty"`
+	// AutoPublish serves a discovery live when any selector matches (OR). Empty
+	// means nothing is auto-published (approve/promote manually).
+	AutoPublish []Selector `yaml:"auto_publish,omitempty" json:"auto_publish,omitempty"`
+	// Naming overrides the suffix for matching discoveries.
+	Naming []NamingRule `yaml:"naming,omitempty" json:"naming,omitempty"`
 }
 
 // EncryptedListenerEnabled reports whether any transport that needs a

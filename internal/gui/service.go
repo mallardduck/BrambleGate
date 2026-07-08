@@ -8,10 +8,13 @@ package gui
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/mallardduck/BrambleDNS/configgen"
+	"github.com/mallardduck/BrambleDNS/internal/mdnscfg"
 	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleDNS/store"
 )
 
@@ -31,12 +34,91 @@ type Service struct {
 	configDir string
 	certOpts  configgen.Options
 
+	mdns *mdnsbridge.Table // nil when mDNS is disabled
+
 	mu sync.Mutex // serializes read-modify-write of the config files
 }
 
 // NewService wires the GUI application layer.
 func NewService(st *store.Store, reloader Reloader, configDir string, certOpts configgen.Options) *Service {
 	return &Service{store: st, reloader: reloader, configDir: configDir, certOpts: certOpts}
+}
+
+// SetMDNSTable gives the GUI read/approve access to the live discovery table.
+// Pass nil when mDNS is disabled.
+func (s *Service) SetMDNSTable(t *mdnsbridge.Table) { s.mdns = t }
+
+// ErrMDNSDisabled is returned by the mDNS endpoints when discovery is off.
+var ErrMDNSDisabled = ErrValidation{errors.New("mDNS is disabled (set mdns.enabled: true)")}
+
+// MDNSCandidates returns the current discovery table for the GUI.
+func (s *Service) MDNSCandidates() ([]mdnsbridge.Entry, error) {
+	if s.mdns == nil {
+		return nil, ErrMDNSDisabled
+	}
+	return s.mdns.Snapshot(), nil
+}
+
+// SetMDNSPublished approves/unapproves a discovered entry for serving (runtime
+// state only — no records.yaml write).
+func (s *Service) SetMDNSPublished(name string, published bool) error {
+	if s.mdns == nil {
+		return ErrMDNSDisabled
+	}
+	if !s.mdns.SetPublished(name, published) {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// PromoteMDNS turns a discovered entry into a durable *live* record in
+// records.yaml: a type:mdns record whose value is resolved from the discovery
+// table via a selector (keyed on the device's host, the stable identifier). It
+// survives restarts and IP changes, and answers empty (NODATA) when the device is
+// absent — it is NOT a frozen snapshot of the current IP (docs/plugins.md).
+func (s *Service) PromoteMDNS(name string) error {
+	if s.mdns == nil {
+		return ErrMDNSDisabled
+	}
+	var entry mdnsbridge.Entry
+	for _, e := range s.mdns.Snapshot() {
+		if strings.EqualFold(e.Name, ensureDot(name)) {
+			entry = e
+			break
+		}
+	}
+	if entry.Name == "" {
+		return ErrNotFound
+	}
+
+	host := strings.TrimSuffix(entry.Host, ".")
+	if host == "" {
+		return ErrValidation{fmt.Errorf("discovered entry %q has no host to link", name)}
+	}
+	rec := model.Record{
+		Name:  strings.TrimSuffix(entry.Name, "."),
+		Type:  model.TypeMDNS,
+		Match: &model.Selector{Host: host},
+	}
+	// AddRecord runs the normal validate→save→reload pipeline and (via
+	// applyRecords) refreshes the discovery table's promoted bindings.
+	return s.AddRecord(rec)
+}
+
+func ensureDot(name string) string {
+	if strings.HasSuffix(name, ".") {
+		return name
+	}
+	return name + "."
+}
+
+// refreshMDNS rebuilds the discovery table's config from the current settings +
+// records (promoted bindings, auto-publish, naming). Called after any save so a
+// new type:mdns record or an mdns settings change takes effect live.
+func (s *Service) refreshMDNS(settings model.Settings, rs model.RecordSet) {
+	if s.mdns != nil {
+		s.mdns.SetConfig(mdnscfg.Build(settings, rs))
+	}
 }
 
 // ErrValidation marks an error caused by invalid user input (renders to HTTP
@@ -94,7 +176,9 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	if err := s.store.SaveSettings(settings); err != nil {
 		return err
 	}
-	return s.reload(rendered)
+	reloadErr := s.reload(rendered)
+	s.refreshMDNS(settings, rs)
+	return reloadErr
 }
 
 // AddRecord appends a record, rejecting a duplicate (same name+type).
@@ -170,7 +254,9 @@ func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) erro
 	if err := s.store.SaveRecords(rs); err != nil {
 		return err
 	}
-	return s.reload(rendered)
+	reloadErr := s.reload(rendered)
+	s.refreshMDNS(settings, rs)
+	return reloadErr
 }
 
 func (s *Service) render(settings model.Settings, rs model.RecordSet) (configgen.Rendered, error) {

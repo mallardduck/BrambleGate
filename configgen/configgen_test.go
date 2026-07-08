@@ -49,6 +49,35 @@ func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 	}
 }
 
+func TestRenderMDNSStanzaOnlyWhenEnabled(t *testing.T) {
+	rs := model.RecordSet{}
+
+	off := baseSettings() // mdns disabled by default
+	out, err := Render(off, rs, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out.Corefile), "mdnsbridge") {
+		t.Fatalf("mdnsbridge should not be rendered when disabled:\n%s", out.Corefile)
+	}
+
+	on := baseSettings()
+	on.MDNS.Enabled = true
+	out, err = Render(on, rs, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf := string(out.Corefile)
+	if strings.Count(cf, "mdnsbridge") != 2 { // one per server block (plain + dot)
+		t.Fatalf("mdnsbridge should appear in both server blocks when enabled:\n%s", cf)
+	}
+	// It must be rendered ahead of localrecords within each block (readability;
+	// actual chain order is fixed by dnsserver.Directives).
+	if strings.Index(cf, "mdnsbridge") > strings.Index(cf, "localrecords") {
+		t.Fatalf("mdnsbridge should be written before localrecords:\n%s", cf)
+	}
+}
+
 func TestRenderZoneDataJSON(t *testing.T) {
 	deny := model.VLANOverride{VLAN: "untrusted-wifi", NXDomain: true}
 	rs := model.RecordSet{Records: []model.Record{
@@ -144,6 +173,62 @@ func TestValidateRejects(t *testing.T) {
 				t.Fatalf("expected validation error for %q", name)
 			}
 		})
+	}
+}
+
+func TestMDNSRecordExcludedFromZoneDataAndValidated(t *testing.T) {
+	s := baseSettings()
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},
+		{Name: "printer.home.arpa", Type: model.TypeMDNS, Match: &model.Selector{Host: "printer.local"}},
+	}}
+	out, err := Render(s, rs, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	zd := string(out.ZoneData)
+	if strings.Contains(zd, "printer.home.arpa") {
+		t.Fatalf("mdns record must be excluded from localrecords zone data:\n%s", zd)
+	}
+	if !strings.Contains(zd, "nas.home.arpa") {
+		t.Fatalf("static record should be in zone data:\n%s", zd)
+	}
+
+	bad := map[string]model.Record{
+		"mdns without match": {Name: "x.home.arpa", Type: model.TypeMDNS},
+		"mdns with default":  {Name: "x.home.arpa", Type: model.TypeMDNS, Default: "1.2.3.4", Match: &model.Selector{Host: "x.local"}},
+		"match on non-mdns":  {Name: "x.home.arpa", Type: model.TypeA, Default: "1.2.3.4", Match: &model.Selector{Host: "x.local"}},
+		"mdns bad vlan":      {Name: "x.home.arpa", Type: model.TypeMDNS, Match: &model.Selector{VLAN: "ghost"}},
+	}
+	for name, rec := range bad {
+		t.Run(name, func(t *testing.T) {
+			if err := Validate(baseSettings(), model.RecordSet{Records: []model.Record{rec}}); err == nil {
+				t.Fatalf("expected validation error for %q", name)
+			}
+		})
+	}
+}
+
+func TestValidateMDNSBlock(t *testing.T) {
+	s := baseSettings()
+	s.MDNS = model.MDNS{
+		Enabled:     true,
+		Suffix:      "not-in-zone.example.com", // outside owned zone → error
+		AutoPublish: []model.Selector{{Service: "_airplay._tcp"}},
+	}
+	if err := Validate(s, model.RecordSet{}); err == nil {
+		t.Fatal("suffix outside owned zone should be rejected")
+	}
+
+	s.MDNS.Suffix = "media.home.arpa"
+	s.MDNS.AutoPublish = []model.Selector{{VLAN: "ghost"}} // unknown vlan
+	if err := Validate(s, model.RecordSet{}); err == nil {
+		t.Fatal("auto_publish selector with unknown vlan should be rejected")
+	}
+
+	s.MDNS.AutoPublish = []model.Selector{{Service: "_airplay._tcp", VLAN: "trusted"}}
+	if err := Validate(s, model.RecordSet{}); err != nil {
+		t.Fatalf("valid mdns block should pass: %v", err)
 	}
 }
 

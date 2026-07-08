@@ -28,7 +28,52 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 	if err := validateACME(s.ACME); err != nil {
 		return err
 	}
+	if err := validateMDNS(s.MDNS, s.VLANs); err != nil {
+		return err
+	}
 	return validateRecords(rs, s.VLANs)
+}
+
+// validateMDNS checks the mDNS block: suffixes must stay inside the owned zone,
+// and selector VLAN/family references must be valid.
+func validateMDNS(m model.MDNS, vlans []model.VLAN) error {
+	if !m.Enabled {
+		return nil
+	}
+	vlanNames := map[string]bool{}
+	for _, v := range vlans {
+		vlanNames[v.Name] = true
+	}
+	if err := validateSuffix(m.Suffix); err != nil {
+		return fmt.Errorf("mdns.suffix: %w", err)
+	}
+	for i, s := range m.AutoPublish {
+		if err := validateSelector(s, vlanNames, fmt.Sprintf("mdns.auto_publish[%d]", i)); err != nil {
+			return err
+		}
+	}
+	for i, r := range m.Naming {
+		if err := validateSelector(r.Match, vlanNames, fmt.Sprintf("mdns.naming[%d].match", i)); err != nil {
+			return err
+		}
+		if err := validateSuffix(r.Suffix); err != nil {
+			return fmt.Errorf("mdns.naming[%d].suffix: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// validateSuffix requires a naming suffix to be the owned zone or a subdomain of
+// it, so discovered names never fall outside where localrecords is authoritative.
+func validateSuffix(suffix string) error {
+	if suffix == "" {
+		return nil // defaults to OwnedZone
+	}
+	s := strings.TrimSuffix(strings.ToLower(suffix), ".")
+	if s != OwnedZone && !strings.HasSuffix(s, "."+OwnedZone) {
+		return fmt.Errorf("%q must be %q or a subdomain of it", suffix, OwnedZone)
+	}
+	return nil
 }
 
 // validateACME checks the fields ACME issuance needs when it is turned on. The
@@ -153,17 +198,27 @@ func validateRecords(rs model.RecordSet, vlans []model.VLAN) error {
 			return fmt.Errorf("record %q is outside the owned zone %q", r.Name, OwnedZone)
 		}
 
-		switch r.Type {
-		case model.TypeA, model.TypeAAAA, model.TypeCNAME:
-		default:
-			return fmt.Errorf("record %q has unsupported type %q", r.Name, r.Type)
-		}
-
 		key := name + "/" + string(r.Type)
 		if seen[key] {
 			return fmt.Errorf("duplicate record for %q type %s", r.Name, r.Type)
 		}
 		seen[key] = true
+
+		if r.IsMDNS() {
+			if err := validateMDNSRecord(r, vlanNames); err != nil {
+				return err
+			}
+			continue
+		}
+
+		switch r.Type {
+		case model.TypeA, model.TypeAAAA, model.TypeCNAME:
+		default:
+			return fmt.Errorf("record %q has unsupported type %q", r.Name, r.Type)
+		}
+		if r.Match != nil {
+			return fmt.Errorf("record %q: match is only valid for type mdns", r.Name)
+		}
 
 		if r.Default != "" {
 			if err := validateValue(r.Type, r.Default); err != nil {
@@ -180,6 +235,31 @@ func validateRecords(rs model.RecordSet, vlans []model.VLAN) error {
 		if r.Default == "" && !anyOverrideProvidesValue(r) {
 			return fmt.Errorf("record %q has no default and no vlan_override supplies a value", r.Name)
 		}
+	}
+	return nil
+}
+
+// validateMDNSRecord checks a live mDNS-linked record: it must carry a Match
+// selector and nothing static.
+func validateMDNSRecord(r model.Record, vlanNames map[string]bool) error {
+	if r.Match == nil || r.Match.IsZero() {
+		return fmt.Errorf("mdns record %q must set a non-empty match selector", r.Name)
+	}
+	if r.Default != "" || r.TTL != 0 || len(r.VLANOverrides) != 0 {
+		return fmt.Errorf("mdns record %q must not set default/ttl/vlan_overrides (value comes live from mDNS)", r.Name)
+	}
+	return validateSelector(*r.Match, vlanNames, fmt.Sprintf("mdns record %q", r.Name))
+}
+
+// validateSelector checks a selector's VLAN reference and family value.
+func validateSelector(s model.Selector, vlanNames map[string]bool, ctx string) error {
+	if s.VLAN != "" && !vlanNames[s.VLAN] {
+		return fmt.Errorf("%s references unknown vlan %q", ctx, s.VLAN)
+	}
+	switch strings.ToLower(s.Family) {
+	case "", "ipv4", "ipv6":
+	default:
+		return fmt.Errorf("%s has invalid family %q (want ipv4 or ipv6)", ctx, s.Family)
 	}
 	return nil
 }

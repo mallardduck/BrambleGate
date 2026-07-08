@@ -38,3 +38,16 @@ acme:
   renew_before_days: 30
   # Credentials come from environment variables, never this file
   # (e.g. CLOUDFLARE_DNS_API_TOKEN).
+
+mdns:
+  # Discover mDNS (.local) devices and make them resolvable under home.arpa.
+  # Nothing is auto-served unless a discovery matches an auto_publish selector;
+  # otherwise approve/promote candidates in the GUI. See docs/plugins.md.
+  enabled: false
+  interfaces: [all]         # [] and [all] both = all multicast interfaces
+  suffix: home.arpa
+  # service_types: [_http._tcp, _airplay._tcp]   # optional; empty = sensible defaults
+  auto_publish: []          # e.g. [{ service: _airplay._tcp, vlan: trusted }]
+  # naming:                 # optional per-selector suffix overrides
+  #   - match: { service: _airplay._tcp }
+  #     suffix: media.home.arpa

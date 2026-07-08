@@ -36,6 +36,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/bodgit/tsig v1.2.2 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
@@ -46,6 +47,7 @@ require (
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
+	github.com/grandcat/zeroconf v1.0.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
@@ -89,6 +91,7 @@ require (
 	github.com/mallardduck/BrambleDNS/configgen v0.0.0
 	github.com/mallardduck/BrambleDNS/model v0.0.0
 	github.com/mallardduck/BrambleDNS/plugins/localrecords v0.0.0 // indirect
+	github.com/mallardduck/BrambleDNS/plugins/mdnsbridge v0.0.0
 	github.com/mallardduck/BrambleDNS/store v0.0.0
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mdlayher/vsock v1.2.1 // indirect
@@ -134,3 +137,5 @@ replace github.com/mallardduck/BrambleDNS/store => ./store
 replace github.com/mallardduck/BrambleDNS/model => ./model
 
 replace github.com/mallardduck/BrambleDNS/plugins/localrecords => ./plugins/localrecords
+
+replace github.com/mallardduck/BrambleDNS/plugins/mdnsbridge => ./plugins/mdnsbridge

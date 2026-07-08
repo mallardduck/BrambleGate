@@ -18,7 +18,9 @@ import (
 	"github.com/mallardduck/BrambleDNS/engine"
 	"github.com/mallardduck/BrambleDNS/internal/acme"
 	"github.com/mallardduck/BrambleDNS/internal/gui"
+	"github.com/mallardduck/BrambleDNS/internal/mdnscfg"
 	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleDNS/store"
 )
 
@@ -68,6 +70,15 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 			"cert", opts.CertFile, "cn", settings.ACME.Domain)
 	}
 
+	// The mDNS discovery table is owned by this process (it must outlive engine
+	// reloads) and injected into the plugin before the engine starts. nil when
+	// mDNS is disabled — the mdnsbridge stanza is then not rendered.
+	var mdnsTable *mdnsbridge.Table
+	if settings.MDNS.Enabled {
+		mdnsTable = mdnsbridge.NewTable(mdnscfg.Build(settings, records), 0)
+		mdnsbridge.SetTable(mdnsTable)
+	}
+
 	rendered, err := configgen.Render(settings, records, opts)
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
@@ -99,8 +110,17 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// GUI goroutine: shares ctx and the same *engine.Engine (as the Reloader).
+	// mDNS listener goroutine: browses the network and feeds the shared table,
+	// independent of engine reloads. Owned here, not in the plugin (docs/plugins.md).
+	if mdnsTable != nil {
+		listener := mdnsbridge.NewListener(mdnsTable, settings.MDNS.ServiceTypes, settings.MDNS.Interfaces, log)
+		go listener.Run(ctx)
+	}
+
+	// GUI goroutine: shares ctx and the same *engine.Engine (as the Reloader). It
+	// also holds the mDNS table (nil when disabled) for the candidates view.
 	svc := gui.NewService(st, eng, configDir, opts)
+	svc.SetMDNSTable(mdnsTable)
 	srv := gui.NewServer(svc, guiAddr)
 	go func() {
 		log.Info("web GUI up", "addr", guiAddr)
