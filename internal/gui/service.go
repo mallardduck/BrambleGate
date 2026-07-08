@@ -6,8 +6,11 @@
 package gui
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 
@@ -33,20 +36,77 @@ type Service struct {
 	reloader  Reloader
 	configDir string
 	certOpts  configgen.Options
+	baseCtx   context.Context // parent for the mDNS listener goroutine's lifetime
+	log       *slog.Logger
 
 	mdns *mdnsbridge.Table // nil when mDNS is disabled
+
+	mdnsCancel context.CancelFunc // non-nil while the browse goroutine is running
+	mdnsCfg    mdnsListenerConfig // services/ifaces the running goroutine was started with
 
 	mu sync.Mutex // serializes read-modify-write of the config files
 }
 
-// NewService wires the GUI application layer.
-func NewService(st *store.Store, reloader Reloader, configDir string, certOpts configgen.Options) *Service {
-	return &Service{store: st, reloader: reloader, configDir: configDir, certOpts: certOpts}
+// mdnsListenerConfig is the subset of model.MDNS the running browse goroutine
+// was configured with — compared on every SaveSettings to decide whether the
+// goroutine needs restarting (Enabled/Suffix/AutoPublish/Naming changes don't
+// require a restart; only the actual browse parameters do).
+type mdnsListenerConfig struct {
+	services []string
+	ifaces   []string
 }
 
-// SetMDNSTable gives the GUI read/approve access to the live discovery table.
-// Pass nil when mDNS is disabled.
+func (c mdnsListenerConfig) equal(other mdnsListenerConfig) bool {
+	return slices.Equal(c.services, other.services) && slices.Equal(c.ifaces, other.ifaces)
+}
+
+// runMDNSListener starts browsing and blocks until ctx is canceled. Overridable
+// so tests can exercise the enable/disable/reconfigure lifecycle without
+// binding real mDNS multicast sockets.
+var runMDNSListener = func(ctx context.Context, tbl *mdnsbridge.Table, services, ifaces []string, log *slog.Logger) {
+	mdnsbridge.NewListener(tbl, services, ifaces, log).Run(ctx)
+}
+
+// NewService wires the GUI application layer. ctx bounds the lifetime of the
+// mDNS browse goroutine (started/stopped independently of engine reloads as
+// mdns.enabled is toggled); log is used only for that goroutine's own logging.
+func NewService(ctx context.Context, st *store.Store, reloader Reloader, configDir string, certOpts configgen.Options, log *slog.Logger) *Service {
+	return &Service{store: st, reloader: reloader, configDir: configDir, certOpts: certOpts, baseCtx: ctx, log: log}
+}
+
+// SetMDNSTable gives the GUI read/approve access to a discovery table without
+// starting a browse goroutine — used by callers (and tests) that manage the
+// table's lifecycle themselves. Pass nil when mDNS is disabled. For the normal
+// "let the GUI own the whole lifecycle" path, mDNS starts/stops/reconfigures
+// itself from SaveSettings; see StartMDNS for adopting an already-built table
+// at process startup.
 func (s *Service) SetMDNSTable(t *mdnsbridge.Table) { s.mdns = t }
+
+// StartMDNS adopts tbl (already injected into the mdnsbridge plugin via
+// mdnsbridge.SetTable by the caller) and starts its browse goroutine, bound to
+// the Service's ctx. Used once at process startup when mDNS is enabled from the
+// start; later enable/disable/reconfigure transitions go through SaveSettings.
+func (s *Service) StartMDNS(tbl *mdnsbridge.Table, cfg model.MDNS) {
+	s.mdns = tbl
+	ctx, cancel := context.WithCancel(s.baseCtx)
+	s.mdnsCancel = cancel
+	s.mdnsCfg = mdnsListenerConfig{services: cfg.ServiceTypes, ifaces: cfg.Interfaces}
+	go runMDNSListener(ctx, tbl, cfg.ServiceTypes, cfg.Interfaces, s.log)
+}
+
+// StopMDNS cancels the browse goroutine (if running) and clears the table, both
+// locally and from the plugin's injected global.
+func (s *Service) StopMDNS() {
+	if s.mdnsCancel != nil {
+		s.mdnsCancel()
+		s.mdnsCancel = nil
+	}
+	s.mdnsCfg = mdnsListenerConfig{}
+	if s.mdns != nil {
+		mdnsbridge.SetTable(nil)
+		s.mdns = nil
+	}
+}
 
 // ErrMDNSDisabled is returned by the mDNS endpoints when discovery is off.
 var ErrMDNSDisabled = ValidationError{errors.New("mDNS is disabled (set mdns.enabled: true)")}
@@ -162,6 +222,14 @@ func (s *Service) SaveRecords(rs model.RecordSet) error {
 
 // SaveSettings validates+persists settings and reloads the engine. Records are
 // re-read so the rendered Corefile stays consistent with them.
+//
+// mDNS enable/disable/reconfigure is the one transition that must straddle the
+// reload: turning it on requires the table to exist and be injected into the
+// mdnsbridge plugin (mdnsPreReload) BEFORE the reload that adds the `mdnsbridge`
+// stanza to the Corefile (the plugin's setup() reads the injected table
+// synchronously while parsing); turning it off, or (re)starting the browse
+// goroutine, is safe only AFTER the reload has swapped the stanza in/out
+// (mdnsPostReload).
 func (s *Service) SaveSettings(settings model.Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -176,9 +244,39 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	if err := s.store.SaveSettings(settings); err != nil {
 		return err
 	}
+	s.mdnsPreReload(settings, rs)
 	reloadErr := s.reload(rendered)
-	s.refreshMDNS(settings, rs)
+	s.mdnsPostReload(settings, rs)
 	return reloadErr
+}
+
+// mdnsPreReload creates and injects the discovery table when mDNS is being
+// turned on, so the about-to-run reload's Corefile parse finds it. It does not
+// start the browse goroutine — that happens in mdnsPostReload, once the reload
+// (and therefore the new Corefile) has actually landed.
+func (s *Service) mdnsPreReload(settings model.Settings, rs model.RecordSet) {
+	if settings.MDNS.Enabled && s.mdns == nil {
+		tbl := mdnsbridge.NewTable(mdnscfg.Build(settings, rs), 0)
+		mdnsbridge.SetTable(tbl)
+		s.mdns = tbl
+	}
+}
+
+// mdnsPostReload starts/stops/restarts the browse goroutine to match the new
+// settings, now that the reload has applied (or failed to apply — either way,
+// the Corefile the running engine now serves reflects the persisted settings).
+func (s *Service) mdnsPostReload(settings model.Settings, rs model.RecordSet) {
+	switch {
+	case !settings.MDNS.Enabled:
+		s.StopMDNS()
+	case s.mdnsCancel == nil:
+		s.StartMDNS(s.mdns, settings.MDNS)
+	case !s.mdnsCfg.equal(mdnsListenerConfig{services: settings.MDNS.ServiceTypes, ifaces: settings.MDNS.Interfaces}):
+		s.mdnsCancel()
+		s.StartMDNS(s.mdns, settings.MDNS)
+	default:
+		s.refreshMDNS(settings, rs)
+	}
 }
 
 // AddRecord appends a record, rejecting a duplicate (same name+type).

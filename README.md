@@ -180,3 +180,18 @@ Design docs live under [`docs/`](docs/) (architecture, DNS engine, plugins, conf
 schema, certificates, roadmap). The repo is a multi-module Go workspace — see
 [`docs/repo-layout.md`](docs/repo-layout.md) for the module layout and the
 `replace`-vs-`go.work` build model.
+
+The dashboard (`internal/gui/ui`) is server-rendered with
+[`a-h/templ`](https://templ.guide) + [htmx](https://htmx.org), styled with Tailwind
+CSS v4 via its standalone CLI — no Node/npm anywhere. Generated `*_templ.go` files and
+`internal/gui/static/style.css` are committed, so a plain `go build ./...` works
+without any extra tooling. After editing anything under `internal/gui/ui`, regenerate
+both with:
+
+```sh
+go generate ./...
+```
+
+(`go tool templ generate` recompiles `.templ` → `_templ.go`; `cmd/gentailwind`
+downloads the Tailwind standalone binary into `./bin/` on first run and rebuilds
+`style.css`.) CI fails if the committed generated files are out of date.

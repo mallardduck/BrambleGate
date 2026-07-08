@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+/* BrambleGate palette — a small set of semantic tokens so dark mode is just
+   swapping these values, not rewriting every utility class. */
+@theme {
+  --color-bramble-bg:          #F3F4EE;
+  --color-bramble-bg-card:     #FFFFFF;
+  --color-bramble-bg-card2:    #ECEEE4;
+  --color-bramble-bg-input:    #FFFFFF;
+  --color-bramble-border:      #DCDFD3;
+  --color-bramble-text:        #1B1F18;
+  --color-bramble-muted:       #5B6355;
+  --color-bramble-primary:     #3F6B3A;
+  --color-bramble-primary-dark:#2E4F2A;
+  --color-bramble-danger:      #A3312A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --color-bramble-bg:           #14170F;
+    --color-bramble-bg-card:      #1C2016;
+    --color-bramble-bg-card2:     #232819;
+    --color-bramble-bg-input:     #14170F;
+    --color-bramble-border:       #2E3524;
+    --color-bramble-text:         #E7EBDE;
+    --color-bramble-muted:        #93A085;
+    --color-bramble-primary:      #6FAE64;
+    --color-bramble-primary-dark: #558A4C;
+    --color-bramble-danger:       #E0645C;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bramble-bg:           #14170F;
+  --color-bramble-bg-card:      #1C2016;
+  --color-bramble-bg-card2:     #232819;
+  --color-bramble-bg-input:     #14170F;
+  --color-bramble-border:       #2E3524;
+  --color-bramble-text:         #E7EBDE;
+  --color-bramble-muted:        #93A085;
+  --color-bramble-primary:      #6FAE64;
+  --color-bramble-primary-dark: #558A4C;
+  --color-bramble-danger:       #E0645C;
+}
+
+/* Theme toggle: highlight the active segment. */
+[data-theme-btn][aria-pressed="true"] {
+  background-color: var(--color-bramble-bg-card2);
+  color: var(--color-bramble-primary);
+}

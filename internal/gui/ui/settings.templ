@@ -1,0 +1,172 @@
+package ui
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/mallardduck/BrambleGate/model"
+)
+
+// SettingsData is everything the settings page needs to render.
+type SettingsData struct {
+	Settings  model.Settings
+	FormError string
+}
+
+templ Settings(data SettingsData) {
+	<h1 class="text-lg font-semibold mb-4">Settings</h1>
+	if data.FormError != "" {
+		<p class="text-bramble-danger text-sm mb-3">{ data.FormError }</p>
+	}
+
+	<form hx-post={ PathSettings } hx-target="#content" hx-swap="innerHTML" class="rounded border border-bramble-border bg-bramble-bg-card p-4">
+		<h2 class="text-sm font-semibold mb-3">Upstream &amp; listeners</h2>
+		<div class="flex flex-wrap gap-3 items-end">
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Upstream DNS (host:port)</span>
+				<input name="upstream_address" value={ data.Settings.UpstreamDNS.Address } placeholder="192.168.10.5:53" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Upstream protocol</span>
+				<select name="upstream_protocol" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
+					@protoOption("plain", data.Settings.UpstreamDNS.Protocol)
+					@protoOption("dot", data.Settings.UpstreamDNS.Protocol)
+					@protoOption("doh", data.Settings.UpstreamDNS.Protocol)
+				</select>
+			</label>
+		</div>
+		<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain)
+			@listenerFields("dot", "DoT", data.Settings.Listeners.DoT)
+			@listenerFields("doh", "DoH", data.Settings.Listeners.DoH)
+			@listenerFields("doq", "DoQ", data.Settings.Listeners.DoQ)
+		</div>
+
+		<h2 class="text-sm font-semibold mt-6 mb-3">ACME (DNS-01 certificates)</h2>
+		<div class="flex flex-wrap gap-3 items-end">
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled }/>
+				Enabled
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Domain</span>
+				<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Email</span>
+				<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">DNS provider</span>
+				<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+			</label>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
+				Production CA
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Renew before (days)</span>
+				<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
+			</label>
+		</div>
+
+		<h2 class="text-sm font-semibold mt-6 mb-3">mDNS discovery</h2>
+		<div class="flex flex-wrap gap-3 items-end">
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled }/>
+				Enabled
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Interfaces (comma-separated, blank/"all" = all)</span>
+				<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Service types (comma-separated, blank = defaults)</span>
+				<input name="mdns_service_types" value={ strings.Join(data.Settings.MDNS.ServiceTypes, ", ") } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Suffix (blank = home.arpa)</span>
+				<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+			</label>
+		</div>
+		<p class="mt-2 text-xs text-bramble-muted">
+			Auto-publish selectors and naming rules are YAML-only for now; discoveries can be approved/promoted
+			individually from the <a href={ templ.SafeURL(PathMDNS) } class="text-bramble-primary hover:underline">mDNS</a> page.
+			Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.
+		</p>
+
+		<div class="mt-4">
+			<button type="submit" class="px-3 py-1.5 rounded bg-bramble-primary text-white text-sm font-medium hover:bg-bramble-primary-dark">
+				Save settings
+			</button>
+		</div>
+	</form>
+
+	<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card p-4">
+		<h2 class="text-sm font-semibold mb-3">VLANs</h2>
+		<div class="flex flex-col gap-2">
+			for _, v := range data.Settings.VLANs {
+				@vlanRow(v)
+			}
+			if len(data.Settings.VLANs) == 0 {
+				<p class="text-bramble-muted text-sm">No VLANs declared — records can only have one default answer.</p>
+			}
+		</div>
+		<form hx-post={ PathSettings + "/vlans" } hx-target="#content" hx-swap="innerHTML" class="mt-4 flex flex-wrap gap-2 items-end">
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Name</span>
+				<input name="vlan_name" placeholder="untrusted-wifi" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">CIDRs (comma-separated)</span>
+				<input name="vlan_cidrs" placeholder="192.168.20.0/24" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+			</label>
+			<button type="submit" class="px-3 py-1.5 rounded border border-bramble-border text-sm hover:bg-bramble-bg-card2">
+				Add VLAN
+			</button>
+		</form>
+	</div>
+}
+
+templ protoOption(value, selected string) {
+	if value == selected {
+		<option value={ value } selected>{ value }</option>
+	} else {
+		<option value={ value }>{ value }</option>
+	}
+}
+
+templ listenerFields(prefix, label string, l model.Listener) {
+	<div class="rounded bg-bramble-bg-card2 px-3 py-2 flex flex-col gap-2">
+		<label class="flex items-center gap-2 text-sm">
+			<input type="checkbox" name={ prefix + "_enabled" } checked?={ l.Enabled }/>
+			{ label }
+		</label>
+		<input
+			type="number"
+			min="1"
+			name={ prefix + "_port" }
+			value={ strconv.Itoa(l.Port) }
+			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+		/>
+	</div>
+}
+
+templ vlanRow(v model.VLAN) {
+	<div class="flex items-center justify-between rounded bg-bramble-bg-card2 px-3 py-2 text-sm">
+		<span>
+			<span class="font-mono font-medium">{ v.Name }</span>
+			<span class="text-bramble-muted ml-2">{ strings.Join(v.CIDRs, ", ") }</span>
+		</span>
+		<button
+			hx-delete={ PathSettings + "/vlans/" + v.Name }
+			hx-target="#content"
+			hx-swap="innerHTML"
+			hx-confirm={ "Remove VLAN " + v.Name + "? Any records overriding it will keep their override entries but they'll no longer apply." }
+			type="button"
+			class="text-bramble-danger hover:underline text-xs"
+		>
+			Remove
+		</button>
+	</div>
+}

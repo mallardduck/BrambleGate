@@ -1,8 +1,11 @@
 package gui
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +40,8 @@ func newService(t *testing.T) (*Service, *store.Store, *stubReloader) {
 		t.Fatal(err)
 	}
 	rl := &stubReloader{}
-	return NewService(st, rl, dir, configgen.Options{}), st, rl
+	log := slog.New(slog.DiscardHandler)
+	return NewService(t.Context(), st, rl, dir, configgen.Options{}, log), st, rl
 }
 
 func TestMDNSDisabledWhenNoTable(t *testing.T) {
@@ -172,5 +176,126 @@ func TestReloadFailurePersistsButSurfaces(t *testing.T) {
 	rs, _ := st.LoadRecords()
 	if len(rs.Records) != 1 {
 		t.Fatalf("record should be persisted despite reload failure, got %d", len(rs.Records))
+	}
+}
+
+// mdnsListenerCall records one runMDNSListener invocation and lets a test wait
+// for its ctx to be canceled (i.e. the "goroutine" to have stopped).
+type mdnsListenerCall struct {
+	services, ifaces []string
+	stopped          chan struct{}
+}
+
+// stubMDNSListener replaces runMDNSListener for the duration of the test,
+// publishing each invocation on the returned channel instead of touching real
+// mDNS multicast sockets. Because StartMDNS launches it with `go`, tests must
+// receive from this channel (waitForMDNSCall) rather than poll a slice — there
+// is no other signal that the goroutine has actually run yet.
+func stubMDNSListener(t *testing.T) chan *mdnsListenerCall {
+	t.Helper()
+	calls := make(chan *mdnsListenerCall, 8)
+
+	orig := runMDNSListener
+	runMDNSListener = func(ctx context.Context, _ *mdnsbridge.Table, services, ifaces []string, _ *slog.Logger) {
+		call := &mdnsListenerCall{services: services, ifaces: ifaces, stopped: make(chan struct{})}
+		calls <- call
+		<-ctx.Done()
+		close(call.stopped)
+	}
+	t.Cleanup(func() { runMDNSListener = orig })
+
+	return calls
+}
+
+func waitForMDNSCall(t *testing.T, calls chan *mdnsListenerCall) *mdnsListenerCall {
+	t.Helper()
+	select {
+	case c := <-calls:
+		return c
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the listener goroutine to start")
+		return nil
+	}
+}
+
+func TestSaveSettingsEnablesMDNSListenerLive(t *testing.T) {
+	svc, _, _ := newService(t)
+	calls := stubMDNSListener(t)
+
+	if _, err := svc.MDNSCandidates(); !IsValidation(err) {
+		t.Fatalf("expected mDNS disabled before enabling, got %v", err)
+	}
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS = model.MDNS{Enabled: true, ServiceTypes: []string{"_http._tcp"}, Interfaces: []string{"all"}}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	waitForMDNSCall(t, calls)
+
+	if _, err := svc.MDNSCandidates(); err != nil {
+		t.Fatalf("expected mDNS enabled live (no restart), got %v", err)
+	}
+}
+
+func TestSaveSettingsRestartsMDNSListenerOnReconfigure(t *testing.T) {
+	svc, _, _ := newService(t)
+	calls := stubMDNSListener(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS = model.MDNS{Enabled: true, ServiceTypes: []string{"_http._tcp"}, Interfaces: []string{"all"}}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	first := waitForMDNSCall(t, calls)
+
+	settings.MDNS.ServiceTypes = []string{"_ipp._tcp"}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("reconfigure: %v", err)
+	}
+	second := waitForMDNSCall(t, calls)
+
+	select {
+	case <-first.stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected the original listener goroutine to be stopped on reconfigure")
+	}
+	if !slices.Equal(second.services, []string{"_ipp._tcp"}) {
+		t.Fatalf("expected restarted listener to use the new service types, got %v", second.services)
+	}
+}
+
+func TestSaveSettingsDisablesMDNSListenerLive(t *testing.T) {
+	svc, _, _ := newService(t)
+	calls := stubMDNSListener(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS = model.MDNS{Enabled: true, ServiceTypes: []string{"_http._tcp"}, Interfaces: []string{"all"}}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	running := waitForMDNSCall(t, calls)
+
+	settings.MDNS.Enabled = false
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+
+	select {
+	case <-running.stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected the listener goroutine to be stopped on disable")
+	}
+	if _, err := svc.MDNSCandidates(); !IsValidation(err) {
+		t.Fatalf("expected mDNS disabled live (no restart), got %v", err)
 	}
 }

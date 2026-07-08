@@ -47,6 +47,15 @@ jobs:
             ( cd "$dir" && go vet ./... )
           done < <(find . -name go.mod -not -path './web/*')
 
+      # internal/gui/ui's templ views and generated Tailwind CSS are committed
+      # (docs/repo-layout.md); regenerate and fail if that drifts from what's checked in.
+      - name: Check generated dashboard assets are up to date
+        shell: bash
+        run: |
+          set -euo pipefail
+          go generate ./...
+          git diff --exit-code -- internal/gui/ui internal/gui/static/style.css
+
   # golangci-lint-action lints one module per invocation (working-directory), so
   # discover the module dirs here and fan them out to a matrix below. This keeps
   # the same auto-discovery the build-test job uses — new modules are linted the

@@ -1,0 +1,245 @@
+package ui
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/mallardduck/BrambleGate/model"
+)
+
+// RecordsData is everything the records page needs to render. Editing is nil
+// for the "add a record" state; set it (from a GET .../edit request) to
+// pre-fill the form for an update.
+type RecordsData struct {
+	Records   model.RecordSet
+	VLANs     []model.VLAN
+	Editing   *model.Record
+	FormError string
+}
+
+templ Records(data RecordsData) {
+	<h1 class="text-lg font-semibold mb-4">Records</h1>
+	<div class="rounded border border-bramble-border bg-bramble-bg-card overflow-x-auto">
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
+					<th class="px-3 py-2">Name</th>
+					<th class="px-3 py-2">Type</th>
+					<th class="px-3 py-2">Default</th>
+					<th class="px-3 py-2">TTL</th>
+					<th class="px-3 py-2">Per-VLAN</th>
+					<th class="px-3 py-2"></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, r := range data.Records.Records {
+					@recordRow(r)
+				}
+				if len(data.Records.Records) == 0 {
+					<tr>
+						<td colspan="6" class="px-3 py-4 text-center text-bramble-muted">No records yet.</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+
+	@recordForm(data)
+
+	if len(data.Records.Records) > 0 {
+		<p class="mt-3 text-xs text-bramble-muted">Changes are saved to records.yaml and applied live — no restart required.</p>
+	}
+}
+
+templ recordRow(r model.Record) {
+	<tr class="border-b border-bramble-border last:border-0">
+		<td class="px-3 py-2 font-mono">{ r.Name }</td>
+		<td class="px-3 py-2">{ string(r.Type) }</td>
+		<td class="px-3 py-2 font-mono">
+			if r.Default != "" {
+				{ r.Default }
+			} else {
+				—
+			}
+		</td>
+		<td class="px-3 py-2">
+			if r.TTL != 0 {
+				{ strconv.Itoa(int(r.TTL)) }
+			} else {
+				300
+			}
+		</td>
+		<td class="px-3 py-2 text-xs">{ summarizeOverrides(r) }</td>
+		<td class="px-3 py-2 text-right whitespace-nowrap">
+			<a
+				href={ templ.SafeURL(RecordPath(r.Name, string(r.Type)) + "/edit") }
+				hx-get={ RecordPath(r.Name, string(r.Type)) + "/edit" }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				class="text-bramble-primary hover:underline text-xs mr-3"
+			>
+				Edit
+			</a>
+			<button
+				hx-delete={ RecordPath(r.Name, string(r.Type)) }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-confirm={ fmt.Sprintf("Delete %s record %s?", r.Type, r.Name) }
+				type="button"
+				class="text-bramble-danger hover:underline text-xs"
+			>
+				Delete
+			</button>
+		</td>
+	</tr>
+}
+
+func summarizeOverrides(r model.Record) string {
+	if len(r.VLANOverrides) == 0 {
+		return "—"
+	}
+	out := ""
+	for i, o := range r.VLANOverrides {
+		if i > 0 {
+			out += ", "
+		}
+		switch {
+		case o.NXDomain:
+			out += o.VLAN + ": ✗"
+		case o.Value != "":
+			out += o.VLAN + ": " + o.Value
+		default:
+			out += o.VLAN + ": (dflt)"
+		}
+	}
+	return out
+}
+
+templ recordForm(data RecordsData) {
+	{{
+		name, rtype, def, ttl := "", "A", "", ""
+		var overrides []model.VLANOverride
+		if data.Editing != nil {
+			name = data.Editing.Name
+			rtype = string(data.Editing.Type)
+			def = data.Editing.Default
+			if data.Editing.TTL != 0 {
+				ttl = strconv.Itoa(int(data.Editing.TTL))
+			}
+			overrides = data.Editing.VLANOverrides
+		}
+	}}
+	<form
+		if data.Editing != nil {
+			hx-put={ RecordPath(data.Editing.Name, string(data.Editing.Type)) }
+		} else {
+			hx-post={ PathRecords }
+		}
+		hx-target="#content"
+		hx-swap="innerHTML"
+		class="mt-6 rounded border border-bramble-border bg-bramble-bg-card p-4"
+	>
+		<h2 class="text-sm font-semibold mb-3">
+			if data.Editing != nil {
+				Edit { rtype } { name }
+			} else {
+				Add a record
+			}
+		</h2>
+		if data.FormError != "" {
+			<p class="text-bramble-danger text-sm mb-3">{ data.FormError }</p>
+		}
+		<div class="flex flex-wrap gap-3 items-end">
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Name</span>
+				<input name="name" value={ name } placeholder="nas.home.arpa" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[180px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Type</span>
+				<select name="type" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
+					@typeOption("A", rtype)
+					@typeOption("AAAA", rtype)
+					@typeOption("CNAME", rtype)
+				</select>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Default value</span>
+				<input name="default" value={ def } placeholder="192.168.10.20" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[160px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">TTL (blank = 300)</span>
+				<input name="ttl" type="number" min="1" value={ ttl } placeholder="300" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
+			</label>
+		</div>
+
+		if len(data.VLANs) > 0 {
+			<fieldset class="mt-4 border border-bramble-border rounded p-3">
+				<legend class="text-xs text-bramble-muted px-1">Per-VLAN overrides</legend>
+				<div class="grid grid-cols-[120px_100px_1fr_100px] gap-2 items-center text-sm">
+					for _, v := range data.VLANs {
+						@overrideRow(v, findOverride(overrides, v.Name))
+					}
+				</div>
+			</fieldset>
+		} else {
+			<p class="mt-3 text-xs text-bramble-muted">Define VLANs in Settings to enable per-VLAN overrides.</p>
+		}
+
+		<div class="mt-4 flex gap-2">
+			<button type="submit" class="px-3 py-1.5 rounded bg-bramble-primary text-white text-sm font-medium hover:bg-bramble-primary-dark">
+				if data.Editing != nil {
+					Save changes
+				} else {
+					Add record
+				}
+			</button>
+			if data.Editing != nil {
+				<a href={ templ.SafeURL(PathRecords) } hx-get={ PathRecords } hx-target="#content" hx-swap="innerHTML" class="px-3 py-1.5 rounded border border-bramble-border text-sm">
+					Cancel
+				</a>
+			}
+		</div>
+	</form>
+}
+
+templ typeOption(value, selected string) {
+	if value == selected {
+		<option value={ value } selected>{ value }</option>
+	} else {
+		<option value={ value }>{ value }</option>
+	}
+}
+
+func findOverride(overrides []model.VLANOverride, vlan string) model.VLANOverride {
+	for _, o := range overrides {
+		if o.VLAN == vlan {
+			return o
+		}
+	}
+	return model.VLANOverride{VLAN: vlan}
+}
+
+templ overrideRow(v model.VLAN, o model.VLANOverride) {
+	<span class="font-mono text-xs">{ v.Name }</span>
+	<label class="flex items-center gap-1 text-xs">
+		<input type="checkbox" name={ "override_nx_" + v.Name } checked?={ o.NXDomain }/>
+		NXDOMAIN
+	</label>
+	<input
+		type="text"
+		name={ "override_value_" + v.Name }
+		value={ o.Value }
+		placeholder="inherit default"
+		class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+	/>
+	<input
+		type="number"
+		min="1"
+		name={ "override_ttl_" + v.Name }
+		if o.TTL != 0 {
+			value={ strconv.Itoa(int(o.TTL)) }
+		}
+		placeholder="inherit TTL"
+		class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+	/>
+}

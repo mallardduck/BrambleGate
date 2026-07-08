@@ -1,0 +1,72 @@
+package ui
+
+import (
+	"fmt"
+
+	"github.com/mallardduck/BrambleGate/model"
+)
+
+// DashboardData is everything the dashboard page needs to render.
+type DashboardData struct {
+	Settings    model.Settings
+	RecordCount int
+	MDNSCount   int // discovered entries; 0 when mDNS is disabled
+}
+
+// IsDefaultUpstream reports whether the upstream forwarder is still the
+// seeded onboarding default (model.DefaultSettings), meaning the user hasn't
+// pointed BrambleGate at their own resolver yet.
+func (d DashboardData) IsDefaultUpstream() bool {
+	def := model.DefaultSettings()
+	return d.Settings.UpstreamDNS.Address == def.UpstreamDNS.Address
+}
+
+templ Dashboard(data DashboardData) {
+	if data.IsDefaultUpstream() {
+		<div class="mb-6 rounded border border-bramble-primary/40 bg-bramble-primary/10 px-4 py-3 text-sm flex items-center justify-between gap-4">
+			<span>
+				Still forwarding to the default upstream ({ data.Settings.UpstreamDNS.Address }). Point BrambleGate at your
+				own ad-block resolver to finish setup.
+			</span>
+			<a href={ templ.SafeURL(PathSettings) } class="shrink-0 px-3 py-1.5 rounded bg-bramble-primary text-white text-xs font-medium hover:bg-bramble-primary-dark">
+				Go to settings
+			</a>
+		</div>
+	}
+	<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+		@statCard("Records", fmt.Sprintf("%d", data.RecordCount), PathRecords)
+		@statCard("VLANs", fmt.Sprintf("%d", len(data.Settings.VLANs)), PathSettings)
+		if data.Settings.MDNS.Enabled {
+			@statCard("mDNS discovered", fmt.Sprintf("%d", data.MDNSCount), PathMDNS)
+		} else {
+			@statCard("mDNS", "disabled", PathSettings)
+		}
+	</div>
+	<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card p-4">
+		<h2 class="text-sm font-semibold mb-3">Listeners</h2>
+		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+			@listenerStat("Plain", data.Settings.Listeners.Plain)
+			@listenerStat("DoT", data.Settings.Listeners.DoT)
+			@listenerStat("DoH", data.Settings.Listeners.DoH)
+			@listenerStat("DoQ", data.Settings.Listeners.DoQ)
+		</div>
+	</div>
+}
+
+templ statCard(label, value, href string) {
+	<a href={ templ.SafeURL(href) } class="block rounded border border-bramble-border bg-bramble-bg-card p-4 hover:border-bramble-primary transition-colors">
+		<p class="text-xs text-bramble-muted uppercase tracking-wide">{ label }</p>
+		<p class="text-2xl font-bold mt-1">{ value }</p>
+	</a>
+}
+
+templ listenerStat(label string, l model.Listener) {
+	<div class="rounded bg-bramble-bg-card2 px-3 py-2">
+		<p class="text-xs text-bramble-muted">{ label }</p>
+		if l.Enabled {
+			<p class="font-medium">port { fmt.Sprintf("%d", l.Port) }</p>
+		} else {
+			<p class="text-bramble-muted">off</p>
+		}
+	</div>
+}

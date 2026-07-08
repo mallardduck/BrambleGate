@@ -3,12 +3,11 @@
 *.exe
 bramblegate
 
+# Downloaded Tailwind standalone CLI (cmd/gentailwind fetches it on demand)
+/bin/
+
 # Go workspace sum (kept? — committed once deps exist; ignore local cache only)
 go.work.sum
-
-# Node / frontend
-web/frontend/node_modules/
-web/frontend/dist/
 
 # Runtime config volume (regenerated; never committed)
 /config/.runtime/

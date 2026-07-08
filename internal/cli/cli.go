@@ -122,17 +122,13 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// mDNS listener goroutine: browses the network and feeds the shared table,
-	// independent of engine reloads. Owned here, not in the plugin (docs/plugins.md).
-	if mdnsTable != nil {
-		listener := mdnsbridge.NewListener(mdnsTable, settings.MDNS.ServiceTypes, settings.MDNS.Interfaces, log)
-		go listener.Run(ctx)
-	}
-
 	// GUI goroutine: shares ctx and the same *engine.Engine (as the Reloader). It
-	// also holds the mDNS table (nil when disabled) for the candidates view.
-	svc := gui.NewService(st, eng, configDir, opts)
-	svc.SetMDNSTable(mdnsTable)
+	// also owns the mDNS browse goroutine's lifecycle (start now if enabled from
+	// boot; later enable/disable/reconfigure happens through Service.SaveSettings).
+	svc := gui.NewService(ctx, st, eng, configDir, opts, log)
+	if mdnsTable != nil {
+		svc.StartMDNS(mdnsTable, settings.MDNS)
+	}
 	srv := gui.NewServer(svc, guiAddr)
 	go func() {
 		log.Info("web GUI up", "addr", guiAddr)

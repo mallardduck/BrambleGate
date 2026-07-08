@@ -2,9 +2,10 @@ package gui
 
 import "embed"
 
-// staticFiles holds the built dashboard assets. For Phase 2 this is a single
-// hand-written page (vanilla JS, no build step); Phase 6 replaces static/ with
-// the output of the web/frontend npm project, embedded the same way.
+// staticFiles holds the dashboard's built/vendored assets: style.css (generated
+// by cmd/gentailwind from internal/gui/ui/static-src/input.css) and js/ (vendored
+// htmx + the theme toggle script). The pages themselves are rendered
+// server-side by internal/gui/ui, not served as static files.
 //
 //go:embed static
 var staticFiles embed.FS

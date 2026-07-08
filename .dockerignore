@@ -8,5 +8,3 @@ docs
 go.work
 go.work.sum
 **/*_test.go
-web/frontend/node_modules
-web/frontend/dist

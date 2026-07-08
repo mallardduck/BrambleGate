@@ -9,12 +9,12 @@ go 1.25.0
 // module, so it does not affect anyone who imports the sub-modules on their own.
 
 replace (
-	github.com/mallardduck/BrambleGate/engine => ./engine
 	github.com/mallardduck/BrambleGate/configgen => ./configgen
-	github.com/mallardduck/BrambleGate/store => ./store
+	github.com/mallardduck/BrambleGate/engine => ./engine
 	github.com/mallardduck/BrambleGate/model => ./model
 	github.com/mallardduck/BrambleGate/plugins/localrecords => ./plugins/localrecords
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ./plugins/mdnsbridge
+	github.com/mallardduck/BrambleGate/store => ./store
 )
 
 require (
@@ -34,7 +34,10 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resourcegraph/armresourcegraph v0.9.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
+	github.com/a-h/parse v0.0.0-20250122154542-74294addb73e // indirect
+	github.com/a-h/templ v0.3.1020 // indirect
 	github.com/alexbrainman/sspi v0.0.0-20180613141037-e580b900e9f5 // indirect
+	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.7 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.18 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.17 // indirect
@@ -51,8 +54,12 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/bodgit/tsig v1.2.2 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cli/browser v1.3.0 // indirect
+	github.com/fatih/color v1.16.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -74,6 +81,9 @@ require (
 	github.com/joshuafuller/beacon v1.3.1 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/linode/linodego v1.68.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.21 // indirect
+	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b // indirect
 	github.com/ovh/go-ovh v1.9.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
@@ -136,3 +146,5 @@ require (
 	google.golang.org/grpc v1.82.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
+
+tool github.com/a-h/templ/cmd/templ

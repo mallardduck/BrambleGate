@@ -35,11 +35,28 @@ func NewServer(svc *Service, addr string) *http.Server {
 		r.Post("/mdns/{name}/promote", h.promoteMDNS)
 	})
 
+	// Server-rendered dashboard (internal/gui/ui): full pages on a plain GET,
+	// just the inner fragment on an htmx request (see render() in handlers_ui.go).
+	r.Get("/", h.dashboardPage)
+	r.Get("/records", h.recordsPage)
+	r.Post("/records", h.recordsCreate)
+	r.Get("/records/{name}/{type}/edit", h.recordsEdit)
+	r.Put("/records/{name}/{type}", h.recordsUpdate)
+	r.Delete("/records/{name}/{type}", h.recordsDelete)
+	r.Get("/settings", h.settingsPage)
+	r.Post("/settings", h.settingsSave)
+	r.Post("/settings/vlans", h.vlanAdd)
+	r.Delete("/settings/vlans/{name}", h.vlanRemove)
+	r.Get("/mdns", h.mdnsPage)
+	r.Post("/mdns/{name}/publish", h.mdnsPublish)
+	r.Post("/mdns/{name}/unpublish", h.mdnsUnpublish)
+	r.Post("/mdns/{name}/promote", h.mdnsPromote)
+
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		panic(err) // embedded FS is compiled in; this cannot fail at runtime
 	}
-	r.Handle("/*", http.FileServer(http.FS(sub)))
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
 
 	return &http.Server{Addr: addr, Handler: r}
 }
