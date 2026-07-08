@@ -20,3 +20,5 @@ web/frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+# ACME integration test artifacts (Pebble CA)
+deploy/test/*.pem

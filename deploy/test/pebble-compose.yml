@@ -1,0 +1,24 @@
+# Local ACME test harness for the acme_integration test (docs/certificates.md).
+# Pebble is Let's Encrypt's test ACME server; challtestsrv is its mock DNS +
+# an HTTP API to set challenge TXT records. Nothing here touches the real
+# internet or a real domain — it proves DNS-01 issuance works fully offline.
+services:
+  challtestsrv:
+    image: ghcr.io/letsencrypt/pebble-challtestsrv:latest
+    # Don't hand out bogus A/AAAA for everything; we only use it for TXT.
+    command: -defaultIPv6 "" -defaultIPv4 ""
+    ports:
+      - "8055:8055" # management HTTP API (set-txt / clear-txt)
+      - "8053:8053/udp" # mock DNS — lego's propagation check queries this
+      - "8053:8053/tcp"
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    depends_on: [challtestsrv]
+    # Resolve DNS-01 challenges via challtestsrv; don't sleep during validation.
+    command: -config /test/config/pebble-config.json -dnsserver challtestsrv:8053
+    environment:
+      - PEBBLE_VA_NOSLEEP=1
+    ports:
+      - "14000:14000" # ACME directory (https)
+      - "15000:15000" # management (issued roots)

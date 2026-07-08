@@ -25,7 +25,32 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 	if s.EncryptedListenerEnabled() && strings.TrimSpace(s.ACME.Domain) == "" {
 		return fmt.Errorf("acme.domain is required when an encrypted listener (DoT/DoH/DoQ) is enabled")
 	}
+	if err := validateACME(s.ACME); err != nil {
+		return err
+	}
 	return validateRecords(rs, s.VLANs)
+}
+
+// validateACME checks the fields ACME issuance needs when it is turned on. The
+// dns_provider name's validity against the supported set is checked by the acme
+// package (which owns the registry); here we just require the fields be present.
+func validateACME(a model.ACME) error {
+	if !a.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(a.Domain) == "" {
+		return fmt.Errorf("acme.domain is required when acme.enabled is true")
+	}
+	if strings.TrimSpace(a.Email) == "" {
+		return fmt.Errorf("acme.email is required when acme.enabled is true")
+	}
+	if strings.TrimSpace(a.DNSProvider) == "" {
+		return fmt.Errorf("acme.dns_provider is required when acme.enabled is true")
+	}
+	if a.RenewBeforeDays < 0 {
+		return fmt.Errorf("acme.renew_before_days must not be negative")
+	}
+	return nil
 }
 
 func validateListeners(l model.Listeners) error {

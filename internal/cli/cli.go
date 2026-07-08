@@ -16,7 +16,9 @@ import (
 
 	"github.com/mallardduck/BrambleDNS/configgen"
 	"github.com/mallardduck/BrambleDNS/engine"
+	"github.com/mallardduck/BrambleDNS/internal/acme"
 	"github.com/mallardduck/BrambleDNS/internal/gui"
+	"github.com/mallardduck/BrambleDNS/model"
 	"github.com/mallardduck/BrambleDNS/store"
 )
 
@@ -108,6 +110,22 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 		}
 	}()
 
+	// ACME goroutine: obtains/renews the real certificate in the background and
+	// reloads the engine in place when it lands. The engine is already serving
+	// (with the self-signed bootstrap cert) — a provider/connectivity problem is
+	// logged and retried, never fatal. A misconfigured provider disables ACME but
+	// leaves the server running on the self-signed cert.
+	if settings.ACME.Enabled && settings.EncryptedListenerEnabled() {
+		mgr, err := acme.NewManager(acmeConfig(configDir, settings), reloadFn(st, eng, opts), log)
+		if err != nil {
+			log.Error("acme disabled (config error) — serving with the self-signed certificate", "err", err)
+		} else {
+			log.Info("acme manager started", "provider", settings.ACME.DNSProvider,
+				"production", settings.ACME.Production, "domain", settings.ACME.Domain)
+			go mgr.Run(ctx)
+		}
+	}
+
 	<-ctx.Done()
 	log.Info("shutdown signal received, stopping GUI and engine")
 
@@ -121,6 +139,46 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	}
 	log.Info("stopped cleanly")
 	return nil
+}
+
+// acmeConfig maps the persisted ACME settings to the acme package's config.
+// Credentials are not included — the provider reads those from the environment.
+func acmeConfig(configDir string, s model.Settings) acme.Config {
+	return acme.Config{
+		ConfigDir:       configDir,
+		Domain:          s.ACME.Domain,
+		Email:           s.ACME.Email,
+		Provider:        s.ACME.DNSProvider,
+		Production:      s.ACME.Production,
+		CADirectoryURL:  s.ACME.CADirectoryURL,
+		RenewBeforeDays: s.ACME.RenewBeforeDays,
+	}
+}
+
+// reloadFn returns the callback the ACME manager (and any future reloader) uses
+// to apply an on-disk change: re-render from the current store and swap the
+// engine config in place. Cert paths are unchanged — only the file contents are
+// (the renewed cert), which the tls directive re-reads on reload.
+func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func() error {
+	return func() error {
+		settings, err := st.LoadSettings()
+		if err != nil {
+			return err
+		}
+		records, err := st.LoadRecords()
+		if err != nil {
+			return err
+		}
+		rendered, err := configgen.Render(settings, records, opts)
+		if err != nil {
+			return err
+		}
+		if err := configgen.WriteZoneData(opts.ConfigDir, rendered.ZoneData); err != nil {
+			return err
+		}
+		_ = configgen.WriteRuntimeCorefile(opts.ConfigDir, rendered.Corefile)
+		return eng.Reload(rendered.Corefile)
+	}
 }
 
 // defaultConfigDir is /config (the mounted volume) unless overridden by

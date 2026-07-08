@@ -43,12 +43,23 @@ type Listener struct {
 
 // ACME configures DNS-01 certificate issuance for the encrypted listeners
 // (docs/certificates.md). Domain is also used as the self-signed cert name in
-// the pre-Phase-4 fallback.
+// the fallback when ACME is disabled/unconfigured.
+//
+// Provider credentials are NOT stored here — they are read from environment
+// variables the way lego expects (e.g. CLOUDFLARE_DNS_API_TOKEN), keeping secrets
+// out of the config volume. See docs/certificates.md for the per-provider vars.
 type ACME struct {
-	Enabled         bool   `yaml:"enabled" json:"enabled"`
-	Domain          string `yaml:"domain" json:"domain"`
-	Email           string `yaml:"email" json:"email"`
-	DNSProvider     string `yaml:"dns_provider" json:"dns_provider"`
+	Enabled     bool   `yaml:"enabled" json:"enabled"`
+	Domain      string `yaml:"domain" json:"domain"`
+	Email       string `yaml:"email" json:"email"`
+	DNSProvider string `yaml:"dns_provider" json:"dns_provider"`
+	// Production selects the Let's Encrypt production CA. Default (false) uses the
+	// LE staging CA — certificates that are NOT publicly trusted, so nothing can
+	// accidentally burn production rate limits until the user opts in.
+	Production bool `yaml:"production" json:"production"`
+	// CADirectoryURL overrides the ACME server entirely (custom CA or a test
+	// server like Pebble). When set it takes precedence over Production.
+	CADirectoryURL  string `yaml:"ca_directory_url,omitempty" json:"ca_directory_url,omitempty"`
 	RenewBeforeDays int    `yaml:"renew_before_days" json:"renew_before_days"`
 }
 

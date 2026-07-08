@@ -27,6 +27,14 @@ listeners:
     port: 853
 
 acme:
-  # In Phase 1 this hostname is only used as the self-signed certificate's name.
-  # Phase 4 uses it to obtain a real, publicly-trusted cert via ACME DNS-01.
-  domain: dns.example.com
+  # When disabled, encrypted listeners use a self-signed cert (fine for testing;
+  # rejected by strict clients like Android). Enable to obtain a real cert via
+  # ACME DNS-01 — no inbound exposure needed. See docs/certificates.md.
+  enabled: false
+  domain: dns.example.com   # a real, owned domain; its A record may point at a LAN IP
+  email: you@example.com
+  dns_provider: cloudflare  # supported names + required env vars: docs/certificates.md
+  production: false         # default = LE staging (untrusted) until you opt in
+  renew_before_days: 30
+  # Credentials come from environment variables, never this file
+  # (e.g. CLOUDFLARE_DNS_API_TOKEN).
