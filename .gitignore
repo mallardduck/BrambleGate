@@ -1,7 +1,7 @@
 # Build output
 /out/
 *.exe
-brambledns
+bramblegate
 
 # Go workspace sum (kept? — committed once deps exist; ignore local cache only)
 go.work.sum

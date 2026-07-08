@@ -1,4 +1,4 @@
-// Package cli holds the command-line entrypoint logic for the brambledns binary.
+// Package cli holds the command-line entrypoint logic for the bramblegate binary.
 // It lives under internal/ so the extractable library modules (engine, plugins/*)
 // can never import it. main.go is a thin shim over Run.
 package cli
@@ -14,17 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mallardduck/BrambleDNS/configgen"
-	"github.com/mallardduck/BrambleDNS/engine"
-	"github.com/mallardduck/BrambleDNS/internal/acme"
-	"github.com/mallardduck/BrambleDNS/internal/gui"
-	"github.com/mallardduck/BrambleDNS/internal/mdnscfg"
-	"github.com/mallardduck/BrambleDNS/model"
-	"github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleDNS/store"
+	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/engine"
+	"github.com/mallardduck/BrambleGate/internal/acme"
+	"github.com/mallardduck/BrambleGate/internal/gui"
+	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
+	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/store"
 )
 
-// Run executes the brambledns command and returns a process exit code.
+// Run executes the bramblegate command and returns a process exit code.
 //
 // Phase 2: load settings.yaml + records.yaml via store, render the Corefile via
 // configgen, start the engine, and start the GUI HTTP server as a second
@@ -34,7 +34,7 @@ import (
 func Run(args []string) int {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	fs := flag.NewFlagSet("brambledns", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bramblegate", flag.ContinueOnError)
 	configDir := fs.String("config-dir", defaultConfigDir(), "path to the /config volume root")
 	guiAddr := fs.String("gui-addr", defaultGUIAddr(), "listen address for the web GUI/API")
 	if err := fs.Parse(args); err != nil {
@@ -214,17 +214,17 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 }
 
 // defaultConfigDir is /config (the mounted volume) unless overridden by
-// BRAMBLEDNS_CONFIG_DIR — handy for running outside a container during dev.
+// BRAMBLEGATE_CONFIG_DIR — handy for running outside a container during dev.
 func defaultConfigDir() string {
-	if d := os.Getenv("BRAMBLEDNS_CONFIG_DIR"); d != "" {
+	if d := os.Getenv("BRAMBLEGATE_CONFIG_DIR"); d != "" {
 		return d
 	}
 	return "/config"
 }
 
-// defaultGUIAddr is :8080 unless overridden by BRAMBLEDNS_GUI_ADDR.
+// defaultGUIAddr is :8080 unless overridden by BRAMBLEGATE_GUI_ADDR.
 func defaultGUIAddr() string {
-	if a := os.Getenv("BRAMBLEDNS_GUI_ADDR"); a != "" {
+	if a := os.Getenv("BRAMBLEGATE_GUI_ADDR"); a != "" {
 		return a
 	}
 	return ":8080"

@@ -1,3 +1,3 @@
-module github.com/mallardduck/BrambleDNS/model
+module github.com/mallardduck/BrambleGate/model
 
 go 1.25

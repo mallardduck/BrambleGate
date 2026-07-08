@@ -1,4 +1,4 @@
-// Command brambledns is the single entrypoint binary. It starts the DNS engine
+// Command bramblegate is the single entrypoint binary. It starts the DNS engine
 // goroutine and the GUI goroutine under one shared shutdown context.
 //
 // main stays deliberately thin: it delegates to internal/cli so the real
@@ -9,7 +9,7 @@ package main
 import (
 	"os"
 
-	"github.com/mallardduck/BrambleDNS/internal/cli"
+	"github.com/mallardduck/BrambleGate/internal/cli"
 )
 
 func main() {

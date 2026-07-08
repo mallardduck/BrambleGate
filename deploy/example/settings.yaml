@@ -1,8 +1,8 @@
-# Example BrambleDNS settings.yaml.
+# Example BrambleGate settings.yaml.
 # Mount this at /config/settings.yaml (see docs/architecture.md volume layout).
 # Full schema reference: docs/config-schema.md. Records live in records.yaml.
 
-# Mirror your real network VLANs here (BrambleDNS is not the authority for VLANs —
+# Mirror your real network VLANs here (BrambleGate is not the authority for VLANs —
 # your network gear is). Names are referenced by per-VLAN record overrides; the
 # client's source subnet selects which VLAN's answer it gets. Each VLAN may list
 # multiple CIDRs.

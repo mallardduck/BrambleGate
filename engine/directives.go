@@ -16,10 +16,10 @@ import (
 	_ "github.com/coredns/coredns/plugin/tls"
 	_ "github.com/coredns/coredns/plugin/whoami"
 
-	// BrambleDNS custom plugins. Blank-importing registers them under their
+	// BrambleGate custom plugins. Blank-importing registers them under their
 	// directive names (reserved in Directives below).
-	_ "github.com/mallardduck/BrambleDNS/plugins/localrecords"
-	_ "github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
+	_ "github.com/mallardduck/BrambleGate/plugins/localrecords"
+	_ "github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 
 	"github.com/coredns/coredns/core/dnsserver"
 )
@@ -27,7 +27,7 @@ import (
 // init declares which compiled-in plugins exist and, crucially, the order they
 // run in for every request. This is independent of any runtime Corefile content
 // (see docs/dns-engine.md). Importing core/dnsserver already sets a default
-// Directives list; we override it to slot the two custom BrambleDNS plugins in
+// Directives list; we override it to slot the two custom BrambleGate plugins in
 // ahead of forward, so static records (localrecords) and mDNS-discovered names
 // (mdnsbridge) are answered before anything falls through to the upstream
 // ad-block resolver (see docs/plugins.md).
@@ -67,7 +67,7 @@ func init() {
 		"chaos",
 		"loadbalance",
 		"tsig",
-		// BrambleDNS custom plugins run BEFORE cache: localrecords answers are
+		// BrambleGate custom plugins run BEFORE cache: localrecords answers are
 		// per-VLAN (split-horizon) and must never be globally cached — the cache
 		// is not keyed by client subnet, so caching them would serve one VLAN's
 		// answer to another. mdnsbridge answers change with device liveness, so it

@@ -20,7 +20,7 @@ COPY . .
 # engine/, plugins/*, model/, store/, configgen/ from disk. go.work is excluded
 # from the build context (.dockerignore) so this is a plain-module build.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags='-s -w' -o /out/brambledns .
+    go build -trimpath -ldflags='-s -w' -o /out/bramblegate .
 
 # ---- Runtime stage ---------------------------------------------------------
 # distroless static: no shell, no package manager, just the binary + CA certs
@@ -35,11 +35,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 # CAP_NET_BIND_SERVICE (or use high ports), and add `user:`—see the README.
 FROM gcr.io/distroless/static-debian12:latest
 
-COPY --from=build /out/brambledns /usr/local/bin/brambledns
+COPY --from=build /out/bramblegate /usr/local/bin/bramblegate
 
 # Config volume (settings.yaml, records.yaml, certs, .runtime) and the GUI port.
 # DNS listener ports (53/853/…) are configured at runtime via settings.yaml.
 VOLUME ["/config"]
 EXPOSE 53/udp 53/tcp 853 8080
 
-ENTRYPOINT ["/usr/local/bin/brambledns"]
+ENTRYPOINT ["/usr/local/bin/bramblegate"]

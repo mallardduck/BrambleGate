@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleGate/model"
 )
 
 // OwnedZone is the zone localrecords is authoritative for. Configurable owned

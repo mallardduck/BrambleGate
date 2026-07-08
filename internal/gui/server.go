@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleGate/model"
 )
 
 // NewServer builds the http.Server for the dashboard + JSON API. The engine and

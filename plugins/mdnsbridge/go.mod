@@ -1,4 +1,4 @@
-module github.com/mallardduck/BrambleDNS/plugins/mdnsbridge
+module github.com/mallardduck/BrambleGate/plugins/mdnsbridge
 
 go 1.25.0
 

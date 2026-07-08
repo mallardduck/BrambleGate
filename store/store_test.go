@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleGate/model"
 )
 
 func TestSettingsRoundTrip(t *testing.T) {

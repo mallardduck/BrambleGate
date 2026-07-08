@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleGate/model"
 )
 
 func baseSettings() model.Settings {

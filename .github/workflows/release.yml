@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 env:
-  # GHCR path is lowercase-only; the module is github.com/mallardduck/BrambleDNS.
-  IMAGE: ghcr.io/mallardduck/brambledns
+  # GHCR path is lowercase-only; the module is github.com/mallardduck/BrambleGate.
+  IMAGE: ghcr.io/mallardduck/bramblegate
 
 jobs:
   image:

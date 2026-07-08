@@ -1,11 +1,26 @@
-module github.com/mallardduck/BrambleDNS
+module github.com/mallardduck/BrambleGate
 
 go 1.25.0
+
+// The root is the entrypoint binary and consumes the sibling library modules
+// directly from disk. These replace directives make plain `go build`/`go install`
+// and the Docker build work without publishing or tagging the sub-modules, and
+// without relying on go.work being active. replace applies only to this main
+// module, so it does not affect anyone who imports the sub-modules on their own.
+
+replace (
+	github.com/mallardduck/BrambleGate/engine => ./engine
+	github.com/mallardduck/BrambleGate/configgen => ./configgen
+	github.com/mallardduck/BrambleGate/store => ./store
+	github.com/mallardduck/BrambleGate/model => ./model
+	github.com/mallardduck/BrambleGate/plugins/localrecords => ./plugins/localrecords
+	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ./plugins/mdnsbridge
+)
 
 require (
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-chi/chi/v5 v5.3.1
-	github.com/mallardduck/BrambleDNS/engine v0.0.0
+	github.com/mallardduck/BrambleGate/engine v0.0.0
 )
 
 require (
@@ -87,11 +102,11 @@ require (
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/mallardduck/BrambleDNS/configgen v0.0.0
-	github.com/mallardduck/BrambleDNS/model v0.0.0
-	github.com/mallardduck/BrambleDNS/plugins/localrecords v0.0.0 // indirect
-	github.com/mallardduck/BrambleDNS/plugins/mdnsbridge v0.0.0
-	github.com/mallardduck/BrambleDNS/store v0.0.0
+	github.com/mallardduck/BrambleGate/configgen v0.0.0
+	github.com/mallardduck/BrambleGate/model v0.0.0
+	github.com/mallardduck/BrambleGate/plugins/localrecords v0.0.0 // indirect
+	github.com/mallardduck/BrambleGate/plugins/mdnsbridge v0.0.0
+	github.com/mallardduck/BrambleGate/store v0.0.0
 	github.com/mdlayher/socket v0.6.1 // indirect
 	github.com/mdlayher/vsock v1.3.0 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
@@ -121,20 +136,3 @@ require (
 	google.golang.org/grpc v1.82.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-// The root is the entrypoint binary and consumes the sibling library modules
-// directly from disk. These replace directives make plain `go build`/`go install`
-// and the Docker build work without publishing or tagging the sub-modules, and
-// without relying on go.work being active. replace applies only to this main
-// module, so it does not affect anyone who imports the sub-modules on their own.
-replace github.com/mallardduck/BrambleDNS/engine => ./engine
-
-replace github.com/mallardduck/BrambleDNS/configgen => ./configgen
-
-replace github.com/mallardduck/BrambleDNS/store => ./store
-
-replace github.com/mallardduck/BrambleDNS/model => ./model
-
-replace github.com/mallardduck/BrambleDNS/plugins/localrecords => ./plugins/localrecords
-
-replace github.com/mallardduck/BrambleDNS/plugins/mdnsbridge => ./plugins/mdnsbridge

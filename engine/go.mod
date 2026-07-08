@@ -1,13 +1,18 @@
-module github.com/mallardduck/BrambleDNS/engine
+module github.com/mallardduck/BrambleGate/engine
 
 go 1.25.0
+
+replace (
+	github.com/mallardduck/BrambleGate/plugins/localrecords => ../plugins/localrecords
+	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ../plugins/mdnsbridge
+)
 
 require (
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.4
+	github.com/mallardduck/BrambleGate/plugins/localrecords v0.0.0-00010101000000-000000000000
+	github.com/mallardduck/BrambleGate/plugins/mdnsbridge v0.0.0-00010101000000-000000000000
 )
-
-require github.com/joshuafuller/beacon v1.3.1 // indirect
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
@@ -21,9 +26,8 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/joshuafuller/beacon v1.3.1 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/mallardduck/BrambleDNS/plugins/localrecords v0.0.0
-	github.com/mallardduck/BrambleDNS/plugins/mdnsbridge v0.0.0
 	github.com/mdlayher/socket v0.6.1 // indirect
 	github.com/mdlayher/vsock v1.3.0 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
@@ -53,7 +57,3 @@ require (
 	google.golang.org/grpc v1.82.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/mallardduck/BrambleDNS/plugins/localrecords => ../plugins/localrecords
-
-replace github.com/mallardduck/BrambleDNS/plugins/mdnsbridge => ../plugins/mdnsbridge

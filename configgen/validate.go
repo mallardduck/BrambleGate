@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mallardduck/BrambleDNS/model"
+	"github.com/mallardduck/BrambleGate/model"
 )
 
 // Validate checks the model is renderable and internally consistent before any

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mallardduck/BrambleDNS/configgen"
-	"github.com/mallardduck/BrambleDNS/model"
-	"github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleDNS/store"
+	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/store"
 )
 
 // stubReloader records the last Corefile and can be made to fail.

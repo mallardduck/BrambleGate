@@ -1,11 +1,11 @@
-# BrambleDNS quickstart. Copy this file, run `docker compose up -d`, then open
+# BrambleGate quickstart. Copy this file, run `docker compose up -d`, then open
 # http://localhost:8080 to manage records and point upstream_dns at your existing
-# ad-block resolver. On first run, with no settings.yaml present, BrambleDNS seeds
+# ad-block resolver. On first run, with no settings.yaml present, BrambleGate seeds
 # a working default that forwards to 1.1.1.1 so DNS resolves immediately.
 services:
-  brambledns:
-    image: ghcr.io/mallardduck/brambledns:latest
-    container_name: brambledns
+  bramblegate:
+    image: ghcr.io/mallardduck/bramblegate:latest
+    container_name: bramblegate
     restart: unless-stopped
     ports:
       - "53:53/udp"     # plain DNS (point your clients/router here)

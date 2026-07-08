@@ -1,4 +1,4 @@
-module github.com/mallardduck/BrambleDNS/plugins/localrecords
+module github.com/mallardduck/BrambleGate/plugins/localrecords
 
 go 1.25.0
 

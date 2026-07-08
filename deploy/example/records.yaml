@@ -1,4 +1,4 @@
-# Example BrambleDNS records.yaml — authoritative records for home.arpa.
+# Example BrambleGate records.yaml — authoritative records for home.arpa.
 # Mount at /config/records.yaml. Managed by the GUI, but hand-editable.
 # Full schema + override semantics: docs/config-schema.md.
 

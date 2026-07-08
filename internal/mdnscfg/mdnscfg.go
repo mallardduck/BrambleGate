@@ -8,9 +8,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/mallardduck/BrambleDNS/configgen"
-	"github.com/mallardduck/BrambleDNS/model"
-	"github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 )
 
 // Build assembles the plugin Config: naming/auto-publish/vlans from settings, and

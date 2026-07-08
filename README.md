@@ -1,4 +1,4 @@
-# BrambleDNS
+# BrambleGate
 
 A small, GUI-managed **DNS front door** for a homelab. It sits in front of your
 existing ad-block resolver (Pi-hole / AdGuard Home / Technitium) and adds:
@@ -13,13 +13,13 @@ existing ad-block resolver (Pi-hole / AdGuard Home / Technitium) and adds:
   `home.arpa` names.
 
 Everything not owned locally is forwarded to your upstream ad-block resolver, so
-BrambleDNS is an *addition* to your setup, not a replacement.
+BrambleGate is an *addition* to your setup, not a replacement.
 
 ---
 
 ## Quickstart
 
-You need Docker. BrambleDNS listens on port 53, so nothing else on the host may
+You need Docker. BrambleGate listens on port 53, so nothing else on the host may
 already be bound to it (on Ubuntu, `systemd-resolved` often is — see
 [Troubleshooting](#troubleshooting)).
 
@@ -27,27 +27,27 @@ already be bound to it (on Ubuntu, `systemd-resolved` often is — see
 
 ```bash
 # Grab the compose file
-curl -O https://raw.githubusercontent.com/mallardduck/BrambleDNS/main/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/mallardduck/BrambleGate/main/deploy/docker-compose.yml
 docker compose up -d
 ```
 
 ### With `docker run`
 
 ```bash
-docker run -d --name brambledns --restart unless-stopped \
+docker run -d --name bramblegate --restart unless-stopped \
   -p 53:53/udp -p 53:53/tcp -p 853:853 -p 8080:8080 \
   -v "$PWD/config:/config" \
-  ghcr.io/mallardduck/brambledns:latest
+  ghcr.io/mallardduck/bramblegate:latest
 ```
 
-**On first run, with no `settings.yaml`, BrambleDNS writes a working default** that
+**On first run, with no `settings.yaml`, BrambleGate writes a working default** that
 forwards everything to `1.1.1.1` — so DNS resolves immediately. Then:
 
 1. Open the GUI at **http://localhost:8080**.
 2. Set **Upstream DNS** to your existing ad-block resolver (e.g. `192.168.10.5:53`)
    and save. This is the one change that makes ad-blocking work again.
 3. Add local records, and point a client (or your router's DHCP DNS option) at the
-   host running BrambleDNS.
+   host running BrambleGate.
 
 That's the whole loop. Nothing below is required reading — it's reference.
 
@@ -95,7 +95,7 @@ records:
 
 ### Encrypted DNS (DoT/DoH) with a real certificate
 
-Enable a `dot` (or `doh`) listener and the `acme` block. BrambleDNS obtains a
+Enable a `dot` (or `doh`) listener and the `acme` block. BrambleGate obtains a
 certificate over **DNS-01**, so it never needs an inbound port open — it only needs
 outbound access to the ACME server and your DNS provider's API. It starts serving on
 a self-signed cert immediately and hot-swaps the real cert in when it lands.
@@ -128,7 +128,7 @@ rate limits. Flip it to `true` once issuance succeeds.
 ```bash
 docker compose pull && docker compose up -d
 # or, for docker run:
-docker pull ghcr.io/mallardduck/brambledns:latest && docker restart brambledns
+docker pull ghcr.io/mallardduck/bramblegate:latest && docker restart bramblegate
 ```
 
 Your `/config` volume carries all state across updates.
@@ -139,7 +139,7 @@ Your `/config` volume carries all state across updates.
 
 **Port 53 is already in use.** On many Linux hosts `systemd-resolved` binds `:53`.
 Free it by setting `DNSStubListener=no` in `/etc/systemd/resolved.conf` and
-restarting the service, or run BrambleDNS on a host/interface that isn't already a
+restarting the service, or run BrambleGate on a host/interface that isn't already a
 resolver.
 
 **Ad-blocking stopped working.** The seeded default forwards to `1.1.1.1`, which does
@@ -151,7 +151,7 @@ and wait for the real cert to be issued (`production: true` once staging works).
 
 **A GUI edit didn't take effect.** Saves validate before writing; an invalid edit is
 rejected with the reason and the previous config keeps serving. Check the container
-logs (`docker logs brambledns`) for the validation or reload error.
+logs (`docker logs bramblegate`) for the validation or reload error.
 
 ---
 

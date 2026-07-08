@@ -11,7 +11,7 @@ type Settings struct {
 	MDNS        MDNS           `yaml:"mdns" json:"mdns"`
 }
 
-// VLAN mirrors one of the user's real network VLANs (BrambleDNS is not the
+// VLAN mirrors one of the user's real network VLANs (BrambleGate is not the
 // authority for VLANs — the network gear is; this just lets the user declare the
 // same name→subnet mapping). Used for split-horizon matching by client source
 // address and for mDNS interface scoping. A VLAN may span more than one CIDR

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mallardduck/BrambleDNS/configgen"
-	"github.com/mallardduck/BrambleDNS/internal/mdnscfg"
-	"github.com/mallardduck/BrambleDNS/model"
-	"github.com/mallardduck/BrambleDNS/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleDNS/store"
+	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
+	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/store"
 )
 
 // Reloader is the slice of the engine the GUI needs: a graceful in-process
