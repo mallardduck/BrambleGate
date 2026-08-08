@@ -3,6 +3,7 @@ package mdnsresponder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -89,7 +90,7 @@ func (b *backend) Register(spec ServiceSpec) (Handle, error) {
 func (b *backend) Unregister(h Handle) error {
 	handle, ok := h.(dnssd.ServiceHandle)
 	if !ok {
-		return fmt.Errorf("invalid handle type")
+		return errors.New("invalid handle type")
 	}
 	b.responder.Remove(handle)
 	return nil
@@ -101,7 +102,7 @@ func (b *backend) Close() error {
 	b.respondCancel()
 	// Wait for Respond to exit and log any error (don't fail — we're closing anyway).
 	err := <-b.respondErrChan
-	if err != nil && err != context.Canceled {
+	if err != nil && !errors.Is(err, context.Canceled) {
 		b.log.Warn("mdns responder error on close", "err", err)
 	}
 	return nil
