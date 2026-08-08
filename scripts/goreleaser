@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+GOWORK=off go tool -modfile=gotools/goreleaser/go.mod github.com/goreleaser/goreleaser/v2 $@

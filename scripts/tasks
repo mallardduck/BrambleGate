@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+GOWORK=off go tool -modfile=gotools/task/go.mod task $@
