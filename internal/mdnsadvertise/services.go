@@ -8,7 +8,7 @@ import (
 )
 
 // instanceNamePrefix is the base of every service's mDNS-SD instance name.
-// beacon's registry keys registrations by InstanceName alone (not
+// The responder backend keys registrations by InstanceName alone (not
 // InstanceName+ServiceType), so a process registering more than one service
 // type — as this one does — needs a distinct instance name per type; see
 // instanceNameFor.

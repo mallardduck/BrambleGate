@@ -1,6 +1,6 @@
 # Example BrambleGate settings.yaml.
-# Mount this at /config/settings.yaml (see docs/architecture.md volume layout).
-# Full schema reference: docs/config-schema.md. Records live in records.yaml.
+# Mount this at /config/settings.yaml (see dev-docs/architecture.md volume layout).
+# Full schema reference: dev-docs/config-schema.md. Records live in records.yaml.
 
 # Mirror your real network VLANs here (BrambleGate is not the authority for VLANs —
 # your network gear is). Names are referenced by per-VLAN record overrides; the
@@ -29,11 +29,11 @@ listeners:
 acme:
   # When disabled, encrypted listeners use a self-signed cert (fine for testing;
   # rejected by strict clients like Android). Enable to obtain a real cert via
-  # ACME DNS-01 — no inbound exposure needed. See docs/certificates.md.
+  # ACME DNS-01 — no inbound exposure needed. See docs/encrypted-dns.md.
   enabled: false
   domain: dns.example.com   # a real, owned domain; its A record may point at a LAN IP
   email: you@example.com
-  dns_provider: cloudflare  # supported names + required env vars: docs/certificates.md
+  dns_provider: cloudflare  # supported names + required env vars: docs/encrypted-dns.md
   production: false         # default = LE staging (untrusted) until you opt in
   renew_before_days: 30
   # Credentials come from environment variables, never this file
@@ -42,7 +42,7 @@ acme:
 mdns:
   # Discover mDNS (.local) devices and make them resolvable under home.arpa.
   # Nothing is auto-served unless a discovery matches an auto_publish selector;
-  # otherwise approve/promote candidates in the GUI. See docs/plugins.md.
+  # otherwise approve/promote candidates in the GUI. See docs/mdns-bridge.md.
   enabled: false
   interfaces: [all]         # [] and [all] both = all multicast interfaces
   suffix: home.arpa

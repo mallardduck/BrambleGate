@@ -174,11 +174,18 @@ To run unprivileged instead:
 
 ---
 
+## Feature docs
+
+For more detail than the quickstart above once you're turning on a specific
+feature, see [`docs/`](docs/): [local records + split-horizon](docs/local-records.md),
+[encrypted DNS + certificates](docs/encrypted-dns.md),
+[the mDNS bridge](docs/mdns-bridge.md), and [upstream forwarding](docs/forwarding.md).
+
 ## For developers
 
-Design docs live under [`docs/`](docs/) (architecture, DNS engine, plugins, config
-schema, certificates, roadmap). The repo is a multi-module Go workspace — see
-[`docs/repo-layout.md`](docs/repo-layout.md) for the module layout and the
+Design docs live under [`dev-docs/`](dev-docs/) (architecture, DNS engine, plugins,
+config schema, certificates, roadmap). The repo is a multi-module Go workspace — see
+[`dev-docs/repo-layout.md`](dev-docs/repo-layout.md) for the module layout and the
 `replace`-vs-`go.work` build model.
 
 The dashboard (`internal/gui/ui`) is server-rendered with
