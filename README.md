@@ -1,5 +1,7 @@
 # BrambleGate
 
+**[mallardduck.github.io/BrambleGate](https://mallardduck.github.io/BrambleGate/)**
+
 A small, GUI-managed **DNS front door** for a homelab. It sits in front of your
 existing ad-block resolver (Pi-hole / AdGuard Home / Technitium) and adds:
 
