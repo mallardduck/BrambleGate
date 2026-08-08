@@ -5,6 +5,8 @@ installing and the five-minute quickstart, start at the root
 [`README.md`](../README.md) instead — come here once you're ready to turn on a
 specific feature.
 
+- [`deploying-docker.md`](deploying-docker.md) — Compose/`docker run`, ports
+  and volumes, updating, non-root hardening, building the image yourself.
 - [`local-records.md`](local-records.md) — static `home.arpa` records and
   per-VLAN split-horizon answers.
 - [`encrypted-dns.md`](encrypted-dns.md) — DoT/DoH/DoQ listeners and getting a

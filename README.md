@@ -131,7 +131,9 @@ docker compose pull && docker compose up -d
 docker pull ghcr.io/mallardduck/bramblegate:latest && docker restart bramblegate
 ```
 
-Your `/config` volume carries all state across updates.
+Your `/config` volume carries all state across updates. For port/volume
+details, non-root hardening, and building the image yourself, see
+[`docs/deploying-docker.md`](docs/deploying-docker.md).
 
 ---
 
@@ -155,29 +157,12 @@ logs (`docker logs bramblegate`) for the validation or reload error.
 
 ---
 
-## Running as non-root (hardening)
-
-The published image runs as **root** by default, deliberately: it binds the
-privileged port 53 and seeds/rewrites config on a freshly mounted `/config`, both of
-which are awkward for an unprivileged uid on a fresh host. This matches how
-Pi-hole/dnsmasq images ship.
-
-To run unprivileged instead:
-
-1. `chown` your config directory to the uid you'll run as.
-2. Grant just the bind capability and set the user, e.g. in compose:
-   ```yaml
-   user: "1000:1000"
-   cap_add: ["NET_BIND_SERVICE"]
-   ```
-   …or map the listeners to high ports in `settings.yaml` and publish those.
-
----
-
 ## Feature docs
 
 For more detail than the quickstart above once you're turning on a specific
-feature, see [`docs/`](docs/): [local records + split-horizon](docs/local-records.md),
+feature, see [`docs/`](docs/): [deploying with Docker](docs/deploying-docker.md)
+(ports, volumes, non-root hardening, building the image),
+[local records + split-horizon](docs/local-records.md),
 [encrypted DNS + certificates](docs/encrypted-dns.md),
 [the mDNS bridge](docs/mdns-bridge.md), and [upstream forwarding](docs/forwarding.md).
 
