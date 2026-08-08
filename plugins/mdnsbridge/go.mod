@@ -6,7 +6,6 @@ require (
 	github.com/brutella/dnssd v1.2.14
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.4
-	github.com/joshuafuller/beacon v1.3.1
 	github.com/miekg/dns v1.1.72
 )
 
