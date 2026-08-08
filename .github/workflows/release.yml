@@ -99,7 +99,20 @@ jobs:
     permissions:
       contents: write   # flip the draft release live
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check semver
+        id: semver
+        run: .github/scripts/check-semver.sh "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      # A prerelease tag (e.g. v1.2.3-beta) is flagged --prerelease and never
+      # marked --latest; a stable tag is undrafted as the new latest release.
       - name: Undraft the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+        run: |
+          if [[ "${{ steps.semver.outputs.HAS_PRERELEASE }}" == "true" ]]; then
+            gh release edit "${{ github.ref_name }}" --draft=false --prerelease --latest=false --repo "${{ github.repository }}"
+          else
+            gh release edit "${{ github.ref_name }}" --draft=false --prerelease=false --latest=true --repo "${{ github.repository }}"
+          fi
