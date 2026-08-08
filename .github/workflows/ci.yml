@@ -69,7 +69,7 @@ jobs:
       - id: find
         shell: bash
         run: |
-          dirs=$(find . -name go.mod -not -path './web/*' -printf '%h\n' \
+          dirs=$(find . -name go.mod -not -path './gotools/*' -not -path './web/*' -printf '%h\n' \
             | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
           echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
 
