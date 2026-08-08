@@ -89,7 +89,7 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # The root .golangci.yml is schema v2; pin the golangci-lint version to match
       # local dev. The action finds the root config by walking up from the module.
