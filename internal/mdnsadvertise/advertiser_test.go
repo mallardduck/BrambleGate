@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joshuafuller/beacon/responder"
-
+	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/model"
 )
 
@@ -17,9 +16,9 @@ import (
 // multicast sockets.
 type fakeBackend struct {
 	mu           sync.Mutex
-	registered   []*responder.Service
+	registered   []mdnsresponder.ServiceSpec
 	unregistered []string
-	failRegister map[string]bool // ServiceType -> force Register to fail once
+	failRegister map[string]bool // Type -> force Register to fail once
 
 	calls chan string // one entry per Register/Unregister call, for waitForCall
 }
@@ -28,25 +27,30 @@ func newFakeBackend() *fakeBackend {
 	return &fakeBackend{calls: make(chan string, 16), failRegister: map[string]bool{}}
 }
 
-func (f *fakeBackend) Register(svc *responder.Service) error {
+func (f *fakeBackend) Register(spec mdnsresponder.ServiceSpec) (mdnsresponder.Handle, error) {
 	f.mu.Lock()
-	fail := f.failRegister[svc.ServiceType]
+	fail := f.failRegister[spec.Type]
 	if !fail {
-		f.registered = append(f.registered, svc)
+		f.registered = append(f.registered, spec)
 	}
 	f.mu.Unlock()
-	f.calls <- "register:" + svc.ServiceType
+	f.calls <- "register:" + spec.Type
 	if fail {
-		return errors.New("simulated register failure")
+		return nil, errors.New("simulated register failure")
 	}
-	return nil
+	// Use the service type itself as the opaque handle for the fake
+	return spec.Type, nil
 }
 
-func (f *fakeBackend) Unregister(serviceID string) error {
+func (f *fakeBackend) Unregister(h mdnsresponder.Handle) error {
+	serviceType, ok := h.(string)
+	if !ok {
+		return errors.New("invalid handle type")
+	}
 	f.mu.Lock()
-	f.unregistered = append(f.unregistered, serviceID)
+	f.unregistered = append(f.unregistered, serviceType)
 	f.mu.Unlock()
-	f.calls <- "unregister:" + serviceID
+	f.calls <- "unregister:" + serviceType
 	return nil
 }
 
@@ -116,17 +120,17 @@ func TestReconcileAddsDoTWithoutTouchingDomain(t *testing.T) {
 	if len(fb.unregistered) != 0 {
 		t.Fatalf("expected no unregistrations when only adding DoT, got %v", fb.unregistered)
 	}
-	var dot *responder.Service
-	for _, svc := range fb.registered {
-		if svc.ServiceType == "_dot._tcp.local" {
-			dot = svc
+	var dot *mdnsresponder.ServiceSpec
+	for i, spec := range fb.registered {
+		if spec.Type == "_dot._tcp.local" {
+			dot = &fb.registered[i]
 		}
 	}
 	if dot == nil {
 		t.Fatal("dot service was not recorded as registered")
 	}
-	if dot.TXTRecords["domain"] != "dns.example.com" {
-		t.Fatalf("expected domain TXT key, got %v", dot.TXTRecords)
+	if dot.TXT["domain"] != "dns.example.com" {
+		t.Fatalf("expected domain TXT key, got %v", dot.TXT)
 	}
 }
 
@@ -146,14 +150,14 @@ func TestReconcileUnregistersOnlyDomainWhenPlainDisabled(t *testing.T) {
 	for range 2 {
 		seen[fb.waitForCall(t)] = true
 	}
-	if !seen["unregister:BrambleGate-domain-udp._domain._udp.local"] || !seen["unregister:BrambleGate-domain-tcp._domain._tcp.local"] {
+	if !seen["unregister:_domain._udp.local"] || !seen["unregister:_domain._tcp.local"] {
 		t.Fatalf("expected both _domain service types unregistered, got %v", seen)
 	}
 
 	fb.mu.Lock()
 	defer fb.mu.Unlock()
 	for _, id := range fb.unregistered {
-		if id == "BrambleGate-dot-tcp._dot._tcp.local" {
+		if id == "_dot._tcp.local" {
 			t.Fatal("_dot._tcp should not have been unregistered")
 		}
 	}

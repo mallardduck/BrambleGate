@@ -13,34 +13,30 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/joshuafuller/beacon/responder"
-
+	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/model"
 )
 
-// responderBackend is the slice of *responder.Responder the Advertiser needs.
+// responderBackend is the mDNS responder backend the Advertiser needs.
 // Kept as an interface so tests can supply a fake instead of opening real
-// mDNS multicast sockets (beacon's own MockTransport is an unexported internal
-// type, not importable outside its module).
+// mDNS multicast sockets.
 type responderBackend interface {
-	Register(*responder.Service) error
-	Unregister(serviceID string) error
-	Close() error
+	mdnsresponder.Backend
 }
 
 // newResponder constructs the real backend. Overridable so tests never touch
 // real sockets — the same seam pattern as gui.runMDNSListener.
-var newResponder = func(ctx context.Context, _ *slog.Logger) (responderBackend, error) {
-	// TODO maybe we need to call: responder.WithHostname()
-	return responder.New(ctx)
+var newResponder = func(ctx context.Context, log *slog.Logger) (responderBackend, error) {
+	return mdnsresponder.New(ctx, log)
 }
 
 // registeredService is what Advertiser tracks per service type so Reconcile can
 // detect a port/TXT change (which requires unregister+re-register) versus no
 // change at all (a no-op).
 type registeredService struct {
-	port uint16
-	txt  string // fingerprint of the TXT records, for change detection
+	port   uint16
+	txt    string // fingerprint of the TXT records, for change detection
+	handle mdnsresponder.Handle
 }
 
 // Advertiser owns the registered mDNS-SD service set for this process.
@@ -70,11 +66,11 @@ func New(ctx context.Context, log *slog.Logger) (*Advertiser, error) {
 func (a *Advertiser) Reconcile(settings model.Settings) {
 	wanted := desiredServices(settings)
 
-	wantedTypes := make(map[string]*responder.Service, len(wanted))
+	wantedSpecs := make(map[string]*mdnsresponder.ServiceSpec, len(wanted))
 	types := make([]string, 0, len(wanted))
-	for _, svc := range wanted {
-		wantedTypes[svc.ServiceType] = svc
-		types = append(types, svc.ServiceType)
+	for _, spec := range wanted {
+		wantedSpecs[spec.Type] = spec
+		types = append(types, spec.Type)
 	}
 	if len(types) == 0 {
 		a.log.Info("mdns advertise: reconcile — nothing to advertise (no enabled listener maps to an mDNS-SD service type)")
@@ -86,50 +82,57 @@ func (a *Advertiser) Reconcile(settings model.Settings) {
 	defer a.mu.Unlock()
 
 	for serviceType := range a.tracked {
-		if _, stillWanted := wantedTypes[serviceType]; !stillWanted {
+		if _, stillWanted := wantedSpecs[serviceType]; !stillWanted {
 			a.unregisterLocked(serviceType)
 		}
 	}
 
-	for serviceType, svc := range wantedTypes {
-		want := registeredService{port: svc.Port, txt: txtFingerprint(svc.TXTRecords)}
+	for serviceType, spec := range wantedSpecs {
+		want := registeredService{port: spec.Port, txt: txtFingerprint(spec.TXT)}
 		if current, ok := a.tracked[serviceType]; ok {
-			if current == want {
+			if current.port == want.port && current.txt == want.txt {
 				continue // already registered with these exact params
 			}
 			a.unregisterLocked(serviceType) // params changed: drop and re-register below
 		}
-		a.registerLocked(svc, want)
+		a.registerLocked(spec, want)
 	}
 }
 
 // registerLocked marks serviceType as tracked and spawns the (blocking)
 // Register call. Called with a.mu held.
-func (a *Advertiser) registerLocked(svc *responder.Service, want registeredService) {
-	a.tracked[svc.ServiceType] = want
+func (a *Advertiser) registerLocked(spec *mdnsresponder.ServiceSpec, want registeredService) {
 	a.log.Info("mdns advertise: registering service",
-		"service_type", svc.ServiceType, "instance_name", svc.InstanceName, "port", svc.Port)
+		"service_type", spec.Type, "instance_name", spec.Name, "port", spec.Port)
 	go func() {
-		if err := a.backend.Register(svc); err != nil {
-			a.log.Error("mdns advertise: register failed", "service_type", svc.ServiceType, "err", err)
+		handle, err := a.backend.Register(*spec)
+		if err != nil {
+			a.log.Error("mdns advertise: register failed", "service_type", spec.Type, "err", err)
 			a.mu.Lock()
-			delete(a.tracked, svc.ServiceType) // let the next Reconcile retry
+			delete(a.tracked, spec.Type) // let the next Reconcile retry
 			a.mu.Unlock()
 			return
 		}
+		a.mu.Lock()
+		want.handle = handle
+		a.tracked[spec.Type] = want
+		a.mu.Unlock()
 		a.log.Info("mdns advertise: service registered — should now be visible in an mDNS browser",
-			"service_type", svc.ServiceType, "instance_name", svc.InstanceName, "port", svc.Port)
+			"service_type", spec.Type, "instance_name", spec.Name, "port", spec.Port)
 	}()
 }
 
 // unregisterLocked drops serviceType from tracking and spawns the (blocking)
 // Unregister call. Called with a.mu held.
 func (a *Advertiser) unregisterLocked(serviceType string) {
+	tracked, ok := a.tracked[serviceType]
 	delete(a.tracked, serviceType)
-	id := instanceNameFor(serviceType) + "." + serviceType
+	if !ok {
+		return // not tracked, nothing to do
+	}
 	a.log.Info("mdns advertise: unregistering service", "service_type", serviceType)
 	go func() {
-		if err := a.backend.Unregister(id); err != nil {
+		if err := a.backend.Unregister(tracked.handle); err != nil {
 			a.log.Error("mdns advertise: unregister failed", "service_type", serviceType, "err", err)
 			return
 		}

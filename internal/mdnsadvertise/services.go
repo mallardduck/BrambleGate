@@ -3,8 +3,7 @@ package mdnsadvertise
 import (
 	"strings"
 
-	"github.com/joshuafuller/beacon/responder"
-
+	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/model"
 )
 
@@ -31,13 +30,13 @@ func instanceNameFor(serviceType string) string {
 // UDP and TCP, so both service types are advertised). Encrypted transports
 // follow draft-liu-add-dnssd-edns-01; DoH/DoQ aren't rendered by configgen yet,
 // so they're not advertised until a later phase implements those listeners.
-func desiredServices(settings model.Settings) []*responder.Service {
-	var out []*responder.Service
+func desiredServices(settings model.Settings) []*mdnsresponder.ServiceSpec {
+	var out []*mdnsresponder.ServiceSpec
 
 	if settings.Listeners.Plain.Enabled {
 		port := uint16(settings.Listeners.Plain.Port)
 		for _, serviceType := range []string{"_domain._udp.local", "_domain._tcp.local"} {
-			out = append(out, &responder.Service{InstanceName: instanceNameFor(serviceType), ServiceType: serviceType, Port: port})
+			out = append(out, &mdnsresponder.ServiceSpec{Name: instanceNameFor(serviceType), Type: serviceType, Port: port})
 		}
 	}
 
@@ -47,11 +46,11 @@ func desiredServices(settings model.Settings) []*responder.Service {
 		if settings.ACME.Domain != "" {
 			txt["domain"] = settings.ACME.Domain
 		}
-		out = append(out, &responder.Service{
-			InstanceName: instanceNameFor(serviceType),
-			ServiceType:  serviceType,
-			Port:         uint16(settings.Listeners.DoT.Port),
-			TXTRecords:   txt,
+		out = append(out, &mdnsresponder.ServiceSpec{
+			Name: instanceNameFor(serviceType),
+			Type: serviceType,
+			Port: uint16(settings.Listeners.DoT.Port),
+			TXT:  txt,
 		})
 	}
 
