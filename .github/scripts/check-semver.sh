@@ -29,6 +29,23 @@ has_build_meta() {
   [[ "$1" =~ \+ ]]
 }
 
+# Extracts the prerelease channel (the first dot-separated identifier after
+# the '-', e.g. "rc" from "1.2.3-rc.1") if it's one we mint a rolling image
+# tag for. Anything else (typos, one-off tags like "-hotfix.1") is left
+# blank so it doesn't silently create a new rolling tag.
+prerelease_type() {
+  local identifier="${1#*-}"
+  identifier="${identifier%%.*}"
+  case "$identifier" in
+    alpha|beta|rc)
+      echo "$identifier"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
 # Output results to stdout
 if has_prerelease "$tag"; then
   echo "HAS_PRERELEASE=true"
@@ -41,3 +58,5 @@ if has_build_meta "$tag"; then
 else
   echo "HAS_BUILD_META=false"
 fi
+
+echo "PRERELEASE_TYPE=$(prerelease_type "$tag")"
