@@ -30,7 +30,10 @@ checksum:
   name_template: checksums.txt
 
 changelog:
-  disable: true
+  # left at the default (false): --release-notes is the only thing that
+  # should ever populate the body, but `disable: true` makes goreleaser
+  # ignore --release-notes too and render an empty changelog instead.
+  disable: false
 
 release:
   draft: true
