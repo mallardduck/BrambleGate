@@ -39,6 +39,18 @@ jobs:
         with:
           go-version: '1.26'
 
+      # goreleaser's own changelog is disabled (.goreleaser.yaml
+      # changelog.disable) in favor of scripts/git-changelog, which groups
+      # commits by verb instead of conventional-commit prefixes.
+      - name: Generate changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
+          if [[ -z "$PREV_TAG" ]]; then
+            echo "_Initial release._" > notes.md
+          else
+            scripts/git-changelog "$PREV_TAG" "${{ github.ref_name }}" notes.md
+          fi
+
       # .goreleaser.yaml has `release: draft: true` — this only publishes
       # binaries/checksums/changelog to a draft release. `undraft` below flips
       # it live once this and the image build both succeed.
@@ -46,7 +58,7 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean
+          args: release --clean --release-notes=notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
