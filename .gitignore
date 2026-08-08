@@ -22,3 +22,6 @@ go.work.sum
 Thumbs.db
 # ACME integration test artifacts (Pebble CA)
 deploy/test/*.pem
+
+# Generated release notes (scripts/git-changelog output, release.yml)
+/release-notes.md

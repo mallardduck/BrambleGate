@@ -46,9 +46,9 @@ jobs:
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
           if [[ -z "$PREV_TAG" ]]; then
-            echo "_Initial release._" > notes.md
+            echo "_Initial release._" > release-notes.md
           else
-            scripts/git-changelog "$PREV_TAG" "${{ github.ref_name }}" notes.md
+            scripts/git-changelog "$PREV_TAG" "${{ github.ref_name }}" release-notes.md
           fi
 
       # .goreleaser.yaml has `release: draft: true` — this only publishes
@@ -58,7 +58,7 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --release-notes=notes.md
+          args: release --clean --release-notes=release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
