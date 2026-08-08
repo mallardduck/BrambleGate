@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrambleGate — A GUI-managed DNS front door for your homelab</title>
+<meta name="description" content="BrambleGate is a small, GUI-managed DNS front door for a homelab: local home.arpa records, per-VLAN split-horizon, encrypted DNS (DoT/DoH/DoQ), and an mDNS bridge — sitting in front of your existing ad-block resolver.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <h1>BrambleGate</h1>
+  <p class="tagline">A small, GUI-managed DNS front door for a homelab.<br>Sits in front of your existing ad-block resolver and adds the parts it doesn't do.</p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="#quickstart">Docker quickstart</a>
+    <a class="btn btn-secondary" href="https://github.com/mallardduck/BrambleGate">View on GitHub</a>
+  </div>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h2>What is BrambleGate?</h2>
+    <p>
+      BrambleGate sits in front of your existing ad-block resolver
+      (Pi-hole / AdGuard Home / Technitium) and handles the things those tools
+      don't: local hostnames, per-VLAN answers, encrypted DNS listeners, and
+      discovering <code>.local</code> devices. Everything it doesn't own locally
+      is forwarded straight to your upstream resolver, so it's an addition to
+      your setup, not a replacement.
+    </p>
+    <div class="columns">
+      <div>
+        <h3>What it does</h3>
+        <ul>
+          <li>Local <code>home.arpa</code> records, managed live in a web GUI</li>
+          <li>Per-VLAN split-horizon answers for the same name</li>
+          <li>DoT/DoH/DoQ listeners with real, auto-renewing certs</li>
+          <li>Bridges <code>.local</code> mDNS devices into stable <code>home.arpa</code> names</li>
+          <li>Forwards everything else upstream to your ad-block resolver</li>
+        </ul>
+      </div>
+      <div>
+        <h3>What it doesn't do</h3>
+        <ul>
+          <li>Replace your ad-block resolver — it forwards to one</li>
+          <li>Ad blocking / filtering itself</li>
+          <li>Distributed or multi-node deployment</li>
+          <li>Require inbound port exposure for encrypted DNS certs (uses ACME DNS-01)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Features</h2>
+    <ul class="use-cases">
+      <li><strong>Local records</strong> — static <code>home.arpa</code> names managed in a
+        web GUI, applied live with no restart.</li>
+      <li><strong>Per-VLAN split-horizon</strong> — the same name can resolve differently
+        (or not at all) depending on which VLAN the client is on.</li>
+      <li><strong>Encrypted DNS</strong> — DoT (and DoH/DoQ) listeners with a real,
+        auto-renewing certificate obtained over ACME DNS-01 — no inbound port exposure
+        required.</li>
+      <li><strong>mDNS bridge</strong> — discover <code>.local</code> devices and make
+        them resolvable as stable <code>home.arpa</code> names.</li>
+    </ul>
+  </section>
+
+  <section class="panel" id="quickstart">
+    <h2>Quick start</h2>
+    <p>You need Docker. BrambleGate listens on port 53, so nothing else on the host may
+      already be bound to it.</p>
+    <pre><code># Grab the compose file
+curl -O https://raw.githubusercontent.com/mallardduck/BrambleGate/main/deploy/docker-compose.yml
+docker compose up -d</code></pre>
+    <p>
+      On first run, with no <code>settings.yaml</code>, BrambleGate writes a working
+      default that forwards everything to <code>1.1.1.1</code> — so DNS resolves
+      immediately. Then open the GUI at <strong>http://localhost:8080</strong>, set
+      Upstream DNS to your existing ad-block resolver, and add local records.
+    </p>
+    <p><a href="https://github.com/mallardduck/BrambleGate#quickstart">See the full quickstart and docs on GitHub &rarr;</a></p>
+  </section>
+
+</main>
+
+<footer>
+  <p><a href="https://github.com/mallardduck/BrambleGate">mallardduck/BrambleGate</a></p>
+</footer>
+
+</body>
+</html>
