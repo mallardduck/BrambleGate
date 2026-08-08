@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+FROM_TAG="${1:-}"
+TO_TAG="${2:-}"
+OUTPUT_FILE="${3:-}"
+
+if [[ -z "$FROM_TAG" || -z "$TO_TAG" ]]; then
+  echo "Usage: $0 <from_tag> <to_tag> [output_file]"
+  exit 1
+fi
+
+generate_changelog() {
+  cat <<EOF
+## [Changelog](./compare/${FROM_TAG}...${TO_TAG})
+
+EOF
+
+  local raw_log
+  raw_log=$(git log --oneline --no-merges "${FROM_TAG}..${TO_TAG}")
+
+  if [[ -z "$raw_log" ]]; then
+    echo "_No commits found between ${FROM_TAG} and ${TO_TAG}._"
+    return
+  fi
+
+  # Helper to capture commits matching verb patterns
+  filter_commits() {
+    local pattern="$1"
+    echo "$raw_log" | grep -iE "^[a-f0-9]+ (${pattern})" || true
+  }
+
+  format_list() {
+    while read -r hash msg; do
+      [[ -z "$hash" ]] && continue
+      # Remove conventional commit prefixes if present, e.g. "feat: ", "fix(scope): "
+      local clean_msg
+      clean_msg=$(echo "$msg" | sed -E "s/^(feat|fix|docs|chore|refactor|ci|build|test)(\([^)]+\))?:? *//i")
+
+      # Capitalize first character for clean formatting
+      clean_msg="$(echo "${clean_msg:0:1}" | tr '[:lower:]' '[:upper:]')${clean_msg:1}"
+
+      echo "- ${clean_msg} (${hash})"
+    done
+  }
+
+  # Categories matching lax vocabulary patterns
+
+  # 1. Features & Additions
+  local feats
+  feats=$(filter_commits "add|introduce|implement|feat")
+  if [[ -n "$feats" ]]; then
+    echo "### 🚀 Features & Additions"
+    echo "$feats" | format_list
+    echo ""
+  fi
+
+  # 2. Bug Fixes & Corrections
+  local fixes
+  fixes=$(filter_commits "fix|bug|resolve|correct|patch")
+  if [[ -n "$fixes" ]]; then
+    echo "### 🐛 Bug Fixes"
+    echo "$fixes" | format_list
+    echo ""
+  fi
+
+  # 3. Refactoring & Code Quality
+  local refactors
+  refactors=$(filter_commits "refactor|replace|reconcile|normalize|use|simplify")
+  if [[ -n "$refactors" ]]; then
+    echo "### ♻️ Refactoring & Improvements"
+    echo "$refactors" | format_list
+    echo ""
+  fi
+
+  # 4. Maintenance, Dependencies & CI
+  local maintenance
+  maintenance=$(filter_commits "update|bump|tidy|gate|exclude|chore|ci|build|deps|dock")
+  if [[ -n "$maintenance" ]]; then
+    echo "### 🧰 Maintenance & Dependencies"
+    echo "$maintenance" | format_list
+    echo ""
+  fi
+
+  # 5. Documentation
+  local docs
+  docs=$(filter_commits "docs|doc|readme")
+  if [[ -n "$docs" ]]; then
+    echo "### 📝 Documentation"
+    echo "$docs" | format_list
+    echo ""
+  fi
+
+  # 6. Uncategorized fallback
+  local matched_patterns="add|introduce|implement|feat|fix|bug|resolve|correct|patch|refactor|replace|reconcile|normalize|use|simplify|update|bump|tidy|gate|exclude|chore|ci|build|deps|dock|docs|doc|readme"
+  local others
+  others=$(echo "$raw_log" | grep -ivE "^[a-f0-9]+ (${matched_patterns})" || true)
+  if [[ -n "$others" ]]; then
+    echo "### ⚙️ Other Changes"
+    echo "$others" | format_list
+    echo ""
+  fi
+}
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+  generate_changelog > "$OUTPUT_FILE"
+  echo "Changelog written to $OUTPUT_FILE"
+else
+  generate_changelog
+fi
