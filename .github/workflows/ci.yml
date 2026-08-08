@@ -35,7 +35,7 @@ jobs:
             echo "::group::$dir"
             ( cd "$dir" && go build ./... && go test ./... ) || fail=1
             echo "::endgroup::"
-          done < <(find . -name go.mod -not -path './web/*')
+          done < <(.github/scripts/find-modules.sh)
           exit $fail
 
       - name: Vet all modules
@@ -45,7 +45,7 @@ jobs:
           while IFS= read -r mod; do
             dir=$(dirname "$mod")
             ( cd "$dir" && go vet ./... )
-          done < <(find . -name go.mod -not -path './web/*')
+          done < <(.github/scripts/find-modules.sh)
 
       # internal/gui/ui's templ views and generated Tailwind CSS are committed
       # (docs/repo-layout.md); regenerate and fail if that drifts from what's checked in.
@@ -69,8 +69,7 @@ jobs:
       - id: find
         shell: bash
         run: |
-          dirs=$(find . -name go.mod -not -path './gotools/*' -not -path './web/*' -printf '%h\n' \
-            | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          dirs=$(.github/scripts/find-modules.sh --json)
           echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
 
   lint:
