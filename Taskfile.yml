@@ -1,0 +1,77 @@
+# https://taskfile.dev
+#
+# No system install required: `task` and `goreleaser` each live in their own
+# gotools/<name>/go.mod (see gotools/README.md), added via
+# `go get -tool -modfile=gotools/<name>/go.mod <module>@<version>`. That keeps
+# them out of the root go.mod entirely — no version/go-directive bleed into the
+# app's own dependency graph. Run tasks with (GOWORK=off is required for the
+# outer `go tool` invocation itself, since go.work is present at the repo root
+# and -modfile can't be combined with workspace mode):
+#   GOWORK=off go tool -modfile=gotools/task/go.mod task <name>
+# (or install `task` normally and just run `task <name>` — same Taskfile).
+version: '3'
+
+vars:
+  # Keep in sync with the `use` block in go.work.
+  MODULES: ". engine model store configgen plugins/localrecords plugins/mdnsbridge"
+  BIN: bin/bramblegate
+  IMAGE: bramblegate:dev
+  GORELEASER: go tool -modfile=gotools/goreleaser/go.mod goreleaser
+
+env:
+  # The root module resolves sibling modules via committed `replace` directives,
+  # not go.work (docs/repo-layout.md) — same rationale as .github/workflows/ci.yml.
+  GOWORK: 'off'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - go tool -modfile=gotools/task/go.mod task --list-all
+    silent: true
+
+  build:
+    desc: Build the bramblegate binary for the host platform
+    cmds:
+      - go build -trimpath -ldflags="-s -w" -o {{.BIN}} .
+
+  generate:
+    desc: Regenerate templ views and the Tailwind CSS bundle (internal/gui/ui)
+    cmds:
+      - go generate ./...
+
+  test:
+    desc: Run `go build` + `go test` in every module (mirrors CI)
+    cmds:
+      - |
+        for m in {{.MODULES}}; do
+          echo "== $m =="
+          (cd "$m" && go build ./... && go test ./...) || exit 1
+        done
+
+  vet:
+    desc: Run `go vet` in every module
+    cmds:
+      - |
+        for m in {{.MODULES}}; do
+          echo "== $m =="
+          (cd "$m" && go vet ./...) || exit 1
+        done
+
+  snapshot:
+    desc: Build a local snapshot release with goreleaser (no publish, no tag needed)
+    cmds:
+      - '{{.GORELEASER}} release --snapshot --clean'
+
+  docker:
+    desc: Build the bramblegate Docker image
+    cmds:
+      - docker build -f deploy/Dockerfile -t {{.IMAGE}} .
+
+  ci:
+    desc: Run the same checks CI runs (build+test, vet, generated-asset drift check)
+    cmds:
+      - task: test
+      - task: vet
+      - task: generate
+      - git diff --exit-code -- internal/gui/ui internal/gui/static/style.css
