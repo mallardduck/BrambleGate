@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joshuafuller/beacon/querier"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge/internal/mdnsquery"
 )
 
 // DefaultServiceTypes is the set of mDNS service types browsed when settings.yaml
@@ -29,34 +29,30 @@ var DefaultServiceTypes = []string{
 
 const expireInterval = 30 * time.Second
 
-// discoverTimeout bounds each DiscoverServices call. It must be long enough to
-// cover the PTR browse phase plus per-instance SRV/TXT/A resolution fallbacks.
-const discoverTimeout = 3 * time.Second
-
-// browseInterval is how often each service type is re-browsed after its first
-// DiscoverServices call completes.
-const browseInterval = 10 * time.Second
-
 // Listener browses mDNS and feeds the Table. It is owned by the host process and
 // runs for the process lifetime (independent of engine reloads).
 type Listener struct {
-	table    *Table
-	services []string
-	ifaces   []net.Interface
-	log      *slog.Logger
+	table      *Table
+	services   []string
+	ifaces     []net.Interface
+	ifaceNames []string
+	browser    mdnsquery.Browser
+	log        *slog.Logger
 }
 
 // NewListener returns a Listener. Empty services uses DefaultServiceTypes; empty
-// or ["all"] ifaceNames lets beacon use all multicast interfaces.
+// or ["all"] ifaceNames lets the browser use all multicast interfaces.
 func NewListener(table *Table, services, ifaceNames []string, log *slog.Logger) *Listener {
 	if len(services) == 0 {
 		services = DefaultServiceTypes
 	}
 	return &Listener{
-		table:    table,
-		services: services,
-		ifaces:   resolveIfaces(ifaceNames, log),
-		log:      log,
+		table:      table,
+		services:   services,
+		ifaces:     resolveIfaces(ifaceNames, log),
+		ifaceNames: ifaceNames,
+		browser:    mdnsquery.New(),
+		log:        log,
 	}
 }
 
@@ -64,7 +60,7 @@ func NewListener(table *Table, services, ifaceNames []string, log *slog.Logger) 
 // a timer. It never returns an error — mDNS problems are logged, not fatal.
 func (l *Listener) Run(ctx context.Context) {
 	for _, svc := range l.services {
-		go l.browse(ctx, svc)
+		go l.browseService(ctx, svc)
 	}
 	l.log.Info("mdns listener started", "services", len(l.services), "all_ifaces", len(l.ifaces) == 0)
 
@@ -80,72 +76,48 @@ func (l *Listener) Run(ctx context.Context) {
 	}
 }
 
-// browse repeatedly discovers instances of service until ctx is canceled.
-func (l *Listener) browse(ctx context.Context, service string) {
-	ticker := time.NewTicker(browseInterval)
-	defer ticker.Stop()
-
-	l.discover(ctx, service)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			l.discover(ctx, service)
-		}
+// browseService runs a continuous browse for one service type until ctx is canceled.
+func (l *Listener) browseService(ctx context.Context, service string) {
+	ifaceNames := l.ifaceNamesForBrowse()
+	err := l.browser.Browse(ctx, service, ifaceNames,
+		func(e mdnsquery.Entry) { l.ingest(service, e) },
+		func(e mdnsquery.Entry) { l.remove(service, e) },
+	)
+	if err != nil && err != context.Canceled {
+		l.log.Error("mdns: browse failed", "service", service, "err", err)
 	}
 }
 
-func (l *Listener) discover(ctx context.Context, service string) {
-	q, err := querier.New(l.clientOpts()...)
-	if err != nil {
-		l.log.Error("mdns: querier init failed", "service", service, "err", err)
-		return
-	}
-	defer func() {
-		if closeErr := q.Close(); closeErr != nil {
-			l.log.Warn("mdns: querier close failed", "service", service, "err", closeErr)
-		}
-	}()
-
-	discoverCtx, cancel := context.WithTimeout(ctx, discoverTimeout)
-	defer cancel()
-
-	instances, err := q.DiscoverServices(discoverCtx, service+".local")
-	if err != nil {
-		l.log.Error("mdns: discover failed", "service", service, "err", err)
-		return
-	}
-	for _, inst := range instances {
-		l.ingest(service, inst)
-	}
-}
-
-func (l *Listener) clientOpts() []querier.Option {
-	if len(l.ifaces) == 0 {
+// ifaceNamesForBrowse returns the interface names for filtering browse results.
+// Returns nil if all interfaces should be used.
+func (l *Listener) ifaceNamesForBrowse() []string {
+	if len(l.ifaceNames) == 0 || (len(l.ifaceNames) == 1 && strings.EqualFold(l.ifaceNames[0], "all")) {
 		return nil // all interfaces
 	}
-	return []querier.Option{querier.WithInterfaces(l.ifaces)}
+	return l.ifaceNames
 }
 
-// ingest maps a resolved beacon service instance into the Table (naming/publish
+// ingest maps a discovered mDNS service instance into the Table (naming/publish
 // decisions happen in the Table from its config).
-func (l *Listener) ingest(service string, inst querier.ServiceInstance) {
+func (l *Listener) ingest(service string, e mdnsquery.Entry) {
 	entry := Entry{
-		Host:     strings.ToLower(strings.TrimSuffix(inst.Hostname, ".")),
+		Host:     strings.ToLower(strings.TrimSuffix(e.Host, ".")),
 		Service:  service,
-		Instance: inst.InstanceName,
-		TXT:      inst.TXT,
+		Instance: e.Instance,
+		TXT:      e.TXT,
+		IPv4:     e.IPv4,
+		IPv6:     e.IPv6,
 	}
-	if inst.AddrIPv4 != nil {
-		if v4 := inst.AddrIPv4.To4(); v4 != nil {
-			entry.IPv4 = append(entry.IPv4, v4.String())
-		}
-	}
-	if entry.Host == "" || len(entry.IPv4) == 0 {
+	if entry.Host == "" {
 		return
 	}
 	l.table.Upsert(entry)
+}
+
+// remove deletes a service instance from the Table (called on goodbye packet or timeout).
+func (l *Listener) remove(service string, e mdnsquery.Entry) {
+	host := strings.ToLower(strings.TrimSuffix(e.Host, "."))
+	_ = l.table.Remove(service, e.Instance, host)
 }
 
 // sanitizeLabel keeps a DNS-safe single label (letters, digits, hyphen).

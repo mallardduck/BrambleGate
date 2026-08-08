@@ -172,6 +172,21 @@ func (t *Table) SetPublished(name string, published bool) bool {
 	return found
 }
 
+// Remove deletes an entry by its service/instance/host key. Returns true if an entry
+// was deleted, false if no match was found. Called when a goodbye packet is received
+// or an entry is explicitly removed.
+func (t *Table) Remove(service, instance, host string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	e := Entry{Service: service, Instance: instance, Host: host}
+	k := entryKey(e)
+	if _, ok := t.entries[k]; ok {
+		delete(t.entries, k)
+		return true
+	}
+	return false
+}
+
 // Expire drops entries not re-announced within the TTL.
 func (t *Table) Expire() {
 	t.mu.Lock()

@@ -3,6 +3,7 @@ module github.com/mallardduck/BrambleGate/plugins/mdnsbridge
 go 1.25.0
 
 require (
+	github.com/brutella/dnssd v1.2.14
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.4
 	github.com/joshuafuller/beacon v1.3.1
@@ -12,7 +13,6 @@ require (
 require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/brutella/dnssd v1.2.14 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568 // indirect
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
