@@ -7,7 +7,7 @@
 # compile to the requested target arch below. Because the binary is pure Go
 # (CGO_ENABLED=0), this is a fast native compile for every target — no QEMU
 # emulation of the compiler (docs/repo-layout.md "Docker build notes").
-FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 
 # Provided by buildx for the target platform of each manifest entry.
 ARG TARGETOS
