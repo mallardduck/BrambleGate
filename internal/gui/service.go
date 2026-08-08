@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
@@ -44,7 +45,22 @@ type Service struct {
 	mdnsCancel context.CancelFunc // non-nil while the browse goroutine is running
 	mdnsCfg    mdnsListenerConfig // services/ifaces the running goroutine was started with
 
+	advertiser mdnsAdvertiser // nil when self-advertisement (mdns.advertise.enabled) is off
+
 	mu sync.Mutex // serializes read-modify-write of the config files
+}
+
+// mdnsAdvertiser is the slice of *mdnsadvertise.Advertiser the Service needs.
+// Kept as an interface so tests can stub it without opening real mDNS
+// multicast sockets — the same rationale as the Reloader interface above.
+type mdnsAdvertiser interface {
+	Reconcile(model.Settings)
+	Close() error
+}
+
+// newMDNSAdvertiser constructs the real advertiser. Overridable for tests.
+var newMDNSAdvertiser = func(ctx context.Context, log *slog.Logger) (mdnsAdvertiser, error) {
+	return mdnsadvertise.New(ctx, log)
 }
 
 // mdnsListenerConfig is the subset of model.MDNS the running browse goroutine
@@ -105,6 +121,48 @@ func (s *Service) StopMDNS() {
 	if s.mdns != nil {
 		mdnsbridge.SetTable(nil)
 		s.mdns = nil
+	}
+}
+
+// StartAdvertise starts self-advertising this server's own DNS service(s) via
+// mDNS-SD, per settings.MDNS.Advertise (independent of settings.MDNS.Enabled,
+// which governs discovering OTHER devices). Used both at process startup and
+// by SaveSettings' reconcileAdvertise.
+func (s *Service) StartAdvertise(settings model.Settings) error {
+	advertiser, err := newMDNSAdvertiser(s.baseCtx, s.log)
+	if err != nil {
+		return fmt.Errorf("start mdns advertiser: %w", err)
+	}
+	advertiser.Reconcile(settings)
+	s.advertiser = advertiser
+	return nil
+}
+
+// StopAdvertise closes the advertiser (if running), sending goodbye packets
+// for everything it had registered.
+func (s *Service) StopAdvertise() {
+	if s.advertiser != nil {
+		if err := s.advertiser.Close(); err != nil {
+			s.log.Error("mdns advertise: close failed", "err", err)
+		}
+		s.advertiser = nil
+	}
+}
+
+// reconcileAdvertise starts/stops/reconfigures self-advertisement to match the
+// just-saved settings. Called at the end of every SaveSettings, independent of
+// whatever else changed — catches e.g. a DoT-enabled edit even when
+// mdns.advertise.enabled itself didn't change.
+func (s *Service) reconcileAdvertise(settings model.Settings) {
+	switch {
+	case !settings.MDNS.Advertise.Enabled:
+		s.StopAdvertise()
+	case s.advertiser == nil:
+		if err := s.StartAdvertise(settings); err != nil {
+			s.log.Error("mdns advertise disabled (start error)", "err", err)
+		}
+	default:
+		s.advertiser.Reconcile(settings)
 	}
 }
 
@@ -247,6 +305,7 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	s.mdnsPreReload(settings, rs)
 	reloadErr := s.reload(rendered)
 	s.mdnsPostReload(settings, rs)
+	s.reconcileAdvertise(settings)
 	return reloadErr
 }
 

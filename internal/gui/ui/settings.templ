@@ -95,6 +95,21 @@ templ Settings(data SettingsData) {
 			Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.
 		</p>
 
+		<h2 class="text-sm font-semibold mt-6 mb-3">mDNS self-advertisement</h2>
+		<div class="flex flex-wrap gap-3 items-end">
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="mdns_advertise_enabled" checked?={ data.Settings.MDNS.Advertise.Enabled }/>
+				Enabled
+			</label>
+		</div>
+		<p class="mt-2 text-xs text-bramble-muted">
+			Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other
+			devices/apps on the LAN can find it: plain DNS as <span class="font-mono">_domain._udp</span>/<span class="font-mono">_domain._tcp</span>,
+			plus <span class="font-mono">_dot._tcp</span> when DoT is enabled. Off by default —
+			broadcasting "there is a DNS resolver here" to the whole network segment is a bigger exposure than
+			passively discovering other devices. Takes effect immediately — no restart needed.
+		</p>
+
 		<div class="mt-4">
 			<button type="submit" class="px-3 py-1.5 rounded bg-bramble-primary text-white text-sm font-medium hover:bg-bramble-primary-dark">
 				Save settings
@@ -144,9 +159,11 @@ templ listenerFields(prefix, label string, l model.Listener) {
 		</label>
 		<input
 			type="number"
-			min="1"
 			name={ prefix + "_port" }
-			value={ strconv.Itoa(l.Port) }
+			if l.Port != 0 {
+				value={ strconv.Itoa(l.Port) }
+			}
+			placeholder="port"
 			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
 		/>
 	</div>

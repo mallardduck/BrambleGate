@@ -299,3 +299,131 @@ func TestSaveSettingsDisablesMDNSListenerLive(t *testing.T) {
 		t.Fatalf("expected mDNS disabled live (no restart), got %v", err)
 	}
 }
+
+// stubAdvertiser is a bare mdnsAdvertiser fake — real Reconcile/Close semantics
+// (registering/unregistering mDNS-SD services) are covered by
+// internal/mdnsadvertise's own tests; here we only need to observe that
+// Service calls the interface correctly.
+type stubAdvertiser struct {
+	reconcileCalls int
+	lastSettings   model.Settings
+	closed         bool
+}
+
+func (a *stubAdvertiser) Reconcile(settings model.Settings) {
+	a.reconcileCalls++
+	a.lastSettings = settings
+}
+
+func (a *stubAdvertiser) Close() error {
+	a.closed = true
+	return nil
+}
+
+func stubMDNSAdvertiser(t *testing.T) *[]*stubAdvertiser {
+	t.Helper()
+	var created []*stubAdvertiser
+
+	orig := newMDNSAdvertiser
+	newMDNSAdvertiser = func(context.Context, *slog.Logger) (mdnsAdvertiser, error) {
+		a := &stubAdvertiser{}
+		created = append(created, a)
+		return a, nil
+	}
+	t.Cleanup(func() { newMDNSAdvertiser = orig })
+
+	return &created
+}
+
+func TestSaveSettingsStartsAdvertiseLive(t *testing.T) {
+	svc, _, _ := newService(t)
+	created := stubMDNSAdvertiser(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS.Advertise.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+
+	if len(*created) != 1 {
+		t.Fatalf("expected exactly one advertiser created, got %d", len(*created))
+	}
+	if (*created)[0].reconcileCalls != 1 {
+		t.Fatalf("expected Reconcile called once, got %d", (*created)[0].reconcileCalls)
+	}
+}
+
+func TestSaveSettingsReconcilesAdvertiseWithoutRecreating(t *testing.T) {
+	svc, _, _ := newService(t)
+	created := stubMDNSAdvertiser(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS.Advertise.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+
+	settings.Listeners.DoT = model.Listener{Enabled: true, Port: 853}
+	settings.ACME.Domain = "dns.example.com"
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable dot: %v", err)
+	}
+
+	if len(*created) != 1 {
+		t.Fatalf("expected the advertiser to be reused, not recreated; got %d instances", len(*created))
+	}
+	if (*created)[0].reconcileCalls != 2 {
+		t.Fatalf("expected Reconcile called on every save, got %d", (*created)[0].reconcileCalls)
+	}
+}
+
+func TestSaveSettingsStopsAdvertiseLive(t *testing.T) {
+	svc, _, _ := newService(t)
+	created := stubMDNSAdvertiser(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS.Advertise.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+
+	settings.MDNS.Advertise.Enabled = false
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+
+	if !(*created)[0].closed {
+		t.Fatal("expected the advertiser to be closed on disable")
+	}
+}
+
+func TestAdvertiseIsIndependentOfMDNSEnabled(t *testing.T) {
+	svc, _, _ := newService(t)
+	created := stubMDNSAdvertiser(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS.Enabled = false
+	settings.MDNS.Advertise.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable advertise only: %v", err)
+	}
+
+	if len(*created) != 1 {
+		t.Fatalf("expected advertising to start even with discovery disabled, got %d instances", len(*created))
+	}
+	if _, err := svc.MDNSCandidates(); !IsValidation(err) {
+		t.Fatalf("expected discovery to remain disabled, got %v", err)
+	}
+}

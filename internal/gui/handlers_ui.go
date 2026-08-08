@@ -297,11 +297,16 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	s.MDNS.Interfaces = splitAndTrim(r.FormValue("mdns_interfaces"))
 	s.MDNS.ServiceTypes = splitAndTrim(r.FormValue("mdns_service_types"))
 	s.MDNS.Suffix = strings.TrimSpace(r.FormValue("mdns_suffix"))
+	s.MDNS.Advertise.Enabled = r.FormValue("mdns_advertise_enabled") != ""
 	return nil
 }
 
 func parseListener(r *http.Request, prefix string, l *model.Listener) {
 	l.Enabled = r.FormValue(prefix+"_enabled") != ""
+	if !l.Enabled {
+		l.Port = 0 // disabled listeners don't need a port persisted
+		return
+	}
 	if port, err := strconv.Atoi(r.FormValue(prefix + "_port")); err == nil && port > 0 {
 		l.Port = port
 	}
