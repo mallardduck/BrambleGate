@@ -1,3 +1,33 @@
-scripts/* text eol=lf
-.github/scripts/* text eol=lf
+# Auto-detect text files and normalize line endings to LF in the repository
+* text=auto
+
+# Force LF for files that must never have CRLF (Linux scripts, Docker, Git configs)
 *.sh text eol=lf
+*.bash text eol=lf
+scripts/* text eol=lf
+Dockerfile* text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+# Force LF for common platform-independent code & configs
+*.go text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Force CRLF for Windows-specific script formats (if applicable)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files (prevent Git from modifying or converting line endings)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.exe binary
