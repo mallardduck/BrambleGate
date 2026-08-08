@@ -71,8 +71,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check semver
+        id: semver
+        run: .github/scripts/check-semver.sh "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
       # Derives tags/labels from the git ref: the version tag, a rolling
-      # major.minor, and (for the default branch) latest.
+      # major.minor, and a rolling channel tag — `alpha` for prereleases,
+      # `latest` for stable releases — so every build has a moving tag too.
       - name: Derive image tags
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -81,7 +86,8 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ steps.semver.outputs.HAS_PRERELEASE == 'false' }}
+            type=raw,value=alpha,enable=${{ steps.semver.outputs.HAS_PRERELEASE == 'true' }}
 
       - name: Build and push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
