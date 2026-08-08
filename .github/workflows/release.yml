@@ -1,7 +1,9 @@
 name: Release
 
 # Multi-arch image build + goreleaser binaries, run in parallel on a pushed
-# version tag (e.g. v0.1.0) and on manual dispatch. goreleaser (.goreleaser.yaml)
+# version tag (e.g. v0.1.0) and on manual dispatch. Both gate on `ci`
+# (ci.yml as a reusable workflow) passing first, so a release can never ship
+# without CI having run. goreleaser (.goreleaser.yaml)
 # creates the GitHub release as a draft; once both the image and goreleaser
 # jobs succeed, `undraft` flips it live. Docker produces a single multi-platform
 # manifest for linux/amd64 (x86 servers) and linux/arm64 (Raspberry Pi and
@@ -18,9 +20,13 @@ env:
   IMAGE: ghcr.io/mallardduck/bramblegate
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   goreleaser:
     # workflow_dispatch has no tag for goreleaser to release under.
     if: startsWith(github.ref, 'refs/tags/')
+    needs: [ci]
     runs-on: ubuntu-latest
     permissions:
       contents: write   # create the draft GitHub release
@@ -45,6 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   image:
+    needs: [ci]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -94,7 +101,7 @@ jobs:
     # Only real tag pushes produce a goreleaser draft release to undraft;
     # workflow_dispatch has no tag and no release.
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [goreleaser, image]
+    needs: [ci, goreleaser, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write   # flip the draft release live
