@@ -78,6 +78,20 @@ type MDNS struct {
 	AutoPublish []Selector `yaml:"auto_publish,omitempty" json:"auto_publish,omitempty"`
 	// Naming overrides the suffix for matching discoveries.
 	Naming []NamingRule `yaml:"naming,omitempty" json:"naming,omitempty"`
+	// Advertise controls self-advertising this server's own DNS service(s) via
+	// mDNS-SD. Independent of Enabled above (which governs discovering OTHER
+	// devices) — broadcasting "there is a DNS resolver here" to the whole L2
+	// segment is a bigger exposure than passively browsing other devices'
+	// announcements, so it is off by default even when discovery is on.
+	Advertise MDNSAdvertise `yaml:"advertise" json:"advertise"`
+}
+
+// MDNSAdvertise configures self-advertisement of this server's own DNS
+// service(s) (plain DNS, and DoT/DoH/DoQ when those listeners are enabled) via
+// mDNS-SD (draft-liu-add-dnssd-edns-01 for the encrypted transports; the
+// IANA-registered "domain" service name for plain port 53).
+type MDNSAdvertise struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // DefaultSettings returns a minimal, immediately-usable configuration seeded on
