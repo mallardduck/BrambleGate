@@ -42,6 +42,8 @@ jobs:
       - name: Find Prev tag
         shell: bash
         id: find-prev-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PREV_TAG=$(scripts/find-prev-release-tag "${{ github.ref_name }}")
           echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
