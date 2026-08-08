@@ -5,6 +5,8 @@
 package engine
 
 import (
+	"fmt"
+	"runtime"
 	"sync"
 
 	"github.com/coredns/caddy"
@@ -30,12 +32,47 @@ func New(corefile []byte) (*Engine, error) {
 // Reload performs a graceful, in-process config swap. On failure the previous
 // config keeps serving and the error is returned to the caller — surface it to
 // the GUI user rather than silently dropping their edit (see docs/architecture.md).
+//
+// On Windows this guarantee doesn't hold — see reloadStopStart.
 func (e *Engine) Reload(corefile []byte) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if runtime.GOOS == "windows" {
+		return e.reloadStopStart(corefile)
+	}
 	newInst, err := e.instance.Restart(corefileInput{body: corefile})
 	if err != nil {
 		return err
+	}
+	e.instance = newInst
+	return nil
+}
+
+// reloadStopStart is the Windows fallback for Reload. Instance.Restart's
+// graceful listener handoff works by duplicating each listening socket via
+// (*net.TCPListener).File() and handing the duplicate to the new instance —
+// this is how the previous config keeps serving even if the new one fails to
+// start. Go's Windows implementation cannot do that duplication for a socket
+// already in the listening state; it fails every time with a generic "device
+// attached to the system is not functioning" error. This is a Windows-only
+// limitation of the underlying net/caddy mechanism, confirmed by the fact that
+// the identical reload succeeds cleanly in the real deployment target (a Linux
+// container) — not a bug in this codebase.
+//
+// The fallback: stop the old instance, then start a new one on the same
+// ports. Unlike Restart, this briefly stops serving DNS, and — if the new
+// config fails to start — leaves nothing listening at all (the "previous
+// config keeps serving on failure" guarantee does not hold here). That
+// trade-off is acceptable only because this path is Windows-only, i.e. never
+// hit in production (Docker/Linux), where Restart's graceful handoff is used
+// and works.
+func (e *Engine) reloadStopStart(corefile []byte) error {
+	if err := e.instance.Stop(); err != nil {
+		return fmt.Errorf("stop previous instance: %w", err)
+	}
+	newInst, err := caddy.Start(corefileInput{body: corefile})
+	if err != nil {
+		return fmt.Errorf("start new instance (previous instance already stopped — DNS is down until this is fixed): %w", err)
 	}
 	e.instance = newInst
 	return nil

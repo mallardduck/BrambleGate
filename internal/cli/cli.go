@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,12 +35,18 @@ import (
 // *engine.Engine (so a saved edit re-renders and calls engine.Reload in-process,
 // no restart). Both shut down together on SIGINT/SIGTERM (docs/architecture.md).
 func Run(args []string) int {
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-
 	fs := flag.NewFlagSet("bramblegate", flag.ContinueOnError)
 	configDir := fs.String("config-dir", defaultConfigDir(), "path to the /config volume root")
 	guiAddr := fs.String("gui-addr", defaultGUIAddr(), "listen address for the web GUI/API")
+	logLevel := fs.String("log-level", defaultLogLevel(), "log level: debug, info, warn, error")
+	logFormat := fs.String("log-format", defaultLogFormat(), "log format: json, text")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	log, err := newLogger(*logLevel, *logFormat)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "bramblegate:", err)
 		return 2
 	}
 
@@ -50,6 +59,7 @@ func Run(args []string) int {
 
 func run(log *slog.Logger, configDir, guiAddr string) error {
 	st := store.New(configDir)
+	log.Info("loading config", "dir", configDir, "settings", st.SettingsPath(), "records", st.RecordsPath())
 
 	// Onboarding: a fresh install has no settings.yaml. Seed a working default
 	// (plain DNS forwarding to a public resolver) so the container comes up as a
@@ -129,6 +139,11 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	if mdnsTable != nil {
 		svc.StartMDNS(mdnsTable, settings.MDNS)
 	}
+	if settings.MDNS.Advertise.Enabled {
+		if err := svc.StartAdvertise(settings); err != nil {
+			log.Error("mdns advertise disabled (startup error)", "err", err)
+		}
+	}
 	srv := gui.NewServer(svc, guiAddr)
 	go func() {
 		log.Info("web GUI up", "addr", guiAddr)
@@ -156,6 +171,8 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 
 	<-ctx.Done()
 	log.Info("shutdown signal received, stopping GUI and engine")
+
+	svc.StopAdvertise() // best-effort goodbye packets for anything self-advertised
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -209,13 +226,41 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 	}
 }
 
-// defaultConfigDir is /config (the mounted volume) unless overridden by
-// BRAMBLEGATE_CONFIG_DIR — handy for running outside a container during dev.
+// defaultConfigDir is /config (the mounted volume root) when running inside a
+// container, or an OS-conventional config directory otherwise — running the
+// binary directly on the host (e.g. from an IDE) shouldn't default to writing
+// at a filesystem root, which on Windows is exactly what the literal "/config"
+// resolves to (C:\config). BRAMBLEGATE_CONFIG_DIR always overrides both.
 func defaultConfigDir() string {
 	if d := os.Getenv("BRAMBLEGATE_CONFIG_DIR"); d != "" {
 		return d
 	}
-	return "/config"
+	if inContainer() {
+		return "/config"
+	}
+	if dir, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(dir, "bramblegate")
+	}
+	return "./bramblegate-config" // last resort: os.UserConfigDir() needs $HOME/%AppData% set
+}
+
+// inContainer reports whether the process is running inside a container.
+// /.dockerenv is injected by the container runtime itself (Docker, and most
+// compatible runtimes), independent of the base image, so this works even
+// against the distroless image this project ships (docs/repo-layout.md). The
+// /proc/1/cgroup check catches non-Docker OCI runtimes (containerd, Kubernetes)
+// that don't create /.dockerenv.
+func inContainer() bool {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	data, err := os.ReadFile("/proc/1/cgroup")
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(data, []byte("docker")) ||
+		bytes.Contains(data, []byte("containerd")) ||
+		bytes.Contains(data, []byte("kubepods"))
 }
 
 // defaultGUIAddr is :8080 unless overridden by BRAMBLEGATE_GUI_ADDR.
@@ -224,4 +269,60 @@ func defaultGUIAddr() string {
 		return a
 	}
 	return ":8080"
+}
+
+// defaultLogLevel is "info" unless overridden by BRAMBLEGATE_LOG_LEVEL.
+func defaultLogLevel() string {
+	if l := os.Getenv("BRAMBLEGATE_LOG_LEVEL"); l != "" {
+		return l
+	}
+	return "info"
+}
+
+// defaultLogFormat is "json" (structured, machine-parseable — the sane default
+// for a process whose stdout is normally read by `docker logs`/a log
+// collector, not a human's terminal) unless overridden by
+// BRAMBLEGATE_LOG_FORMAT; "text" gives slog's human-readable key=value form.
+func defaultLogFormat() string {
+	if f := os.Getenv("BRAMBLEGATE_LOG_FORMAT"); f != "" {
+		return f
+	}
+	return "json"
+}
+
+// newLogger builds the process logger from the (flag- or env-sourced) level
+// and format strings.
+func newLogger(levelStr, format string) (*slog.Logger, error) {
+	level, err := parseLogLevel(levelStr)
+	if err != nil {
+		return nil, err
+	}
+	opts := &slog.HandlerOptions{Level: level}
+
+	var handler slog.Handler
+	switch strings.ToLower(format) {
+	case "", "json":
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	case "text":
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	default:
+		return nil, fmt.Errorf("invalid log format %q (want %q or %q)", format, "json", "text")
+	}
+	return slog.New(handler), nil
+}
+
+// parseLogLevel maps a flag/env string to a slog.Level.
+func parseLogLevel(s string) (slog.Level, error) {
+	switch strings.ToLower(s) {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "", "info":
+		return slog.LevelInfo, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return 0, fmt.Errorf("invalid log level %q (want debug, info, warn, or error)", s)
+	}
 }
