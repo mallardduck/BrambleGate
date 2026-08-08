@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Finds the nearest ancestor tag of CURRENT_TAG that has a published
+# (non-draft) GitHub Release. Tags are immutable and never deleted here, but
+# a release for a given tag can fail to publish (goreleaser creates it as a
+# draft; `undraft` only flips it live once every job succeeds). Diffing the
+# changelog against such a tag would silently drop its commits from every
+# release page's changelog, since no release exists to have shown them.
+# Skipping past unpublished tags keeps the changelog contiguous.
+
+CURRENT_TAG="${1:-}"
+if [[ -z "$CURRENT_TAG" ]]; then
+  echo "Usage: $0 <current_tag>" >&2
+  exit 1
+fi
+
+PUBLISHED_TAGS=$(gh release list --limit 1000 --json tagName,isDraft,createdAt \
+  --jq '[.[] | select(.isDraft == false)] | sort_by(.createdAt) | reverse | .[].tagName')
+
+for tag in $(git tag --sort=-creatordate --merged "$CURRENT_TAG"); do
+  [[ "$tag" == "$CURRENT_TAG" ]] && continue
+  if grep -qxF "$tag" <<< "$PUBLISHED_TAGS"; then
+    echo "$tag"
+    exit 0
+  fi
+done

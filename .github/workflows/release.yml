@@ -42,9 +42,17 @@ jobs:
       # goreleaser's own changelog is disabled (.goreleaser.yaml
       # changelog.disable) in favor of scripts/git-changelog, which groups
       # commits by verb instead of conventional-commit prefixes.
+      #
+      # The "previous tag" is the nearest ancestor tag with a published
+      # release, not just the nearest tag (scripts/find-prev-release-tag) —
+      # tags are never deleted, but a release can fail to publish, and
+      # diffing against such a tag would drop its commits from every
+      # changelog since no release page ever showed them.
       - name: Generate changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
+          PREV_TAG=$(scripts/find-prev-release-tag "${{ github.ref_name }}")
           if [[ -z "$PREV_TAG" ]]; then
             echo "_Initial release._" > release-notes.md
           else
