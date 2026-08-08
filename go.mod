@@ -1,6 +1,8 @@
 module github.com/mallardduck/BrambleGate
 
-go 1.25.0
+go 1.26
+
+toolchain go1.26.5
 
 // The root is the entrypoint binary and consumes the sibling library modules
 // directly from disk. These replace directives make plain `go build`/`go install`

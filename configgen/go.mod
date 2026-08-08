@@ -1,6 +1,8 @@
 module github.com/mallardduck/BrambleGate/configgen
 
-go 1.25
+go 1.26
+
+toolchain go1.26.5
 
 // Sibling library module resolved from disk (see docs/repo-layout.md).
 replace github.com/mallardduck/BrambleGate/model => ../model

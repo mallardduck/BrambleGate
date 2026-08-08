@@ -1,6 +1,8 @@
 module github.com/mallardduck/BrambleGate/engine
 
-go 1.25.0
+go 1.26
+
+toolchain go1.26.5
 
 replace (
 	github.com/mallardduck/BrambleGate/plugins/localrecords => ../plugins/localrecords
