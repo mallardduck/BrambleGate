@@ -2,6 +2,7 @@ package mdnsbridge
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"strings"
@@ -83,7 +84,7 @@ func (l *Listener) browseService(ctx context.Context, service string) {
 		func(e mdnsquery.Entry) { l.ingest(service, e) },
 		func(e mdnsquery.Entry) { l.remove(service, e) },
 	)
-	if err != nil && err != context.Canceled {
+	if err != nil && !errors.Is(err, context.Canceled) {
 		l.log.Error("mdns: browse failed", "service", service, "err", err)
 	}
 }
