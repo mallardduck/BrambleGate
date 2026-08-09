@@ -92,12 +92,34 @@ func TestRenderCorefileIncludesACMEDomainAsFallthroughZone(t *testing.T) {
 	}
 	cf := string(out.Corefile)
 	for _, want := range []string{
-		"localrecords home.arpa dns.example.com {",
+		// resolver.arpa is also present: baseSettings enables DoT, so a DDR
+		// record exists too (see TestRenderIncludesDDRZoneAndFallthroughIsACMEDomainOnly).
+		"localrecords home.arpa dns.example.com resolver.arpa {",
 		"fallthrough dns.example.com",
 	} {
 		if !strings.Contains(cf, want) {
 			t.Errorf("Corefile missing %q:\n%s", want, cf)
 		}
+	}
+}
+
+func TestRenderIncludesDDRZoneAndFallthroughIsACMEDomainOnly(t *testing.T) {
+	s := acmeEnabledSettings() // DoT enabled in baseSettings
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, "localrecords home.arpa dns.example.com resolver.arpa {") {
+		t.Errorf("Corefile missing DDR zone in localrecords line:\n%s", cf)
+	}
+	// resolver.arpa must NOT be in the fallthrough line — a miss there is
+	// NXDOMAIN, same as home.arpa, unlike the ACME domain.
+	if strings.Contains(cf, "fallthrough dns.example.com resolver.arpa") || strings.Contains(cf, "fallthrough resolver.arpa") {
+		t.Errorf("resolver.arpa must not be a fallthrough zone:\n%s", cf)
+	}
+	if !strings.Contains(cf, "fallthrough dns.example.com") {
+		t.Errorf("Corefile missing ACME domain fallthrough:\n%s", cf)
 	}
 }
 
@@ -198,6 +220,92 @@ func TestRenderACMESynthesisRespectsFamilySeparately(t *testing.T) {
 		if r.Type == model.TypeAAAA {
 			t.Fatalf("no AAAA record should be synthesized without a detected V6 address: %+v", r)
 		}
+	}
+}
+
+func TestRenderZoneDataDDRRecords(t *testing.T) {
+	s := acmeEnabledSettings()
+	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
+	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8853}}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	var zd struct {
+		DDR []ddrRecord `json:"ddr"`
+	}
+	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
+		t.Fatalf("zone data is not valid JSON: %v\n%s", err, out.ZoneData)
+	}
+	if len(zd.DDR) != 3 {
+		t.Fatalf("expected 3 DDR records (DoT/DoH/DoQ), got %+v", zd.DDR)
+	}
+	byAlpn := map[string]ddrRecord{}
+	for _, d := range zd.DDR {
+		if d.Target != "dns.example.com" {
+			t.Fatalf("unexpected DDR target: %+v", d)
+		}
+		for _, p := range d.Params {
+			if p.Key == "alpn" {
+				byAlpn[p.Value] = d
+			}
+		}
+	}
+	dot, ok := byAlpn["dot"]
+	if !ok {
+		t.Fatalf("missing dot DDR record: %+v", zd.DDR)
+	}
+	if !hasParam(dot.Params, "port", "853") {
+		t.Errorf("dot record missing port 853: %+v", dot.Params)
+	}
+	doh, ok := byAlpn["h2"]
+	if !ok {
+		t.Fatalf("missing h2 DDR record: %+v", zd.DDR)
+	}
+	if !hasParam(doh.Params, "port", "443") || !hasParam(doh.Params, "dohpath", "/dns-query{?dns}") {
+		t.Errorf("h2 record missing port/dohpath: %+v", doh.Params)
+	}
+	doq, ok := byAlpn["doq"]
+	if !ok {
+		t.Fatalf("missing doq DDR record: %+v", zd.DDR)
+	}
+	if !hasParam(doq.Params, "port", "8853") {
+		t.Errorf("doq record missing port 8853: %+v", doq.Params)
+	}
+}
+
+func hasParam(params []ddrParam, key, value string) bool {
+	for _, p := range params {
+		if p.Key == key && p.Value == value {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRenderNoDDRZoneWhenACMEDisabled(t *testing.T) {
+	s := baseSettings() // ACME disabled; DoT enabled
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Contains(cf, "resolver.arpa") {
+		t.Errorf("resolver.arpa should not be served without ACME configured:\n%s", cf)
+	}
+}
+
+func TestRenderNoDDRZoneWhenNoEncryptedListenerEnabled(t *testing.T) {
+	s := acmeEnabledSettings()
+	s.Listeners.DoT.Enabled = false // only plain enabled now
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Contains(cf, "resolver.arpa") {
+		t.Errorf("resolver.arpa should not be served with no encrypted listener enabled:\n%s", cf)
 	}
 }
 

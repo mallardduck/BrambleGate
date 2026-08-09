@@ -35,6 +35,14 @@ type record struct {
 	def       string // "" => no base answer (override-only record)
 	ttl       uint32 // 0 => server default
 	overrides map[string]override
+
+	// ddrPriority/ddrTarget/ddrParams are set only when rtype is dns.TypeSVCB
+	// (a DDR record — see ddr.go). SVCB records are never per-VLAN (the same
+	// designated-resolver info applies to every client), so def/overrides are
+	// unused for them.
+	ddrPriority uint16
+	ddrTarget   string
+	ddrParams   []wireDDRParam
 }
 
 // LocalRecords is authoritative for Zones and answers from in-memory tables keyed
@@ -161,6 +169,9 @@ func (lr *LocalRecords) effective(rc *record, vlan string) (value string, ttl ui
 // namePresent reports whether any record for the name answers for this VLAN.
 func (lr *LocalRecords) namePresent(qname, vlan string) bool {
 	for _, rc := range lr.records[qname] {
+		if rc.rtype == dns.TypeSVCB {
+			return true // DDR records answer identically for every client
+		}
 		if _, _, ok := lr.effective(rc, vlan); ok {
 			return true
 		}
@@ -191,6 +202,18 @@ func (lr *LocalRecords) buildAnswers(qname string, qtype uint16, vlan string) []
 	var out []dns.RR
 	for _, rc := range lr.records[qname] {
 		if rc.rtype != qtype {
+			continue
+		}
+		if rc.rtype == dns.TypeSVCB {
+			ttl := rc.ttl
+			if ttl == 0 {
+				ttl = lr.defaultTTL
+			}
+			svcb, err := buildSVCB(rc, qname, ttl)
+			if err != nil {
+				continue // validated at load; should not happen
+			}
+			out = append(out, svcb)
 			continue
 		}
 		value, ttl, ok := lr.effective(rc, vlan)

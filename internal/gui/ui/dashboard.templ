@@ -153,6 +153,14 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 					</p>
 				</div>
 				<div>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide" title="Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ from plain DNS">DDR</p>
+					if settings.ACME.Enabled && settings.ACME.Domain != "" && settings.EncryptedListenerEnabled() {
+						@tag("Served", true)
+					} else {
+						@tag("Not served", false)
+					}
+				</div>
+				<div>
 					<p class="text-bramble-muted text-xs uppercase tracking-wide">Certificate</p>
 					if !cert.Present {
 						@tag("None on disk", false)

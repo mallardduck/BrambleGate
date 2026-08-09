@@ -233,3 +233,106 @@ func TestNODATAForWrongType(t *testing.T) {
 		t.Fatalf("NODATA should carry an SOA, got %d", len(m.Ns))
 	}
 }
+
+const ddrZoneJSON = `{
+  "default_ttl": 300,
+  "zones": ["home.arpa", "resolver.arpa"],
+  "vlans": [],
+  "records": [],
+  "ddr": [
+    {"priority": 1, "target": "dns.example.com", "params": [
+      {"key": "alpn", "value": "dot"}, {"key": "port", "value": "853"}
+    ]},
+    {"priority": 1, "target": "dns.example.com", "params": [
+      {"key": "alpn", "value": "h2"}, {"key": "port", "value": "443"}, {"key": "dohpath", "value": "/dns-query{?dns}"}
+    ]}
+  ]
+}`
+
+func buildDDR(t *testing.T) *LocalRecords {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "records.json")
+	if err := os.WriteFile(path, []byte(ddrZoneJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corefile := "localrecords home.arpa resolver.arpa {\n\tzonedata " + filepath.ToSlash(path) + "\n}"
+	lr, err := parse(caddy.NewTestController("dns", corefile))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	return lr
+}
+
+func TestDDRAnswersSVCBForEachProtocol(t *testing.T) {
+	lr := buildDDR(t)
+	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeSVCB)
+	if m.Rcode != dns.RcodeSuccess || len(m.Answer) != 2 {
+		t.Fatalf("want 2 SVCB answers, got rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+	byAlpn := map[string]*dns.SVCB{}
+	for _, rr := range m.Answer {
+		svcb, ok := rr.(*dns.SVCB)
+		if !ok {
+			t.Fatalf("expected *dns.SVCB, got %T", rr)
+		}
+		if svcb.Target != "dns.example.com." {
+			t.Fatalf("unexpected target %q", svcb.Target)
+		}
+		for _, v := range svcb.Value {
+			if alpn, ok := v.(*dns.SVCBAlpn); ok {
+				byAlpn[alpn.Alpn[0]] = svcb
+			}
+		}
+	}
+	dot, ok := byAlpn["dot"]
+	if !ok {
+		t.Fatalf("missing dot SVCB record: %+v", m.Answer)
+	}
+	if !svcbHasPort(dot, 853) {
+		t.Errorf("dot record missing port 853: %+v", dot.Value)
+	}
+	h2, ok := byAlpn["h2"]
+	if !ok {
+		t.Fatalf("missing h2 SVCB record: %+v", m.Answer)
+	}
+	if !svcbHasPort(h2, 443) || !svcbHasDoHPath(h2, "/dns-query{?dns}") {
+		t.Errorf("h2 record missing port/dohpath: %+v", h2.Value)
+	}
+}
+
+func svcbHasPort(svcb *dns.SVCB, port uint16) bool {
+	for _, v := range svcb.Value {
+		if p, ok := v.(*dns.SVCBPort); ok && p.Port == port {
+			return true
+		}
+	}
+	return false
+}
+
+func svcbHasDoHPath(svcb *dns.SVCB, template string) bool {
+	for _, v := range svcb.Value {
+		if p, ok := v.(*dns.SVCBDoHPath); ok && p.Template == template {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDDRWrongTypeIsNODATA(t *testing.T) {
+	lr := buildDDR(t)
+	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeA)
+	if m.Rcode != dns.RcodeSuccess || len(m.Answer) != 0 {
+		t.Fatalf("want NODATA, got rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+}
+
+func TestDDRUnrelatedNameInZoneIsNXDomain(t *testing.T) {
+	lr := buildDDR(t)
+	// resolver.arpa is NXDOMAIN-owned (not a fallthrough zone) — a special-use
+	// domain nobody delegates, so a miss here must not fall through.
+	m := queryFrom(lr, "192.168.10.5", "nope.resolver.arpa", dns.TypeA)
+	if m.Rcode != dns.RcodeNameError {
+		t.Fatalf("want NXDOMAIN, got %d", m.Rcode)
+	}
+}

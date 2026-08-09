@@ -143,6 +143,21 @@ func (lr *LocalRecords) loadZoneData(path string) error {
 		name := dns.CanonicalName(wr.Name)
 		lr.records[name] = append(lr.records[name], rc)
 	}
+
+	for _, wd := range z.DDR {
+		for _, p := range wd.Params {
+			if _, err := buildSVCBValue(p.Key, p.Value); err != nil {
+				return fmt.Errorf("zone data ddr record: %w", err)
+			}
+		}
+		lr.records[ddrQName] = append(lr.records[ddrQName], &record{
+			rtype:       dns.TypeSVCB,
+			overrides:   map[string]override{},
+			ddrPriority: wd.Priority,
+			ddrTarget:   dns.CanonicalName(wd.Target),
+			ddrParams:   wd.Params,
+		})
+	}
 	return nil
 }
 

@@ -25,19 +25,49 @@ import (
 // miss — nothing under it should ever leak upstream).
 const OwnedZone = "home.arpa"
 
-// ownedZones returns every zone localrecords should serve, in the order they're
-// written to the Corefile line — OwnedZone first, then the ACME domain (as a
-// fallthrough zone; see writeServerBlock) when ACME is enabled and configured.
-// The ACME domain stays real/public-DNS-authoritative for anything not
-// explicitly declared here — only a locally-declared record (e.g. the ACME
-// hostname's own A/AAAA, so a device doesn't need it added to public DNS just
-// to reach a LAN IP) is answered locally.
+// DDRZone is the reserved special-use domain Discovery of Designated Resolvers
+// (RFC 9462) queries live under. Unlike the ACME domain, nothing should ever
+// fall through here — it isn't delegated to anyone upstream — so a miss is
+// NXDOMAIN, same as OwnedZone. Only added to the served zone list when there's
+// at least one DDR record to answer with (see ddrRecords).
+const DDRZone = "resolver.arpa"
+
+// ownedZones returns every zone localrecords should serve, in the order
+// they're written to the Corefile line: OwnedZone first, then the ACME domain
+// when enabled/configured, then DDRZone when there's DDR data to serve. See
+// fallthroughZones for which of these defer to Next on a miss rather than
+// answering NXDOMAIN/NODATA.
 func ownedZones(s model.Settings) []string {
 	zones := []string{OwnedZone}
-	if s.ACME.Enabled && strings.TrimSpace(s.ACME.Domain) != "" {
-		zones = append(zones, strings.ToLower(strings.TrimSpace(s.ACME.Domain)))
+	if acmeDomain := normalizedACMEDomain(s); acmeDomain != "" {
+		zones = append(zones, acmeDomain)
+	}
+	if len(ddrRecords(s)) > 0 {
+		zones = append(zones, DDRZone)
 	}
 	return zones
+}
+
+// fallthroughZones is the subset of ownedZones where a miss defers to Next
+// instead of answering NXDOMAIN/NODATA — just the ACME domain, which stays
+// real/public-DNS-authoritative for anything not explicitly declared locally
+// (e.g. the ACME hostname's own A/AAAA, so a device doesn't need it added to
+// public DNS just to reach a LAN IP).
+func fallthroughZones(s model.Settings) []string {
+	if acmeDomain := normalizedACMEDomain(s); acmeDomain != "" {
+		return []string{acmeDomain}
+	}
+	return nil
+}
+
+// normalizedACMEDomain returns the lower-cased, trimmed ACME domain when ACME
+// is enabled and a domain is set, else "".
+func normalizedACMEDomain(s model.Settings) string {
+	if !s.ACME.Enabled {
+		return ""
+	}
+	d := strings.ToLower(strings.TrimSpace(s.ACME.Domain))
+	return d
 }
 
 // acmeSelfRecords returns render-time-only A/AAAA records for the ACME domain
@@ -47,10 +77,10 @@ func ownedZones(s model.Settings) []string {
 // added; an explicit user record always wins. Returns nil when ACME is off,
 // Domain is unset, or detection found nothing usable.
 func acmeSelfRecords(s model.Settings, declared []model.Record, ips selfip.Result) []model.Record {
-	if !s.ACME.Enabled || strings.TrimSpace(s.ACME.Domain) == "" {
+	name := normalizedACMEDomain(s)
+	if name == "" {
 		return nil
 	}
-	name := strings.ToLower(strings.TrimSpace(s.ACME.Domain))
 	normalized := (model.Record{Name: name}).NormalizedName()
 	declaredHas := func(t model.RecordType) bool {
 		for _, r := range declared {
@@ -116,6 +146,57 @@ func sortedVLANNames(m map[string]selfip.VLANAddrs) []string {
 	return names
 }
 
+// ddrRecord/ddrParam mirror the localrecords plugin's wireDDR/wireDDRParam
+// JSON shape (field names must match, same convention as zoneData/model.Record
+// above — see plugins/localrecords/zonedata.go).
+type ddrRecord struct {
+	Priority uint16     `json:"priority"`
+	Target   string     `json:"target"`
+	Params   []ddrParam `json:"params"`
+}
+
+type ddrParam struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// ddrRecords returns the Discovery of Designated Resolvers (RFC 9462) SVCB
+// records for _dns.resolver.arpa — one per enabled encrypted listener, so
+// each can carry its own port (DoT/DoH/DoQ may each run on a different port).
+// TargetName is the ACME domain: RFC 9462 requires an authentication domain
+// name here, not "." — and it must be the name the issued certificate covers,
+// since that's what the client validates when it upgrades (dev-docs/certificates.md).
+// Entirely derived from settings — never user-authored, same rationale as
+// acmeSelfRecords. Returns nil when ACME is off/unconfigured or no encrypted
+// listener is enabled (nothing to designate).
+func ddrRecords(s model.Settings) []ddrRecord {
+	domain := normalizedACMEDomain(s)
+	if domain == "" {
+		return nil
+	}
+	var out []ddrRecord
+	if s.Listeners.DoT.Enabled {
+		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
+			{Key: "alpn", Value: "dot"},
+			{Key: "port", Value: fmt.Sprintf("%d", s.Listeners.DoT.Port)},
+		}})
+	}
+	if s.Listeners.DoH.Enabled {
+		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
+			{Key: "alpn", Value: "h2"},
+			{Key: "port", Value: fmt.Sprintf("%d", s.Listeners.DoH.Port)},
+			{Key: "dohpath", Value: "/dns-query{?dns}"},
+		}})
+	}
+	if s.Listeners.DoQ.Enabled {
+		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
+			{Key: "alpn", Value: "doq"},
+			{Key: "port", Value: fmt.Sprintf("%d", s.Listeners.DoQ.Port)},
+		}})
+	}
+	return out
+}
+
 // DefaultTTL is the server-wide fallback TTL for records that set none.
 const DefaultTTL = 300
 
@@ -151,6 +232,7 @@ type zoneData struct {
 	Zones      []string       `json:"zones"`
 	VLANs      []model.VLAN   `json:"vlans"`
 	Records    []model.Record `json:"records"`
+	DDR        []ddrRecord    `json:"ddr,omitempty"`
 }
 
 // Render validates the model and returns the Corefile plus JSON zone data. On any
@@ -176,6 +258,7 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 		Zones:      ownedZones(s),
 		VLANs:      s.VLANs,
 		Records:    static,
+		DDR:        ddrRecords(s),
 	}, "", "  ")
 	if err != nil {
 		return Rendered{}, fmt.Errorf("marshal zone data: %w", err)
@@ -235,10 +318,8 @@ func writeServerBlock(b *strings.Builder, addr string, tls bool, extra string, s
 	zones := ownedZones(s)
 	fmt.Fprintf(b, "\tlocalrecords %s {\n", strings.Join(zones, " "))
 	fmt.Fprintf(b, "\t\tzonedata %s\n", ZoneDataPath(opts.ConfigDir))
-	if len(zones) > 1 {
-		// Everything after OwnedZone (currently just the ACME domain, if set) is a
-		// fallthrough zone — see ownedZones.
-		fmt.Fprintf(b, "\t\tfallthrough %s\n", strings.Join(zones[1:], " "))
+	if ft := fallthroughZones(s); len(ft) > 0 {
+		fmt.Fprintf(b, "\t\tfallthrough %s\n", strings.Join(ft, " "))
 	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(b, "\tforward . %s\n", forwardTarget(s.UpstreamDNS))
