@@ -18,12 +18,22 @@ mdns:
   interfaces: [all]     # [] and [all] both mean "all multicast interfaces"
   suffix: home.arpa      # default zone a discovered name maps into
   # service_types: [_http._tcp, _airplay._tcp]   # optional; empty = sensible defaults
+  # service_types: [all]   # discover types dynamically instead of a fixed list (see below)
   auto_publish: []        # e.g. [{ service: _airplay._tcp, vlan: trusted }]
 ```
 
 Once enabled, discovered devices show up as candidates at `/mdns` in the GUI —
 nothing is served as a DNS answer automatically unless it matches
 `auto_publish`.
+
+`service_types` has three distinct settings, not two: empty (the default)
+browses a curated list of common types (`_http._tcp`, `_airplay._tcp`,
+`_googlecast._tcp`, ...); an explicit list browses only those types; and
+`[all]` discovers whatever types are actually being advertised on the
+network via the DNS-SD meta-query, rather than only ever asking about a
+fixed list. `[all]` will surface devices the curated default can't (IoT/
+vendor-specific types), at the cost of noisier `/mdns` candidates and a
+small amount of extra multicast traffic while types are enumerated.
 
 ### Selectors — one primitive, three uses
 

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge/internal/mdnsquery"
@@ -28,6 +29,13 @@ var DefaultServiceTypes = []string{
 	"_hap._tcp",
 }
 
+// allServicesSentinel, when it is the sole entry in mdns.services, means "no
+// fixed list" — discover service types dynamically via the DNS-SD meta-query
+// (mdnsquery.Browser.BrowseTypes) instead of only ever asking about
+// DefaultServiceTypes. There's no way to browse "everything" in one query;
+// RFC 6762/6763 requires enumerating types first (see mdnssd's doc.go).
+const allServicesSentinel = "all"
+
 const expireInterval = 30 * time.Second
 
 // Listener browses mDNS and feeds the Table. It is owned by the host process and
@@ -41,8 +49,9 @@ type Listener struct {
 	log        *slog.Logger
 }
 
-// NewListener returns a Listener. Empty services uses DefaultServiceTypes; empty
-// or ["all"] ifaceNames lets the browser use all multicast interfaces.
+// NewListener returns a Listener. Empty services uses DefaultServiceTypes;
+// services == ["all"] discovers types dynamically instead (allServicesSentinel).
+// Empty or ["all"] ifaceNames lets the browser use all multicast interfaces.
 func NewListener(table *Table, services, ifaceNames []string, log *slog.Logger) *Listener {
 	if len(services) == 0 {
 		services = DefaultServiceTypes
@@ -60,10 +69,15 @@ func NewListener(table *Table, services, ifaceNames []string, log *slog.Logger) 
 // Run browses each service type until ctx is canceled, expiring stale entries on
 // a timer. It never returns an error — mDNS problems are logged, not fatal.
 func (l *Listener) Run(ctx context.Context) {
-	for _, svc := range l.services {
-		go l.browseService(ctx, svc)
+	dynamic := l.usesDynamicServices()
+	if dynamic {
+		go l.browseAllTypes(ctx)
+	} else {
+		for _, svc := range l.services {
+			go l.browseService(ctx, svc)
+		}
 	}
-	l.log.Info("mdns listener started", "services", len(l.services), "all_ifaces", len(l.ifaces) == 0)
+	l.log.Info("mdns listener started", "services", len(l.services), "dynamic_services", dynamic, "all_ifaces", len(l.ifaces) == 0)
 
 	ticker := time.NewTicker(expireInterval)
 	defer ticker.Stop()
@@ -76,6 +90,41 @@ func (l *Listener) Run(ctx context.Context) {
 				l.log.Debug("mdns: expired stale entries", "count", dropped, "ttl", l.table.ttl)
 			}
 		}
+	}
+}
+
+// usesDynamicServices reports whether mdns.services was set to the "all"
+// sentinel (and only that), meaning types should be discovered dynamically
+// rather than browsed from a fixed list.
+func (l *Listener) usesDynamicServices() bool {
+	return len(l.services) == 1 && strings.EqualFold(l.services[0], allServicesSentinel)
+}
+
+// browseAllTypes discovers service types dynamically via the DNS-SD
+// meta-query and starts a browseService goroutine for each newly discovered
+// type, deduping so a type re-announcing itself doesn't start a second
+// browse. Runs until ctx is canceled.
+func (l *Listener) browseAllTypes(ctx context.Context) {
+	ifaceNames := l.ifaceNamesForBrowse()
+	l.log.Debug("mdns: dynamic type discovery started", "ifaces", ifaceNames)
+
+	var mu sync.Mutex
+	started := make(map[string]bool)
+
+	err := l.browser.BrowseTypes(ctx, ifaceNames, func(typ string) {
+		mu.Lock()
+		if started[typ] {
+			mu.Unlock()
+			return
+		}
+		started[typ] = true
+		mu.Unlock()
+
+		l.log.Info("mdns: discovered new service type", "type", typ)
+		go l.browseService(ctx, typ)
+	})
+	if err != nil && !errors.Is(err, context.Canceled) {
+		l.log.Error("mdns: browse types failed", "err", err)
 	}
 }
 
