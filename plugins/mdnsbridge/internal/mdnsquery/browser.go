@@ -2,9 +2,8 @@ package mdnsquery
 
 import (
 	"context"
-	"strings"
 
-	"github.com/brutella/dnssd"
+	"github.com/mallardduck/BrambleGate/mdnssd"
 )
 
 // Entry represents a discovered mDNS-SD service instance.
@@ -31,72 +30,39 @@ type Browser interface {
 	Browse(ctx context.Context, service string, ifaceNames []string, add AddFunc, rmv RmvFunc) error
 }
 
-// New returns a Browser backed by dnssd.LookupType.
+// New returns a Browser backed by mdnssd. mdnssd replaced brutella/dnssd
+// here because dnssd has two gaps that matter for this app: no way to
+// browse the DNS-SD meta-query (so service-type discovery beyond a fixed
+// list is impossible), and no active cache refresh (RFC 6762 §5.2), so live
+// entries were silently evicted on TTL expiry. See mdnssd's doc.go.
 func New() Browser {
 	return &browser{}
 }
 
 type browser struct{}
 
-// Browse implements Browser.
+// Browse implements Browser. Each call opens its own dedicated transport
+// scoped to ifaceNames, mirroring the previous dnssd-backed behavior (which
+// likewise opened a fresh connection per LookupType call) rather than
+// sharing one transport across concurrent Browse calls for different
+// service types — mdnssd's Transport.Read is not safe for concurrent
+// readers on one underlying connection.
 func (b *browser) Browse(ctx context.Context, service string, ifaceNames []string, add AddFunc, rmv RmvFunc) error {
-	// dnssd.LookupType expects the fully-qualified service name with trailing dot.
-	fqService := strings.TrimSuffix(service, ".") + ".local."
-
-	// Build a set of allowed interface names for filtering (empty means all).
-	allowedIfaces := make(map[string]bool)
-	for _, n := range ifaceNames {
-		allowedIfaces[n] = true
+	transport, err := mdnssd.NewUDPTransport(ifaceNames)
+	if err != nil {
+		return err
 	}
+	defer func() { _ = transport.Close() }()
 
-	return dnssd.LookupType(ctx, fqService,
-		func(e dnssd.BrowseEntry) {
-			// Filter by interface if specific names were requested.
-			if len(allowedIfaces) > 0 && !allowedIfaces[e.IfaceName] {
-				return
-			}
-
-			// Split mixed v4/v6 IPs from dnssd.BrowseEntry.IPs into separate slices.
-			var ipv4, ipv6 []string
-			for _, ip := range e.IPs {
-				if ip.To4() != nil {
-					ipv4 = append(ipv4, ip.String())
-				} else {
-					ipv6 = append(ipv6, ip.String())
-				}
-			}
-
-			add(Entry{
-				Host:     e.Host,
-				Instance: e.Name,
-				TXT:      e.Text,
-				IPv4:     ipv4,
-				IPv6:     ipv6,
-			})
-		},
-		func(e dnssd.BrowseEntry) {
-			if len(allowedIfaces) > 0 && !allowedIfaces[e.IfaceName] {
-				return
-			}
-
-			var ipv4, ipv6 []string
-			for _, ip := range e.IPs {
-				if ip.To4() != nil {
-					ipv4 = append(ipv4, ip.String())
-				} else {
-					ipv6 = append(ipv6, ip.String())
-				}
-			}
-
-			rmv(Entry{
-				Host:     e.Host,
-				Instance: e.Name,
-				TXT:      e.Text,
-				IPv4:     ipv4,
-				IPv6:     ipv6,
-			})
-		},
+	br := mdnssd.New(mdnssd.WithTransport(transport))
+	return br.Browse(ctx, service, ifaceNames,
+		func(e mdnssd.Entry) { add(toEntry(e)) },
+		func(e mdnssd.Entry) { rmv(toEntry(e)) },
 	)
+}
+
+func toEntry(e mdnssd.Entry) Entry {
+	return Entry{Host: e.Host, Instance: e.Instance, TXT: e.TXT, IPv4: e.IPv4, IPv6: e.IPv6}
 }
 
 // FakeBrowser is a test double that synchronously calls add/rmv with canned entries.

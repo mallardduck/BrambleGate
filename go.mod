@@ -13,6 +13,7 @@ toolchain go1.26.5
 replace (
 	github.com/mallardduck/BrambleGate/configgen => ./configgen
 	github.com/mallardduck/BrambleGate/engine => ./engine
+	github.com/mallardduck/BrambleGate/mdnssd => ./mdnssd
 	github.com/mallardduck/BrambleGate/model => ./model
 	github.com/mallardduck/BrambleGate/plugins/localrecords => ./plugins/localrecords
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ./plugins/mdnsbridge
@@ -83,6 +84,7 @@ require (
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/linode/linodego v1.68.0 // indirect
+	github.com/mallardduck/BrambleGate/mdnssd v0.0.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect

@@ -145,7 +145,7 @@ func resolveIfaces(names []string, log *slog.Logger) []net.Interface {
 	var out []net.Interface
 	for _, n := range names {
 		if strings.EqualFold(n, "all") || n == "" {
-			return nil // explicit "all" → let dnssd use every interface
+			return nil // explicit "all" → use every multicast-capable interface
 		}
 		ifi, err := net.InterfaceByName(n)
 		if err != nil {

@@ -26,7 +26,8 @@ func TestListenerDiscovers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("responder init: %v", err)
 	}
-	defer func() { _ = responder.Close() }()
+	// dnssd.Responder has no Close method — responderCancel (deferred above)
+	// stops it via ctx cancellation instead.
 
 	// Start the responder in a background goroutine.
 	responderErrChan := make(chan error, 1)
@@ -50,7 +51,7 @@ func TestListenerDiscovers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("register service: %v", err)
 	}
-	defer func() { _ = responder.Remove(handle) }()
+	defer responder.Remove(handle)
 
 	// auto-publish everything (match-all) so any discovery is immediately servable
 	table := NewTable(Config{DefaultSuffix: "home.arpa", AutoPublish: SelectorSet{{}}}, time.Minute)
