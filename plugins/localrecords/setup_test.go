@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/coredns/caddy"
+
 	"github.com/mallardduck/BrambleGate/pluginreg"
 )
 
