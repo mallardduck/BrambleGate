@@ -10,6 +10,7 @@ import (
 type MDNSData struct {
 	Enabled bool
 	Entries []mdnsbridge.Entry
+	Error   string
 }
 
 templ MDNS(data MDNSData) {
@@ -24,6 +25,9 @@ templ MDNS(data MDNSData) {
 			<p class="text-xs text-bramble-muted mb-3">
 				Names seen on the network, mapped into home.arpa. Publish serves it live while seen (lost on restart); Promote writes a durable records.yaml entry and takes over the "served" state shown here.
 			</p>
+			if data.Error != "" {
+				<p class="text-bramble-danger text-sm mb-3">{ data.Error }</p>
+			}
 			<div
 				id="mdns-grid"
 				hx-get={ PathMDNS + "/grid" }

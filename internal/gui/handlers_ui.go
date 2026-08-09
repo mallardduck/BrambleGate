@@ -343,18 +343,27 @@ func (h *handlers) mdnsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) mdnsPublish(w http.ResponseWriter, r *http.Request) {
-	_ = h.svc.SetMDNSPublished(chi.URLParam(r, "name"), true)
-	h.renderMDNS(w, r)
+	errMsg := ""
+	if err := h.svc.SetMDNSPublished(chi.URLParam(r, "name"), true); err != nil {
+		errMsg = err.Error()
+	}
+	h.renderMDNSWithError(w, r, errMsg)
 }
 
 func (h *handlers) mdnsUnpublish(w http.ResponseWriter, r *http.Request) {
-	_ = h.svc.SetMDNSPublished(chi.URLParam(r, "name"), false)
-	h.renderMDNS(w, r)
+	errMsg := ""
+	if err := h.svc.SetMDNSPublished(chi.URLParam(r, "name"), false); err != nil {
+		errMsg = err.Error()
+	}
+	h.renderMDNSWithError(w, r, errMsg)
 }
 
 func (h *handlers) mdnsPromote(w http.ResponseWriter, r *http.Request) {
-	_ = h.svc.PromoteMDNS(chi.URLParam(r, "name"))
-	h.renderMDNS(w, r)
+	errMsg := ""
+	if err := h.svc.PromoteMDNS(chi.URLParam(r, "name")); err != nil {
+		errMsg = err.Error()
+	}
+	h.renderMDNSWithError(w, r, errMsg)
 }
 
 // mdnsGridFragment serves the auto-refresh poll: just the card grid's
@@ -377,12 +386,16 @@ func (h *handlers) mdnsGridFragment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) renderMDNS(w http.ResponseWriter, r *http.Request) {
+	h.renderMDNSWithError(w, r, "")
+}
+
+func (h *handlers) renderMDNSWithError(w http.ResponseWriter, r *http.Request, errMsg string) {
 	settings, err := h.svc.Settings()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.MDNSData{Enabled: settings.MDNS.Enabled}
+	data := ui.MDNSData{Enabled: settings.MDNS.Enabled, Error: errMsg}
 	if settings.MDNS.Enabled {
 		if e, err := h.svc.MDNSCandidates(); err == nil {
 			data.Entries = e
