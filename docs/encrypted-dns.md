@@ -48,6 +48,14 @@ acme:
   renew_before_days: 30
 ```
 
+**This is DNS-01, not HTTP-01** — the ACME CA never connects to your box at
+all. It reads a TXT record published via your DNS provider's API instead, so
+BrambleGate only ever makes *outbound* calls (to the ACME server and the
+provider API). Nothing needs to be port-forwarded on your router, and the
+`domain`'s `A` record can point at a private LAN address. If you've seen
+"open port 80 for Let's Encrypt" advice elsewhere, that's HTTP-01 (e.g.
+certbot's standalone mode) — a different, unused-here challenge type.
+
 Provider credentials are **environment variables on the container, never in
 `settings.yaml`**. Supported `dns_provider` values and their primary env vars:
 
@@ -61,7 +69,7 @@ Provider credentials are **environment variables on the container, never in
 | `linode` | `LINODE_TOKEN` |
 | `hetzner` | `HETZNER_API_KEY` |
 | `ovh` | `OVH_ENDPOINT`, `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` |
-| `namecheap` | `NAMECHEAP_API_USER`, `NAMECHEAP_API_KEY` |
+| `namecheap` | `NAMECHEAP_API_USER`, `NAMECHEAP_API_KEY` — API access must be enabled on the Namecheap account, and the container's *outbound* IP whitelisted in Namecheap's dashboard (Namecheap authenticates by caller IP as well as key). The key is account-wide, not scoped to one domain. |
 | `rfc2136` (alias `dnsupdate`) | `RFC2136_NAMESERVER`, `RFC2136_TSIG_KEY`, `RFC2136_TSIG_SECRET`, `RFC2136_TSIG_ALGORITHM` |
 | `exec` | `EXEC_PATH` — run your own script, no provider SDK needed |
 | `httpreq` | `HTTPREQ_ENDPOINT` — call your own webhook |
