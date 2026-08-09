@@ -8,6 +8,13 @@ import (
 	// Compiled-in plugins. Blank-importing registers each plugin's setup under
 	// its directive name; a directive listed in Directives below but not imported
 	// here simply can't be used in a Corefile (it isn't an error until referenced).
+	//
+	// bind is never emitted by configgen's production Corefile rendering (every
+	// listener binds the wildcard address), but engine's own tests use a literal
+	// `bind 127.0.0.1` in their raw test Corefiles to avoid contending for the
+	// wildcard address on the CI runner (see engine_test.go's corefileOn) — do
+	// not remove this import, it isn't dead.
+	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/errors"
 	_ "github.com/coredns/coredns/plugin/forward"
