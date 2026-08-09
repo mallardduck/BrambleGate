@@ -10,8 +10,11 @@ import (
 	"os"
 
 	"github.com/mallardduck/BrambleGate/internal/cli"
+	"github.com/mallardduck/BrambleGate/internal/gui/ui"
+	"github.com/mallardduck/BrambleGate/internal/version"
 )
 
 func main() {
+	ui.AppVersion = version.String()
 	os.Exit(cli.Run(os.Args[1:]))
 }

@@ -14,7 +14,8 @@ const (
 	PathMDNS      = "/mdns"
 )
 
-// AppVersion is the running server version, set by gui.NewServer at startup.
+// AppVersion is the running server version, set from internal/version by
+// main() at startup.
 var AppVersion = "dev"
 
 // RecordPath returns the URL for a single record identified by name+type, as

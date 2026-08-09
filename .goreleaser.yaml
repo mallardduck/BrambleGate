@@ -19,6 +19,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
+      - -X github.com/mallardduck/BrambleGate/internal/version.Version={{.Tag}}
+      - -X github.com/mallardduck/BrambleGate/internal/version.GitCommit={{.ShortCommit}}
+      - -X github.com/mallardduck/BrambleGate/internal/version.Date={{.Date}}
 
 archives:
   - id: default

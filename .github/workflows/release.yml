@@ -105,6 +105,10 @@ jobs:
         id: semver
         run: .github/scripts/check-semver.sh "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
+      - name: Set build date
+        id: build_date
+        run: echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       # Derives tags/labels from the git ref: the version tag, a rolling
       # major.minor, and a rolling channel tag — `latest` for stable
       # releases, or the prerelease channel (alpha/beta/rc) for recognized
@@ -138,6 +142,9 @@ jobs:
           # shell-less image (see deploy/Dockerfile).
           build-args: |
             VARIANT=${{ steps.semver.outputs.HAS_PRERELEASE == 'true' && 'debug' || 'latest' }}
+            VERSION=${{ github.ref_name }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build_date.outputs.DATE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

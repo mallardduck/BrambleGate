@@ -22,11 +22,22 @@ ARG TARGETARCH
 WORKDIR /src
 COPY . .
 
+# Version metadata for internal/version, passed in by CI (see
+# .github/workflows/release.yml); a local `docker build` with no build-args
+# falls back to the same "v0.0.0-dev"/"HEAD"/"unknown" defaults as `go build`.
+ARG VERSION=v0.0.0-dev
+ARG GIT_COMMIT=HEAD
+ARG BUILD_DATE=unknown
+
 # The root is the entrypoint module; its go.mod `replace` directives pull in
 # engine/, plugins/*, model/, store/, configgen/ from disk. go.work is excluded
 # from the build context (.dockerignore) so this is a plain-module build.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags='-s -w' -o /out/bramblegate .
+    go build -trimpath -ldflags="-s -w \
+      -X github.com/mallardduck/BrambleGate/internal/version.Version=${VERSION} \
+      -X github.com/mallardduck/BrambleGate/internal/version.GitCommit=${GIT_COMMIT} \
+      -X github.com/mallardduck/BrambleGate/internal/version.Date=${BUILD_DATE}" \
+    -o /out/bramblegate .
 
 # ---- Runtime stage ---------------------------------------------------------
 # distroless static: no package manager, just the binary + CA certs (CA certs
