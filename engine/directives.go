@@ -13,6 +13,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/errors"
 	_ "github.com/coredns/coredns/plugin/forward"
 	_ "github.com/coredns/coredns/plugin/log"
+	_ "github.com/coredns/coredns/plugin/quic"
 	_ "github.com/coredns/coredns/plugin/tls"
 	_ "github.com/coredns/coredns/plugin/whoami"
 

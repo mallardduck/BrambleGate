@@ -30,15 +30,27 @@ type UpstreamTarget struct {
 
 // Listeners is the set of DNS transports this server terminates.
 type Listeners struct {
-	Plain Listener `yaml:"plain" json:"plain"`
-	DoT   Listener `yaml:"dot" json:"dot"`
-	DoH   Listener `yaml:"doh" json:"doh"`
-	DoQ   Listener `yaml:"doq" json:"doq"`
+	Plain Listener     `yaml:"plain" json:"plain"`
+	DoT   Listener     `yaml:"dot" json:"dot"`
+	DoH   Listener     `yaml:"doh" json:"doh"`
+	DoQ   QUICListener `yaml:"doq" json:"doq"`
 }
 
 type Listener struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	Port    int  `yaml:"port" json:"port"`
+}
+
+// QUICListener is the DoQ listener plus its transport-specific tuning knobs
+// (CoreDNS's "quic" plugin directive, RFC 9250). Zero means "not set" — the
+// quic{} directive is then omitted entirely and CoreDNS's own defaults apply,
+// rather than the settings model forcing a specific value on every install.
+type QUICListener struct {
+	Listener `yaml:",inline" json:",inline"`
+	// MaxStreams caps simultaneous streams per QUIC connection.
+	MaxStreams int `yaml:"max_streams,omitempty" json:"max_streams,omitempty"`
+	// WorkerPoolSize caps the goroutine pool quic-go uses to service streams.
+	WorkerPoolSize int `yaml:"worker_pool_size,omitempty" json:"worker_pool_size,omitempty"`
 }
 
 // ACME configures DNS-01 certificate issuance for the encrypted listeners

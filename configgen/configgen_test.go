@@ -66,6 +66,66 @@ func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 	}
 }
 
+func TestRenderCorefileDoHAndDoQ(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
+	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 853}}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{
+		"https://.:443 {",
+		"quic://.:853 {",
+	} {
+		if !strings.Contains(cf, want) {
+			t.Errorf("Corefile missing %q:\n%s", want, cf)
+		}
+	}
+	// Every encrypted block (dot/doh/doq — 3 of them here) needs its own tls line.
+	if strings.Count(cf, "tls /c/cert.pem /c/key.pem") != 3 {
+		t.Errorf("expected a tls line in each of the 3 encrypted blocks:\n%s", cf)
+	}
+	if strings.Contains(cf, "quic {") {
+		t.Errorf("quic{} tuning block should be omitted when max_streams/worker_pool_size are unset:\n%s", cf)
+	}
+}
+
+func TestRenderCorefileDoQTuning(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoQ = model.QUICListener{
+		Listener:       model.Listener{Enabled: true, Port: 8853},
+		MaxStreams:     256,
+		WorkerPoolSize: 512,
+	}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{
+		"quic://.:8853 {",
+		"quic {",
+		"max_streams 256",
+		"worker_pool_size 512",
+	} {
+		if !strings.Contains(cf, want) {
+			t.Errorf("Corefile missing %q:\n%s", want, cf)
+		}
+	}
+}
+
+func TestValidateRejectsNegativeQUICTuning(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 853}, MaxStreams: -1}
+	if err := Validate(s, model.RecordSet{}); err == nil {
+		t.Fatal("expected an error for negative max_streams")
+	}
+}
+
 func TestRenderMDNSStanzaOnlyWhenEnabled(t *testing.T) {
 	rs := model.RecordSet{}
 

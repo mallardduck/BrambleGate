@@ -85,19 +85,46 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 func buildCorefile(s model.Settings, opts Options) []byte {
 	var b strings.Builder
 	if s.Listeners.Plain.Enabled {
-		writeServerBlock(&b, fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, s, opts)
+		writeServerBlock(&b, fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, "", s, opts)
 	}
 	if s.Listeners.DoT.Enabled {
-		writeServerBlock(&b, fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, s, opts)
+		writeServerBlock(&b, fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, "", s, opts)
+	}
+	if s.Listeners.DoH.Enabled {
+		writeServerBlock(&b, fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, "", s, opts)
+	}
+	if s.Listeners.DoQ.Enabled {
+		writeServerBlock(&b, fmt.Sprintf("quic://.:%d", s.Listeners.DoQ.Port), true, quicDirective(s.Listeners.DoQ), s, opts)
 	}
 	return []byte(b.String())
 }
 
-func writeServerBlock(b *strings.Builder, addr string, tls bool, s model.Settings, opts Options) {
+// quicDirective renders the optional "quic" plugin tuning block for DoQ.
+// Zero fields are omitted rather than written as literal 0s, since 0 isn't a
+// valid max_streams/worker_pool_size (both plugins reject <= 0) — it means
+// "leave this to CoreDNS's own default".
+func quicDirective(l model.QUICListener) string {
+	if l.MaxStreams == 0 && l.WorkerPoolSize == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\tquic {\n")
+	if l.MaxStreams > 0 {
+		fmt.Fprintf(&b, "\t\tmax_streams %d\n", l.MaxStreams)
+	}
+	if l.WorkerPoolSize > 0 {
+		fmt.Fprintf(&b, "\t\tworker_pool_size %d\n", l.WorkerPoolSize)
+	}
+	b.WriteString("\t}\n")
+	return b.String()
+}
+
+func writeServerBlock(b *strings.Builder, addr string, tls bool, extra string, s model.Settings, opts Options) {
 	fmt.Fprintf(b, "%s {\n", addr)
 	if tls {
 		fmt.Fprintf(b, "\ttls %s %s\n", opts.CertFile, opts.KeyFile)
 	}
+	b.WriteString(extra)
 	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
 	// ahead of localrecords per the directive order. Only rendered when enabled.
 	if s.MDNS.Enabled {
