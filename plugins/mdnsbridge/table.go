@@ -187,6 +187,19 @@ func (t *Table) Remove(service, instance, host string) bool {
 	return false
 }
 
+// Clear drops every discovered entry immediately, returning how many were
+// dropped. Used when the browse configuration itself changes (service
+// types / interfaces): entries discovered under the old filter are no
+// longer being refreshed by the new browse, and would otherwise linger
+// until their TTL naturally expires instead of disappearing right away.
+func (t *Table) Clear() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	dropped := len(t.entries)
+	t.entries = map[string]*Entry{}
+	return dropped
+}
+
 // Expire drops entries not re-announced within the TTL, returning how many
 // were dropped.
 func (t *Table) Expire() int {

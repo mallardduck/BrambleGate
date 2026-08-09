@@ -271,6 +271,44 @@ func TestSaveSettingsRestartsMDNSListenerOnReconfigure(t *testing.T) {
 	}
 }
 
+// A service-types/interfaces reconfigure must flush the table: entries
+// discovered under the old filter aren't refreshed by the new browse
+// config, so they should disappear immediately from /mdns candidates
+// rather than lingering until their TTL naturally expires.
+func TestSaveSettingsReconfigureFlushesStaleTableEntries(t *testing.T) {
+	svc, _, _ := newService(t)
+	calls := stubMDNSListener(t)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.MDNS = model.MDNS{Enabled: true, ServiceTypes: []string{"_http._tcp"}, Interfaces: []string{"all"}}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	waitForMDNSCall(t, calls)
+
+	svc.mdns.Upsert(mdnsbridge.Entry{Host: "printer.local.", Service: "_http._tcp", Instance: "Printer", IPv4: []string{"192.168.1.9"}})
+	if got, err := svc.MDNSCandidates(); err != nil || len(got) != 1 {
+		t.Fatalf("setup: expected 1 candidate before reconfigure, got %v err=%v", got, err)
+	}
+
+	settings.MDNS.ServiceTypes = []string{"_ipp._tcp"}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("reconfigure: %v", err)
+	}
+	waitForMDNSCall(t, calls)
+
+	got, err := svc.MDNSCandidates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("candidates after reconfigure = %v, want none — stale entry should have been flushed", got)
+	}
+}
+
 func TestSaveSettingsDisablesMDNSListenerLive(t *testing.T) {
 	svc, _, _ := newService(t)
 	calls := stubMDNSListener(t)

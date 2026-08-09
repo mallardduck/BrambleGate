@@ -172,6 +172,25 @@ func TestExpire(t *testing.T) {
 	}
 }
 
+func TestClear(t *testing.T) {
+	tbl := NewTable(baseCfg(), time.Minute)
+	tbl.Upsert(Entry{Host: "x.local.", Service: "_http._tcp", Instance: "X", IPv4: []string{"10.0.0.1"}})
+	tbl.Upsert(Entry{Host: "y.local.", Service: "_ipp._tcp", Instance: "Y", IPv4: []string{"10.0.0.2"}})
+
+	if dropped := tbl.Clear(); dropped != 2 {
+		t.Fatalf("Clear() = %d, want 2", dropped)
+	}
+	if len(tbl.Snapshot()) != 0 {
+		t.Fatal("Clear should drop every entry")
+	}
+
+	// A subsequent discovery still works normally after clearing.
+	tbl.Upsert(Entry{Host: "z.local.", Service: "_http._tcp", Instance: "Z", IPv4: []string{"10.0.0.3"}})
+	if len(tbl.Snapshot()) != 1 {
+		t.Fatal("Table should accept new entries after Clear")
+	}
+}
+
 func bridge(tbl *Table) *MDNSBridge {
 	next := plugin.HandlerFunc(func(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 		m := new(dns.Msg)

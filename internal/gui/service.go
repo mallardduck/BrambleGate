@@ -332,6 +332,11 @@ func (s *Service) mdnsPostReload(settings model.Settings, rs model.RecordSet) {
 		s.StartMDNS(s.mdns, settings.MDNS)
 	case !s.mdnsCfg.equal(mdnsListenerConfig{services: settings.MDNS.ServiceTypes, ifaces: settings.MDNS.Interfaces}):
 		s.mdnsCancel()
+		// Entries discovered under the old service-type/interface filter
+		// won't be refreshed by the new browse config, and would otherwise
+		// sit in the table (and /mdns candidates) until their TTL expires
+		// instead of reflecting the change immediately.
+		s.mdns.Clear()
 		s.StartMDNS(s.mdns, settings.MDNS)
 	default:
 		s.refreshMDNS(settings, rs)
