@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mallardduck/BrambleGate/model"
@@ -178,20 +179,20 @@ func ddrRecords(s model.Settings) []ddrRecord {
 	if s.Listeners.DoT.Enabled {
 		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
 			{Key: "alpn", Value: "dot"},
-			{Key: "port", Value: fmt.Sprintf("%d", s.Listeners.DoT.Port)},
+			{Key: "port", Value: strconv.Itoa(s.Listeners.DoT.Port)},
 		}})
 	}
 	if s.Listeners.DoH.Enabled {
 		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
 			{Key: "alpn", Value: "h2"},
-			{Key: "port", Value: fmt.Sprintf("%d", s.Listeners.DoH.Port)},
+			{Key: "port", Value: strconv.Itoa(s.Listeners.DoT.Port)},
 			{Key: "dohpath", Value: "/dns-query{?dns}"},
 		}})
 	}
 	if s.Listeners.DoQ.Enabled {
 		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
 			{Key: "alpn", Value: "doq"},
-			{Key: "port", Value: fmt.Sprintf("%d", s.Listeners.DoQ.Port)},
+			{Key: "port", Value: strconv.Itoa(s.Listeners.DoT.Port)},
 		}})
 	}
 	return out
