@@ -10,6 +10,8 @@ type Settings struct {
 	ACME        ACME           `yaml:"acme" json:"acme"`
 	MDNS        MDNS           `yaml:"mdns" json:"mdns"`
 	Cache       CacheTuning    `yaml:"cache" json:"cache"`
+	Log         LogTuning      `yaml:"log" json:"log"`
+	Errors      ErrorsTuning   `yaml:"errors" json:"errors"`
 }
 
 // CacheTuning controls the cache plugin's resilience/efficiency knobs
@@ -32,6 +34,34 @@ type CacheTuning struct {
 	// PrefetchDisabled turns off `prefetch` (rendered as `prefetch 10 1m 10%`
 	// when enabled — the plugin's own documented defaults).
 	PrefetchDisabled bool `yaml:"prefetch_disabled,omitempty" json:"prefetch_disabled,omitempty"`
+}
+
+// LogTuning controls the log plugin (dev-docs/plugin-audit-inuse.md). Zero
+// value matches CoreDNS's own default and BrambleGate's prior behavior: log
+// everything, unconditionally — so existing installs aren't silently changed.
+// Unlike CacheTuning, there is a real "turn it off" case here (CoreDNS's own
+// docs note the plugin costs performance on busy servers), hence a distinct
+// Disabled bool rather than reusing a *Disabled naming convention tied to one
+// specific sub-feature.
+type LogTuning struct {
+	// Disabled omits the log directive entirely.
+	Disabled bool `yaml:"disabled,omitempty" json:"disabled,omitempty"`
+	// Classes restricts logged responses to specific classes (success, denial,
+	// error, all — CoreDNS's own class names). Empty means every response is
+	// logged, the same as omitting `class` in the Corefile.
+	Classes []string `yaml:"classes,omitempty" json:"classes,omitempty"`
+}
+
+// ErrorsTuning controls the errors plugin's consolidate option (see
+// CacheTuning's doc comment for the general "disable-only, fixed sane
+// default" shape this follows). On by default: repeated identical failures
+// (a flaky upstream timing out) collapse into a periodic summary instead of
+// one line per error. Not further tunable — there's no BrambleGate use case
+// that needs a different window/pattern than "consolidate upstream timeouts".
+type ErrorsTuning struct {
+	// ConsolidateDisabled turns off consolidate, reverting to one log line
+	// per error.
+	ConsolidateDisabled bool `yaml:"consolidate_disabled,omitempty" json:"consolidate_disabled,omitempty"`
 }
 
 // VLAN mirrors one of the user's real network VLANs (BrambleGate is not the

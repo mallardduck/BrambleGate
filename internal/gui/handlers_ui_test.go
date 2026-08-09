@@ -298,6 +298,72 @@ func TestSettingsSave_ForwardTuning(t *testing.T) {
 	}
 }
 
+func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	base := func(extra url.Values) url.Values {
+		form := url.Values{
+			"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+			"plain_enabled": {"on"}, "plain_port": {"53"},
+			"acme_renew_before_days": {"30"},
+		}
+		for k, v := range extra {
+			form[k] = v
+		}
+		return form
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(url.Values{
+		"cache_serve_stale_disabled":  {"on"},
+		"cache_prefetch_disabled":     {"on"},
+		"log_disabled":                {"on"},
+		"log_classes":                 {"denial, error"},
+		"errors_consolidate_disabled": {"on"},
+	})))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (cache/log/errors tuning) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.Cache.ServeStaleDisabled || !settings.Cache.PrefetchDisabled {
+		t.Fatalf("expected cache knobs disabled, got: %+v", settings.Cache)
+	}
+	if !settings.Log.Disabled {
+		t.Fatalf("expected log disabled, got: %+v", settings.Log)
+	}
+	if len(settings.Log.Classes) != 2 || settings.Log.Classes[0] != "denial" || settings.Log.Classes[1] != "error" {
+		t.Fatalf("expected log classes [denial error], got: %+v", settings.Log.Classes)
+	}
+	if !settings.Errors.ConsolidateDisabled {
+		t.Fatalf("expected errors consolidate disabled, got: %+v", settings.Errors)
+	}
+
+	// Blank/unchecked fields clear previously-set tuning back to zero-value
+	// defaults (both cache knobs enabled, log unconditional, errors consolidated).
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(nil)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (clear tuning) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err = st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Cache.ServeStaleDisabled || settings.Cache.PrefetchDisabled {
+		t.Fatalf("expected cache knobs cleared, got: %+v", settings.Cache)
+	}
+	if settings.Log.Disabled || len(settings.Log.Classes) != 0 {
+		t.Fatalf("expected log tuning cleared, got: %+v", settings.Log)
+	}
+	if settings.Errors.ConsolidateDisabled {
+		t.Fatalf("expected errors consolidate re-enabled, got: %+v", settings.Errors)
+	}
+}
+
 // The mode select is an explicit choice (none/default/all/custom) rather
 // than inferring "none" from a blank text field — a blank field and a
 // never-touched field were otherwise indistinguishable, which made saving

@@ -352,8 +352,8 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.S
 	blk.DirectiveIf(s.UpstreamDNS.ECS, "rewrite edns0 subnet set 32 128")
 	writeForward(blk, s.UpstreamDNS)
 	writeCache(blk, s)
-	blk.Directive("errors")
-	blk.Directive("log")
+	writeErrors(blk, s)
+	writeLog(blk, s)
 	return blk.String()
 }
 
@@ -377,6 +377,38 @@ func writeCache(blk *corefile.Block, s model.Settings) {
 	blk.SubBlock("cache", func(inner *corefile.Block) {
 		inner.DirectiveIf(!c.PrefetchDisabled, "prefetch 10 1m 10%%")
 		inner.DirectiveIf(!c.ServeStaleDisabled, "serve_stale 1h immediate")
+	})
+}
+
+// writeErrors renders the errors directive with consolidate on by default —
+// collapsing repeated identical failures (a flaky upstream timing out) into a
+// periodic summary instead of one line per error — or bare when disabled
+// (dev-docs/plugin-audit-inuse.md). The window/pattern/level are the plugin's
+// own documented example, not user-tunable (see model.ErrorsTuning).
+func writeErrors(blk *corefile.Block, s model.Settings) {
+	if s.Errors.ConsolidateDisabled {
+		blk.Directive("errors")
+		return
+	}
+	blk.SubBlock("errors", func(inner *corefile.Block) {
+		inner.Directive(`consolidate 5m ".* i/o timeout$" warning`)
+	})
+}
+
+// writeLog renders the log directive, or omits it entirely when disabled, or
+// scopes it to specific response classes when set (dev-docs/plugin-audit-inuse.md).
+// Default (both fields zero) matches CoreDNS's own unconditional
+// log-everything behavior, unchanged from before these settings existed.
+func writeLog(blk *corefile.Block, s model.Settings) {
+	if s.Log.Disabled {
+		return
+	}
+	if len(s.Log.Classes) == 0 {
+		blk.Directive("log")
+		return
+	}
+	blk.SubBlock("log", func(inner *corefile.Block) {
+		inner.Directive("class %s", strings.Join(s.Log.Classes, " "))
 	})
 }
 

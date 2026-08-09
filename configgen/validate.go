@@ -32,7 +32,23 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 	if err := validateMDNS(s.MDNS, s.VLANs); err != nil {
 		return err
 	}
+	if err := validateLog(s.Log); err != nil {
+		return err
+	}
 	return validateRecords(rs, s.VLANs, ownedZones(s))
+}
+
+// validateLog checks the log plugin's class filter, if set, against the
+// class names the plugin actually recognizes (plugin/log/README.md).
+func validateLog(l model.LogTuning) error {
+	for _, c := range l.Classes {
+		switch strings.ToLower(strings.TrimSpace(c)) {
+		case "success", "denial", "error", "all":
+		default:
+			return fmt.Errorf("log.classes: %q is not a valid class (want success, denial, error, or all)", c)
+		}
+	}
+	return nil
 }
 
 // validateMDNS checks the mDNS block: suffixes must stay inside the owned zone,

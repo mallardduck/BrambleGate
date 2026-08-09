@@ -594,6 +594,72 @@ func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
 	}
 }
 
+func TestRenderErrorsConsolidateDefaultAndDisabled(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, `errors {`) || !strings.Contains(cf, `consolidate 5m ".* i/o timeout$" warning`) {
+		t.Errorf("expected default errors consolidate sub-block:\n%s", cf)
+	}
+
+	disabled := baseSettings()
+	disabled.Errors.ConsolidateDisabled = true
+	out, err = Render(disabled, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf = string(out.Corefile)
+	if strings.Contains(cf, "consolidate") {
+		t.Errorf("consolidate should not be rendered when disabled:\n%s", cf)
+	}
+	if strings.Count(cf, "\terrors\n") != 2 { // one per server block (plain + dot)
+		t.Errorf("expected a bare errors directive in both server blocks when disabled:\n%s", cf)
+	}
+}
+
+func TestRenderLogDefaultDisabledAndClasses(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Count(cf, "\tlog\n") != 2 { // one per server block (plain + dot)
+		t.Errorf("expected a bare log directive in both server blocks by default:\n%s", cf)
+	}
+
+	disabled := baseSettings()
+	disabled.Log.Disabled = true
+	out, err = Render(disabled, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf = string(out.Corefile)
+	if strings.Contains(cf, "log") {
+		t.Errorf("log should not be rendered when disabled:\n%s", cf)
+	}
+
+	classed := baseSettings()
+	classed.Log.Classes = []string{"denial", "error"}
+	out, err = Render(classed, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf = string(out.Corefile)
+	if !strings.Contains(cf, "log {") || !strings.Contains(cf, "class denial error") {
+		t.Errorf("expected a scoped log sub-block with the configured classes:\n%s", cf)
+	}
+}
+
+func TestValidateRejectsInvalidLogClass(t *testing.T) {
+	s := baseSettings()
+	s.Log.Classes = []string{"bogus"}
+	if err := Validate(s, model.RecordSet{}); err == nil || !strings.Contains(err.Error(), "log.classes") {
+		t.Fatalf("expected a log.classes validation error, got: %v", err)
+	}
+}
+
 func TestValidateRejects(t *testing.T) {
 	cases := map[string]func() (model.Settings, model.RecordSet){
 		"overlapping vlan cidrs": func() (model.Settings, model.RecordSet) {

@@ -100,6 +100,42 @@ templ Settings(data SettingsData) {
 			@doqListenerFields(data.Settings.Listeners.DoQ)
 		</div>
 
+		<h2 class="text-sm font-semibold mt-6 mb-3">Cache, logging &amp; errors</h2>
+		<div class="flex flex-wrap gap-6 items-start">
+			<div>
+				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Cache</h3>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="cache_serve_stale_disabled" checked?={ data.Settings.Cache.ServeStaleDisabled }/>
+					Disable serve_stale
+				</label>
+				<label class="flex items-center gap-2 text-sm mt-1">
+					<input type="checkbox" name="cache_prefetch_disabled" checked?={ data.Settings.Cache.PrefetchDisabled }/>
+					Disable prefetch
+				</label>
+			</div>
+			<div>
+				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Log</h3>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="log_disabled" checked?={ data.Settings.Log.Disabled }/>
+					Disable query log
+				</label>
+				<label class="flex flex-col gap-1 text-sm mt-2">
+					<span class="text-bramble-muted text-xs">Classes (comma-separated, blank = all)</span>
+					<input name="log_classes" value={ strings.Join(data.Settings.Log.Classes, ", ") } placeholder="success, denial, error" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+				</label>
+			</div>
+			<div>
+				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Errors</h3>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="errors_consolidate_disabled" checked?={ data.Settings.Errors.ConsolidateDisabled }/>
+					Disable consolidating repeated errors
+				</label>
+			</div>
+		</div>
+		<p class="text-bramble-muted text-xs mt-2 max-w-prose">
+			By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; and every query is logged to stdout. Each of these is on by default — the checkboxes above only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when "Send client IP to upstream" above is enabled, since a subnet-scoped answer must never be served to a different client.
+		</p>
+
 		<h2 class="text-sm font-semibold mt-6 mb-3">ACME (DNS-01 certificates)</h2>
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex items-center gap-2 text-sm">

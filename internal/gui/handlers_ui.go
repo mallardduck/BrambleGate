@@ -322,6 +322,12 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	parseUint32(r, "upstream_max_concurrent", &s.UpstreamDNS.MaxConcurrent)
 	s.UpstreamDNS.PreferUDP = r.FormValue("upstream_prefer_udp") != ""
 
+	s.Cache.ServeStaleDisabled = r.FormValue("cache_serve_stale_disabled") != ""
+	s.Cache.PrefetchDisabled = r.FormValue("cache_prefetch_disabled") != ""
+	s.Log.Disabled = r.FormValue("log_disabled") != ""
+	s.Log.Classes = splitAndTrim(r.FormValue("log_classes"))
+	s.Errors.ConsolidateDisabled = r.FormValue("errors_consolidate_disabled") != ""
+
 	parseListener(r, "plain", &s.Listeners.Plain)
 	parseListener(r, "dot", &s.Listeners.DoT)
 	parseListener(r, "doh", &s.Listeners.DoH)
