@@ -367,7 +367,7 @@ func writeForward(blk *corefile.Block, u model.UpstreamTarget) {
 		blk.Directive("forward . %s", target)
 		return
 	}
-	blk.SubBlock(fmt.Sprintf("forward . %s", target), func(inner *corefile.Block) {
+	blk.SubBlock("forward . "+target, func(inner *corefile.Block) {
 		if u.MaxFails != nil {
 			inner.Directive("max_fails %d", *u.MaxFails)
 		}
