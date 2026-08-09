@@ -185,14 +185,14 @@ func ddrRecords(s model.Settings) []ddrRecord {
 	if s.Listeners.DoH.Enabled {
 		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
 			{Key: "alpn", Value: "h2"},
-			{Key: "port", Value: strconv.Itoa(s.Listeners.DoT.Port)},
+			{Key: "port", Value: strconv.Itoa(s.Listeners.DoH.Port)},
 			{Key: "dohpath", Value: "/dns-query{?dns}"},
 		}})
 	}
 	if s.Listeners.DoQ.Enabled {
 		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
 			{Key: "alpn", Value: "doq"},
-			{Key: "port", Value: strconv.Itoa(s.Listeners.DoT.Port)},
+			{Key: "port", Value: strconv.Itoa(s.Listeners.DoQ.Port)},
 		}})
 	}
 	return out
