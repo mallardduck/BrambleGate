@@ -12,29 +12,45 @@ import (
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge/internal/mdnsquery"
 )
 
-// DefaultServiceTypes is the set of mDNS service types browsed when settings.yaml
-// lists none. Discovering a device under any of these yields its hostname, IPs,
-// instance, and TXT — the fields selectors match on (docs/plugins.md).
+// DefaultServiceTypes is the curated set of mDNS service types browsed when
+// mdns.services is set to the "default" sentinel. Discovering a device under
+// any of these yields its hostname, IPs, instance, and TXT — the fields
+// selectors match on (docs/plugins.md).
+//
+// Curation criterion: does this type represent an addressable service worth
+// mirroring into DNS for cross-VLAN hostname access, and/or a plausible
+// reverse-proxy target? Presence-only/legacy types (_workstation._tcp) and
+// types with no stable named service to resolve toward (Matter's mDNS use
+// is commissioning-time only; Spotify Connect isn't dialed into by
+// hostname) are deliberately left out — mdns.services: [all] covers those
+// on demand instead of bloating the default list.
 var DefaultServiceTypes = []string{
-	"_workstation._tcp",
 	"_http._tcp",
 	"_https._tcp",
 	"_ssh._tcp",
 	"_smb._tcp",
 	"_ipp._tcp",
+	"_ipps._tcp",
 	"_printer._tcp",
 	"_airplay._tcp",
+	"_raop._tcp",
 	"_googlecast._tcp",
-	"_homekit._tcp",
+	"_sonos._tcp",
 	"_hap._tcp",
 }
 
-// allServicesSentinel, when it is the sole entry in mdns.services, means "no
-// fixed list" — discover service types dynamically via the DNS-SD meta-query
-// (mdnsquery.Browser.BrowseTypes) instead of only ever asking about
-// DefaultServiceTypes. There's no way to browse "everything" in one query;
-// RFC 6762/6763 requires enumerating types first (see mdnssd's doc.go).
-const allServicesSentinel = "all"
+// mdns.services has three distinct meanings, not two:
+//   - empty: browse nothing (no fixed list, no dynamic discovery).
+//   - [defaultServicesSentinel] ("default"): browse DefaultServiceTypes.
+//   - [allServicesSentinel] ("all"): discover types dynamically via the
+//     DNS-SD meta-query (mdnsquery.Browser.BrowseTypes) instead of a fixed
+//     list — there's no way to browse "everything" in one query; RFC
+//     6762/6763 requires enumerating types first (see mdnssd's doc.go).
+//   - anything else: browse exactly that explicit list.
+const (
+	defaultServicesSentinel = "default"
+	allServicesSentinel     = "all"
+)
 
 const expireInterval = 30 * time.Second
 
@@ -49,11 +65,12 @@ type Listener struct {
 	log        *slog.Logger
 }
 
-// NewListener returns a Listener. Empty services uses DefaultServiceTypes;
-// services == ["all"] discovers types dynamically instead (allServicesSentinel).
-// Empty or ["all"] ifaceNames lets the browser use all multicast interfaces.
+// NewListener returns a Listener. services == [defaultServicesSentinel] uses
+// DefaultServiceTypes; services == [allServicesSentinel] discovers types
+// dynamically; empty services browses nothing. Empty or ["all"] ifaceNames
+// lets the browser use all multicast interfaces.
 func NewListener(table *Table, services, ifaceNames []string, log *slog.Logger) *Listener {
-	if len(services) == 0 {
+	if len(services) == 1 && strings.EqualFold(services[0], defaultServicesSentinel) {
 		services = DefaultServiceTypes
 	}
 	return &Listener{

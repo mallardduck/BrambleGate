@@ -53,7 +53,7 @@ func MDNS(data MDNSData) templ.Component {
 			var templ_7745c5c3_Var2 templ.SafeURL
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(PathSettings))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 21, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 21, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -71,7 +71,7 @@ func MDNS(data MDNSData) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathMDNS + "/grid")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 29, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 29, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -167,7 +167,7 @@ func mdnsCard(e mdnsbridge.Entry) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(e.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 57, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 57, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -195,7 +195,7 @@ func mdnsCard(e mdnsbridge.Entry) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(e.Host)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 67, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 67, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -208,7 +208,7 @@ func mdnsCard(e mdnsbridge.Entry) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(e.Service)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 71, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 71, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -221,7 +221,7 @@ func mdnsCard(e mdnsbridge.Entry) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(append(append([]string{}, e.IPv4...), e.IPv6...), ", "))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 75, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 75, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -234,7 +234,7 @@ func mdnsCard(e mdnsbridge.Entry) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(MDNSActionPath(e.Name, publishAction(e.Published)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 80, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 80, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -262,7 +262,7 @@ func mdnsCard(e mdnsbridge.Entry) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(MDNSActionPath(e.Name, "promote"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/mdns.templ`, Line: 93, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `mdns.templ`, Line: 93, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {

@@ -81,8 +81,8 @@ templ Settings(data SettingsData) {
 				<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Service types (comma-separated, blank = defaults)</span>
-				<input name="mdns_service_types" value={ strings.Join(data.Settings.MDNS.ServiceTypes, ", ") } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+				<span class="text-bramble-muted text-xs">Service types ("default", "all", or a comma-separated list; blank = none)</span>
+				<input name="mdns_service_types" value={ mdnsServiceTypesFieldValue(data.Settings.MDNS.ServiceTypes) } placeholder="default" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				<span class="text-bramble-muted text-xs">Suffix (blank = home.arpa)</span>
@@ -186,4 +186,11 @@ templ vlanRow(v model.VLAN) {
 			Remove
 		</button>
 	</div>
+}
+
+func mdnsServiceTypesFieldValue(types []string) string {
+	if len(types) == 0 {
+		return "default"
+	}
+	return strings.Join(types, ", ")
 }

@@ -69,9 +69,11 @@ type ACME struct {
 type MDNS struct {
 	Enabled    bool     `yaml:"enabled" json:"enabled"`
 	Interfaces []string `yaml:"interfaces" json:"interfaces"` // [] or ["all"] = all
-	// ServiceTypes to browse (e.g. "_http._tcp"); empty uses the plugin
-	// defaults (a curated common-types list). ["all"] discovers service
-	// types dynamically via the DNS-SD meta-query instead of a fixed list.
+	// ServiceTypes to browse (e.g. "_http._tcp"). Three sentinel forms:
+	// empty means browse nothing; ["default"] uses the plugin's curated
+	// common-types list; ["all"] discovers types dynamically via the DNS-SD
+	// meta-query instead of a fixed list. Anything else is browsed as an
+	// explicit list of exactly those types.
 	ServiceTypes []string `yaml:"service_types,omitempty" json:"service_types,omitempty"`
 	// Suffix is the default zone discovered names map into; empty → home.arpa.
 	Suffix string `yaml:"suffix,omitempty" json:"suffix,omitempty"`

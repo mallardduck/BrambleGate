@@ -94,6 +94,42 @@ func TestListenerRemovesEntry(t *testing.T) {
 	}
 }
 
+func TestNewListener_DefaultSentinel_ResolvesToDefaultServiceTypes(t *testing.T) {
+	l := NewListener(nil, []string{"default"}, nil, slog.New(slog.DiscardHandler))
+	if len(l.services) != len(DefaultServiceTypes) {
+		t.Fatalf("services = %v, want DefaultServiceTypes (%v)", l.services, DefaultServiceTypes)
+	}
+	for i, svc := range DefaultServiceTypes {
+		if l.services[i] != svc {
+			t.Errorf("services[%d] = %q, want %q", i, l.services[i], svc)
+		}
+	}
+}
+
+func TestNewListener_DefaultSentinel_CaseInsensitive(t *testing.T) {
+	l := NewListener(nil, []string{"DEFAULT"}, nil, slog.New(slog.DiscardHandler))
+	if len(l.services) != len(DefaultServiceTypes) {
+		t.Fatalf("services = %v, want DefaultServiceTypes", l.services)
+	}
+}
+
+func TestNewListener_Empty_BrowsesNothing(t *testing.T) {
+	l := NewListener(nil, nil, nil, slog.New(slog.DiscardHandler))
+	if len(l.services) != 0 {
+		t.Errorf("services = %v, want none — empty must mean \"browse nothing\", not the defaults", l.services)
+	}
+	if l.usesDynamicServices() {
+		t.Error("usesDynamicServices() = true for empty services, want false")
+	}
+}
+
+func TestNewListener_ExplicitList_Unaffected(t *testing.T) {
+	l := NewListener(nil, []string{"_ipp._tcp", "_ssh._tcp"}, nil, slog.New(slog.DiscardHandler))
+	if len(l.services) != 2 || l.services[0] != "_ipp._tcp" || l.services[1] != "_ssh._tcp" {
+		t.Errorf("services = %v, want the explicit list unchanged", l.services)
+	}
+}
+
 func TestUsesDynamicServices(t *testing.T) {
 	cases := []struct {
 		name     string

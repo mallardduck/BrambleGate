@@ -54,7 +54,7 @@ func Settings(data SettingsData) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(data.FormError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 19, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 19, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -72,7 +72,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathSettings)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 22, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 22, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -85,7 +85,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Settings.UpstreamDNS.Address)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 27, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 27, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -144,7 +144,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Settings.ACME.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 53, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 53, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -157,7 +157,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Settings.ACME.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 57, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 57, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -170,7 +170,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Settings.ACME.DNSProvider)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 61, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 61, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -193,7 +193,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(data.Settings.ACME.RenewBeforeDays))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 69, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 69, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -216,33 +216,33 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(strings.Join(data.Settings.MDNS.Interfaces, ", "))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 81, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 81, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" placeholder=\"all\" class=\"px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]\"></label> <label class=\"flex flex-col gap-1 text-sm\"><span class=\"text-bramble-muted text-xs\">Service types (comma-separated, blank = defaults)</span> <input name=\"mdns_service_types\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" placeholder=\"all\" class=\"px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]\"></label> <label class=\"flex flex-col gap-1 text-sm\"><span class=\"text-bramble-muted text-xs\">Service types (\"default\", \"all\", or a comma-separated list; blank = none)</span> <input name=\"mdns_service_types\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(strings.Join(data.Settings.MDNS.ServiceTypes, ", "))
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(mdnsServiceTypesFieldValue(data.Settings.MDNS.ServiceTypes))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 85, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 85, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" placeholder=\"_http._tcp, _ipp._tcp\" class=\"px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]\"></label> <label class=\"flex flex-col gap-1 text-sm\"><span class=\"text-bramble-muted text-xs\">Suffix (blank = home.arpa)</span> <input name=\"mdns_suffix\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" placeholder=\"default\" class=\"px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]\"></label> <label class=\"flex flex-col gap-1 text-sm\"><span class=\"text-bramble-muted text-xs\">Suffix (blank = home.arpa)</span> <input name=\"mdns_suffix\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Settings.MDNS.Suffix)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 89, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 89, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -255,7 +255,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var12 templ.SafeURL
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(PathMDNS))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 94, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 94, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -294,7 +294,7 @@ func Settings(data SettingsData) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathSettings + "/vlans")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 130, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 130, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 		if templ_7745c5c3_Err != nil {
@@ -337,7 +337,7 @@ func protoOption(value, selected string) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 148, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 148, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -350,7 +350,7 @@ func protoOption(value, selected string) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 148, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 148, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
@@ -368,7 +368,7 @@ func protoOption(value, selected string) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 150, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 150, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
@@ -381,7 +381,7 @@ func protoOption(value, selected string) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 150, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 150, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -424,7 +424,7 @@ func listenerFields(prefix, label string, l model.Listener) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefix + "_enabled")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 157, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 157, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -447,7 +447,7 @@ func listenerFields(prefix, label string, l model.Listener) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 158, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 158, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -460,7 +460,7 @@ func listenerFields(prefix, label string, l model.Listener) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefix + "_port")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 162, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 162, Col: 26}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
@@ -478,7 +478,7 @@ func listenerFields(prefix, label string, l model.Listener) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(l.Port))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 164, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 164, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -525,7 +525,7 @@ func vlanRow(v model.VLAN) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(v.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 175, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 175, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -538,7 +538,7 @@ func vlanRow(v model.VLAN) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(v.CIDRs, ", "))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 176, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 176, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -551,7 +551,7 @@ func vlanRow(v model.VLAN) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathSettings + "/vlans/" + v.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 179, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 179, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -564,7 +564,7 @@ func vlanRow(v model.VLAN) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue("Remove VLAN " + v.Name + "? Any records overriding it will keep their override entries but they'll no longer apply.")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/settings.templ`, Line: 182, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `settings.templ`, Line: 182, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 		if templ_7745c5c3_Err != nil {
@@ -576,6 +576,13 @@ func vlanRow(v model.VLAN) templ.Component {
 		}
 		return nil
 	})
+}
+
+func mdnsServiceTypesFieldValue(types []string) string {
+	if len(types) == 0 {
+		return "default"
+	}
+	return strings.Join(types, ", ")
 }
 
 var _ = templruntime.GeneratedTemplate
