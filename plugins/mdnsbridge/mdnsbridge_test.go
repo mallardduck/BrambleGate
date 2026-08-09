@@ -138,6 +138,31 @@ func TestResolvePromotedPresentAndAbsent(t *testing.T) {
 	}
 }
 
+func TestPromotedBindingMarksEntryPublished(t *testing.T) {
+	cfg := baseCfg()
+	cfg.Promoted = map[string]Selector{
+		"nas.home.arpa.": {Service: "_smb._tcp", Instance: "Synology*"},
+	}
+	tbl := NewTable(cfg, time.Minute)
+
+	tbl.Upsert(Entry{Host: "syn.local.", Service: "_smb._tcp", Instance: "Synology NAS", IPv4: []string{"192.168.1.20"}})
+	entries := tbl.Snapshot()
+	if len(entries) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(entries))
+	}
+	if !entries[0].Promoted || !entries[0].Published {
+		t.Fatalf("entry matched by a promoted selector should report Promoted and Published, got %+v", entries[0])
+	}
+
+	// A non-matching entry stays unpublished.
+	tbl.Upsert(Entry{Host: "other.local.", Service: "_http._tcp", Instance: "Other", IPv4: []string{"192.168.1.30"}})
+	for _, e := range tbl.Snapshot() {
+		if e.Host == "other.local." && (e.Promoted || e.Published) {
+			t.Fatalf("non-matching entry should not be Promoted/Published, got %+v", e)
+		}
+	}
+}
+
 func TestManualPublishAndResolveByName(t *testing.T) {
 	tbl := NewTable(baseCfg(), time.Minute) // no auto-publish
 	tbl.Upsert(Entry{Host: "printer.local.", Service: "_ipp._tcp", Instance: "Office", IPv4: []string{"192.168.1.9"}})

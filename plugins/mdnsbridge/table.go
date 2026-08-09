@@ -39,7 +39,8 @@ type Entry struct {
 	TXT       map[string]string `json:"txt,omitempty"`
 	IPv4      []string          `json:"ipv4,omitempty"`
 	IPv6      []string          `json:"ipv6,omitempty"`
-	Published bool              `json:"published"`
+	Published bool              `json:"published"` // served live: manual/auto-publish OR a matching promoted binding
+	Promoted  bool              `json:"promoted"`  // a records.yaml type:mdns binding resolves to this entry
 	LastSeen  time.Time         `json:"last_seen"`
 	// TTL is the record's own most recently announced TTL (0 = unknown).
 	// Table.expired prefers this over the table-wide default — see DefaultTTL.
@@ -114,7 +115,22 @@ func (t *Table) rederive(e *Entry) {
 	if label != "" {
 		e.Name = label + "." + strings.TrimSuffix(t.cfg.suffixFor(*e), ".") + "."
 	}
-	e.Published = e.manual || t.cfg.AutoPublish.MatchAny(*e, t.cfg.VLANs)
+	e.Promoted = t.promotedMatch(*e)
+	e.Published = e.manual || t.cfg.AutoPublish.MatchAny(*e, t.cfg.VLANs) || e.Promoted
+}
+
+// promotedMatch reports whether any promoted binding's selector matches e —
+// i.e. some type:mdns record in records.yaml will resolve to this entry's
+// addresses, regardless of its own Name. Used so the GUI's "served" state
+// reflects promotion too, not just publish/auto-publish (Resolve already
+// answers promoted names this way; Published previously didn't agree).
+func (t *Table) promotedMatch(e Entry) bool {
+	for _, sel := range t.cfg.Promoted {
+		if sel.Match(e, t.cfg.VLANs) {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolve answers a query name from the table. owned=true means the name is the

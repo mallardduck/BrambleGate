@@ -22,7 +22,7 @@ templ MDNS(data MDNSData) {
 			</p>
 		} else {
 			<p class="text-xs text-bramble-muted mb-3">
-				Names seen on the network, mapped into home.arpa. Publish serves it live; Promote writes a permanent record.
+				Names seen on the network, mapped into home.arpa. Publish serves it live while seen (lost on restart); Promote writes a durable records.yaml entry and takes over the "served" state shown here.
 			</p>
 			<div
 				id="mdns-grid"
@@ -55,7 +55,9 @@ templ mdnsCard(e mdnsbridge.Entry) {
 	<div class="rounded border border-bramble-border bg-bramble-bg-card p-4 flex flex-col gap-2">
 		<div class="flex items-start justify-between gap-2">
 			<p class="font-mono text-sm font-medium break-all">{ e.Name }</p>
-			if e.Published {
+			if e.Promoted {
+				<span title="A records.yaml record resolves this name from live mDNS matches" class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-bramble-primary/10 text-bramble-primary whitespace-nowrap">Served (promoted)</span>
+			} else if e.Published {
 				<span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-bramble-primary/10 text-bramble-primary whitespace-nowrap">Served</span>
 			} else {
 				<span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-bramble-bg-card2 text-bramble-muted whitespace-nowrap">Not served</span>
@@ -76,28 +78,37 @@ templ mdnsCard(e mdnsbridge.Entry) {
 			</div>
 		</dl>
 		<div class="mt-auto pt-2 border-t border-bramble-border flex gap-3">
-			<button
-				hx-post={ MDNSActionPath(e.Name, publishAction(e.Published)) }
-				hx-target="#content"
-				hx-swap="innerHTML"
-				type="button"
-				class="text-bramble-primary hover:underline text-xs"
-			>
-				if e.Published {
-					Unpublish
-				} else {
-					Publish
-				}
-			</button>
-			<button
-				hx-post={ MDNSActionPath(e.Name, "promote") }
-				hx-target="#content"
-				hx-swap="innerHTML"
-				type="button"
-				class="text-bramble-primary hover:underline text-xs"
-			>
-				Promote
-			</button>
+			if e.Promoted {
+				<span title="Promoted names are managed from the Records tab — publish/unpublish and re-promoting have no effect here" class="text-bramble-muted text-xs">
+					Managed in
+					<a href={ templ.SafeURL(PathRecords) } hx-get={ PathRecords } hx-target="#content" hx-swap="innerHTML" class="text-bramble-primary hover:underline">Records</a>
+				</span>
+			} else {
+				<button
+					hx-post={ MDNSActionPath(e.Name, publishAction(e.Published)) }
+					hx-target="#content"
+					hx-swap="innerHTML"
+					type="button"
+					title={ publishTitle(e.Published) }
+					class="text-bramble-primary hover:underline text-xs"
+				>
+					if e.Published {
+						Unpublish
+					} else {
+						Publish
+					}
+				</button>
+				<button
+					hx-post={ MDNSActionPath(e.Name, "promote") }
+					hx-target="#content"
+					hx-swap="innerHTML"
+					type="button"
+					title="Claim this name as authoritative: still resolves from live mDNS matches, but returns NODATA instead of falling through when the device isn't currently seen"
+					class="text-bramble-primary hover:underline text-xs"
+				>
+					Promote
+				</button>
+			}
 		</div>
 	</div>
 }
@@ -107,4 +118,11 @@ func publishAction(published bool) string {
 		return "unpublish"
 	}
 	return "publish"
+}
+
+func publishTitle(published bool) string {
+	if published {
+		return "Stop serving this name; queries fall through to the rest of the chain when it drops off mDNS"
+	}
+	return "Serve this name while it's seen on mDNS; falls through to the rest of the chain once it drops off"
 }

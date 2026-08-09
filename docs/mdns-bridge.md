@@ -74,6 +74,13 @@ A published/promoted mDNS name takes precedence over a same-named static
 record in `records.yaml` (an edge case, since you'd rarely name both the
 same).
 
+A discovered entry's "served" state at `/mdns` reflects publish/auto-publish
+*and* any promoted binding that resolves to it — promoting a candidate marks
+it served immediately, even though the write only touched `records.yaml`.
+Once an entry is covered by a promoted binding, its publish/unpublish toggle
+is hidden there: the binding already takes precedence in `Resolve`, so
+toggling it would have no effect. Manage it from the Records tab instead.
+
 ## Self-advertisement (the reverse direction)
 
 BrambleGate can also advertise *itself* via mDNS-SD, so other devices on the
