@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mallardduck/BrambleGate/configgen/corefile"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/selfip"
 )
@@ -269,72 +270,61 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 }
 
 func buildCorefile(s model.Settings, opts Options) []byte {
-	var b strings.Builder
+	var out strings.Builder
 	if s.Listeners.Plain.Enabled {
-		writeServerBlock(&b, fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, "", s, opts)
+		out.WriteString(buildServerBlock(fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, nil, s, opts))
 	}
 	if s.Listeners.DoT.Enabled {
-		writeServerBlock(&b, fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, "", s, opts)
+		out.WriteString(buildServerBlock(fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, nil, s, opts))
 	}
 	if s.Listeners.DoH.Enabled {
-		writeServerBlock(&b, fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, "", s, opts)
+		out.WriteString(buildServerBlock(fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, nil, s, opts))
 	}
 	if s.Listeners.DoQ.Enabled {
-		writeServerBlock(&b, fmt.Sprintf("quic://.:%d", s.Listeners.DoQ.Port), true, quicDirective(s.Listeners.DoQ), s, opts)
+		q := s.Listeners.DoQ
+		out.WriteString(buildServerBlock(fmt.Sprintf("quic://.:%d", q.Port), true, &q, s, opts))
 	}
-	return []byte(b.String())
+	return []byte(out.String())
 }
 
-// quicDirective renders the optional "quic" plugin tuning block for DoQ.
-// Zero fields are omitted rather than written as literal 0s, since 0 isn't a
-// valid max_streams/worker_pool_size (both plugins reject <= 0) — it means
-// "leave this to CoreDNS's own default".
-func quicDirective(l model.QUICListener) string {
-	if l.MaxStreams == 0 && l.WorkerPoolSize == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("\tquic {\n")
-	if l.MaxStreams > 0 {
-		fmt.Fprintf(&b, "\t\tmax_streams %d\n", l.MaxStreams)
-	}
-	if l.WorkerPoolSize > 0 {
-		fmt.Fprintf(&b, "\t\tworker_pool_size %d\n", l.WorkerPoolSize)
-	}
-	b.WriteString("\t}\n")
-	return b.String()
-}
-
-func writeServerBlock(b *strings.Builder, addr string, tls bool, extra string, s model.Settings, opts Options) {
-	fmt.Fprintf(b, "%s {\n", addr)
+// buildServerBlock renders one Corefile server block. quic is non-nil only
+// for the DoQ block, and its quic{} tuning sub-block is itself only rendered
+// when at least one of MaxStreams/WorkerPoolSize is set — 0 isn't a valid
+// value for either (both plugins reject <= 0), so 0 means "leave it to
+// CoreDNS's own default" rather than being written as a literal 0.
+func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.Settings, opts Options) string {
+	blk := corefile.NewBlock(addr)
 	if tls {
-		fmt.Fprintf(b, "\ttls %s %s\n", opts.CertFile, opts.KeyFile)
+		blk.Directive("tls %s %s", opts.CertFile, opts.KeyFile)
 	}
-	b.WriteString(extra)
+	if quic != nil && (quic.MaxStreams > 0 || quic.WorkerPoolSize > 0) {
+		blk.SubBlock("quic", func(inner *corefile.Block) {
+			inner.DirectiveIf(quic.MaxStreams > 0, "max_streams %d", quic.MaxStreams)
+			inner.DirectiveIf(quic.WorkerPoolSize > 0, "worker_pool_size %d", quic.WorkerPoolSize)
+		})
+	}
 	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
 	// ahead of localrecords per the directive order. Only rendered when enabled.
-	if s.MDNS.Enabled {
-		b.WriteString("\tmdnsbridge\n")
-	}
+	blk.DirectiveIf(s.MDNS.Enabled, "mdnsbridge")
+
 	zones := ownedZones(s)
-	fmt.Fprintf(b, "\tlocalrecords %s {\n", strings.Join(zones, " "))
-	fmt.Fprintf(b, "\t\tzonedata %s\n", ZoneDataPath(opts.ConfigDir))
-	if ft := fallthroughZones(s); len(ft) > 0 {
-		fmt.Fprintf(b, "\t\tfallthrough %s\n", strings.Join(ft, " "))
-	}
-	b.WriteString("\t}\n")
+	blk.SubBlock("localrecords "+strings.Join(zones, " "), func(inner *corefile.Block) {
+		inner.Directive("zonedata %s", ZoneDataPath(opts.ConfigDir))
+		if ft := fallthroughZones(s); len(ft) > 0 {
+			inner.Directive("fallthrough %s", strings.Join(ft, " "))
+		}
+	})
+
 	// ecs_enabled attaches the real client source IP to the forwarded query via
 	// EDNS0 Client Subnet (RFC 7871), so the upstream can apply per-client policy.
 	// Validate rejects this unless the upstream is private/loopback (docs/plugins.md),
 	// so full-precision masks (32/128, i.e. no truncation) are safe here.
-	if s.UpstreamDNS.ECS {
-		b.WriteString("\trewrite edns0 subnet set 32 128\n")
-	}
-	fmt.Fprintf(b, "\tforward . %s\n", forwardTarget(s.UpstreamDNS))
-	b.WriteString("\tcache\n")
-	b.WriteString("\terrors\n")
-	b.WriteString("\tlog\n")
-	b.WriteString("}\n")
+	blk.DirectiveIf(s.UpstreamDNS.ECS, "rewrite edns0 subnet set 32 128")
+	blk.Directive("forward . %s", forwardTarget(s.UpstreamDNS))
+	blk.Directive("cache")
+	blk.Directive("errors")
+	blk.Directive("log")
+	return blk.String()
 }
 
 // forwardTarget renders the upstream for the forward plugin, honoring an
