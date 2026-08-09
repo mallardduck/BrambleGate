@@ -8,7 +8,6 @@ import (
 	// Compiled-in plugins. Blank-importing registers each plugin's setup under
 	// its directive name; a directive listed in Directives below but not imported
 	// here simply can't be used in a Corefile (it isn't an error until referenced).
-	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/errors"
 	_ "github.com/coredns/coredns/plugin/forward"
