@@ -56,7 +56,7 @@ templ recordRow(r model.Record) {
 		<td class="px-3 py-2">{ string(r.Type) }</td>
 		<td class="px-3 py-2 font-mono">
 			if r.Default != "" {
-				{ r.Default }
+				<span class="select-all">{ r.Default }</span>
 			} else {
 				—
 			}
@@ -68,7 +68,9 @@ templ recordRow(r model.Record) {
 				300
 			}
 		</td>
-		<td class="px-3 py-2 text-xs">{ summarizeOverrides(r) }</td>
+		<td class="px-3 py-2 text-xs">
+			@overridesSummary(r)
+		</td>
 		<td class="px-3 py-2 text-right whitespace-nowrap">
 			<a
 				href={ templ.SafeURL(RecordPath(r.Name, string(r.Type)) + "/edit") }
@@ -95,25 +97,32 @@ templ recordRow(r model.Record) {
 	</tr>
 }
 
-func summarizeOverrides(r model.Record) string {
+// overridesSummary lists each VLAN override as "vlan: value" — the value is
+// wrapped in its own select-all span so a double-click grabs the whole IP
+// (browsers otherwise break word-selection on the dots) instead of a
+// fragment of it.
+templ overridesSummary(r model.Record) {
 	if len(r.VLANOverrides) == 0 {
-		return "—"
-	}
-	out := ""
-	for i, o := range r.VLANOverrides {
-		if i > 0 {
-			out += ", "
-		}
-		switch {
-		case o.NXDomain:
-			out += o.VLAN + ": ✗"
-		case o.Value != "":
-			out += o.VLAN + ": " + o.Value
-		default:
-			out += o.VLAN + ": (dflt)"
+		—
+	} else {
+		for i, o := range r.VLANOverrides {
+			if i > 0 {
+				{ ", " }
+			}
+			{ o.VLAN }: <span class="select-all">{ overrideValue(o) }</span>
 		}
 	}
-	return out
+}
+
+func overrideValue(o model.VLANOverride) string {
+	switch {
+	case o.NXDomain:
+		return "✗"
+	case o.Value != "":
+		return o.Value
+	default:
+		return "(dflt)"
+	}
 }
 
 templ recordForm(data RecordsData) {

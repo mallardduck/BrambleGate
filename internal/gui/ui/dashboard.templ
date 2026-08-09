@@ -160,12 +160,14 @@ templ acmeSelfIPCard(settings model.Settings, records []model.Record) {
 								<td class="px-3 py-2">{ string(r.Type) }</td>
 								<td class="px-3 py-2 font-mono">
 									if r.Default != "" {
-										{ r.Default }
+										<span class="select-all">{ r.Default }</span>
 									} else {
 										—
 									}
 								</td>
-								<td class="px-3 py-2 text-xs">{ summarizeOverrides(r) }</td>
+								<td class="px-3 py-2 text-xs">
+									@overridesSummary(r)
+								</td>
 							</tr>
 						}
 					</tbody>

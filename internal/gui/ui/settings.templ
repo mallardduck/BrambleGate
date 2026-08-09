@@ -175,8 +175,8 @@ templ vlanCandidateRow(c selfip.Candidate) {
 			<span class="text-bramble-muted text-xs">Name</span>
 			<input name="vlan_name" value={ c.Suggested } required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
 		</label>
-		<span class="text-bramble-muted text-sm font-mono">{ c.CIDR }</span>
-		<span class="text-bramble-muted text-xs">(seen at { c.SampleIP })</span>
+		<span class="text-bramble-muted text-sm font-mono select-all">{ c.CIDR }</span>
+		<span class="text-bramble-muted text-xs">(seen at <span class="select-all">{ c.SampleIP }</span>)</span>
 		<button type="submit" class="px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-xs hover:bg-bramble-primary/10">
 			Add as VLAN
 		</button>
@@ -278,7 +278,7 @@ templ vlanRow(v model.VLAN) {
 	<div class="flex items-center justify-between rounded bg-bramble-bg-card2 px-3 py-2 text-sm">
 		<span>
 			<span class="font-mono font-medium">{ v.Name }</span>
-			<span class="text-bramble-muted ml-2">{ strings.Join(v.CIDRs, ", ") }</span>
+			<span class="text-bramble-muted ml-2 select-all">{ strings.Join(v.CIDRs, ", ") }</span>
 		</span>
 		<button
 			hx-delete={ PathSettings + "/vlans/" + v.Name }
