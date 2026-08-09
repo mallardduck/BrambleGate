@@ -54,6 +54,19 @@ func TestNewReloadStop(t *testing.T) {
 	}
 }
 
+// The ecs_enabled setting renders a "rewrite edns0 subnet set 32 128" line
+// (configgen); this confirms CoreDNS's own rewrite plugin actually accepts
+// that directive syntax, not just that configgen's string-building is right.
+func TestNewAcceptsECSRewriteDirective(t *testing.T) {
+	skipIfWindows(t)
+	cf := []byte(".:45355 {\n\tbind 127.0.0.1\n\trewrite edns0 subnet set 32 128\n\twhoami\n}\n")
+	eng, err := New(cf)
+	if err != nil {
+		t.Fatalf("New with rewrite edns0 subnet directive: %v", err)
+	}
+	_ = eng.Stop()
+}
+
 func TestNewInvalidFails(t *testing.T) {
 	skipIfWindows(t)
 	eng, err := New([]byte("definitely not a corefile {"))

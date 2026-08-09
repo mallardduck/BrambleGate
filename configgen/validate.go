@@ -143,7 +143,23 @@ func validateUpstream(u model.UpstreamTarget) error {
 	default:
 		return fmt.Errorf("upstream_dns.protocol %q must be plain, dot, or doh", u.Protocol)
 	}
+	if u.ECS {
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return fmt.Errorf("upstream_dns.ecs_enabled requires upstream_dns.address to be a literal private/loopback IP, not hostname %q", host)
+		}
+		if !isTrustedECSUpstream(ip) {
+			return fmt.Errorf("upstream_dns.ecs_enabled requires a private/loopback upstream (got %q) — sending real client IPs to a public resolver leaks them off-network", host)
+		}
+	}
 	return nil
+}
+
+// isTrustedECSUpstream reports whether ip is a private/loopback/ULA address —
+// the only kind of upstream it's safe to hand real client source IPs to via
+// EDNS0 Client Subnet.
+func isTrustedECSUpstream(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
 // ownedCIDR tracks a parsed CIDR back to the VLAN it belongs to, for overlap

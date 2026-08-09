@@ -323,6 +323,13 @@ func writeServerBlock(b *strings.Builder, addr string, tls bool, extra string, s
 		fmt.Fprintf(b, "\t\tfallthrough %s\n", strings.Join(ft, " "))
 	}
 	b.WriteString("\t}\n")
+	// ecs_enabled attaches the real client source IP to the forwarded query via
+	// EDNS0 Client Subnet (RFC 7871), so the upstream can apply per-client policy.
+	// Validate rejects this unless the upstream is private/loopback (docs/plugins.md),
+	// so full-precision masks (32/128, i.e. no truncation) are safe here.
+	if s.UpstreamDNS.ECS {
+		b.WriteString("\trewrite edns0 subnet set 32 128\n")
+	}
 	fmt.Fprintf(b, "\tforward . %s\n", forwardTarget(s.UpstreamDNS))
 	b.WriteString("\tcache\n")
 	b.WriteString("\terrors\n")
