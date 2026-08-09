@@ -88,6 +88,10 @@ func (h *handlers) recordsEdit(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if rec.IsMDNS() {
+		h.renderRecords(w, r, nil, "live mDNS-linked records are managed from the mDNS page, not edited here")
+		return
+	}
 	h.renderRecords(w, r, &rec, "")
 }
 
@@ -115,6 +119,15 @@ func (h *handlers) recordsUpdate(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.Settings()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rs, err := h.svc.Records()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if existing, ok := findRecord(rs, name, rtype); ok && existing.IsMDNS() {
+		h.renderRecords(w, r, nil, "live mDNS-linked records are managed from the mDNS page, not edited here")
 		return
 	}
 	rec, err := parseRecordForm(r, settings.VLANs)

@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/mallardduck/BrambleGate/model"
 )
 
 func newTestServer(t *testing.T) http.Handler {
@@ -119,6 +121,50 @@ func TestRecordsCreateDuplicateShowsFormError(t *testing.T) {
 	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/records", form))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "already exists") {
 		t.Fatalf("expected duplicate FormError, got status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// A promoted mDNS record's value comes from the live discovery table (Match),
+// not Default/TTL/overrides — the generic add/edit form has no fields for
+// that, so editing one there previously rendered a broken-looking form (type
+// selected nothing, default looked emptily "valid"). It should be steered to
+// the mDNS page instead of edited here.
+func TestRecordsEditRejectsMDNSRecord(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	if err := st.SaveRecords(model.RecordSet{Records: []model.Record{
+		{Name: "printer.home.arpa", Type: model.TypeMDNS, Match: &model.Selector{Host: "printer"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/records/printer.home.arpa/mdns/edit", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "Edit mdns printer.home.arpa") {
+		t.Fatalf("did not expect the edit form to render for an mDNS record, got: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "managed from the mDNS page") {
+		t.Fatalf("expected steer-to-mDNS-page message, got: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPut, "/records/printer.home.arpa/mdns", url.Values{
+		"name": {"printer.home.arpa"}, "type": {"A"}, "default": {"192.168.10.50"},
+	}))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "managed from the mDNS page") {
+		t.Fatalf("expected update to be rejected, got status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rs, err := st.LoadRecords()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs.Records) != 1 || rs.Records[0].Type != model.TypeMDNS {
+		t.Fatalf("expected the mDNS record to be untouched, got: %+v", rs.Records)
 	}
 }
 
