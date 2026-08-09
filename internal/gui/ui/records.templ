@@ -11,10 +11,9 @@ import (
 // for the "add a record" state; set it (from a GET .../edit request) to
 // pre-fill the form for an update.
 type RecordsData struct {
-	Records   model.RecordSet
-	VLANs     []model.VLAN
-	Editing   *model.Record
-	FormError string
+	Records model.RecordSet
+	VLANs   []model.VLAN
+	Editing *model.Record
 }
 
 templ Records(data RecordsData) {
@@ -146,9 +145,6 @@ templ recordForm(data RecordsData) {
 				Add a record
 			}
 		</h2>
-		if data.FormError != "" {
-			<p class="text-bramble-danger text-sm mb-3">{ data.FormError }</p>
-		}
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex flex-col gap-1 text-sm">
 				<span class="text-bramble-muted text-xs">Name</span>

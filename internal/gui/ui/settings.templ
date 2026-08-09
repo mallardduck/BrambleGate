@@ -9,15 +9,11 @@ import (
 
 // SettingsData is everything the settings page needs to render.
 type SettingsData struct {
-	Settings  model.Settings
-	FormError string
+	Settings model.Settings
 }
 
 templ Settings(data SettingsData) {
 	<h1 class="text-lg font-semibold mb-4">Settings</h1>
-	if data.FormError != "" {
-		<p class="text-bramble-danger text-sm mb-3">{ data.FormError }</p>
-	}
 
 	<form hx-post={ PathSettings } hx-target="#content" hx-swap="innerHTML" class="rounded border border-bramble-border bg-bramble-bg-card p-4">
 		<h2 class="text-sm font-semibold mb-3">Upstream &amp; listeners</h2>

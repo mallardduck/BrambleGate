@@ -15,6 +15,7 @@ templ Base(title string, active string) {
 			<link rel="stylesheet" href="/static/style.css"/>
 			<script src="/static/js/htmx.min.js"></script>
 			<script src="/static/js/theme.js"></script>
+			<script src="/static/js/toast.js"></script>
 		</head>
 		<body class="h-full bg-bramble-bg text-bramble-text flex flex-col">
 			@Topbar(active)
@@ -22,6 +23,10 @@ templ Base(title string, active string) {
 				{ children... }
 			</main>
 			@PageFooter()
+			// Lives outside #content so htmx's hx-target="#content" swaps never
+			// clear it; toasts arrive via hx-swap-oob from any handler/page (see
+			// toast.templ) and are self-dismissing (see static/js/toast.js).
+			<div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite"></div>
 		</body>
 	</html>
 }

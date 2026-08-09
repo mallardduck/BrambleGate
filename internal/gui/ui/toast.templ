@@ -1,0 +1,16 @@
+package ui
+
+// Toast renders a single dismissible error notification as an out-of-band
+// swap: htmx inserts it into #toast-container (see layout.templ) regardless
+// of the response's primary hx-target, so any handler can flash one
+// alongside its normal fragment — see render/renderError in handlers_ui.go.
+templ Toast(message string) {
+	<div
+		hx-swap-oob="afterbegin:#toast-container"
+		data-toast
+		class="pointer-events-auto flex items-start gap-2 rounded border border-bramble-danger bg-bramble-bg-card px-3 py-2 text-sm text-bramble-danger shadow-lg max-w-sm transition-opacity duration-200"
+	>
+		<span class="flex-1 break-words">{ message }</span>
+		<button type="button" data-toast-close aria-label="Dismiss" class="shrink-0 text-bramble-muted hover:text-bramble-text">✕</button>
+	</div>
+}

@@ -26,6 +26,17 @@ func render(w http.ResponseWriter, r *http.Request, title, active string, page t
 	_ = ui.Base(title, active).Render(ctx, w)
 }
 
+// renderError is render plus an out-of-band error toast (see ui.Toast):
+// pages no longer carry their own inline "FormError"/"Error" text, so this
+// is the one place any handler flashes a user action's failure, regardless
+// of which page it happened on.
+func renderError(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, errMsg string) {
+	if errMsg != "" {
+		page = templ.Join(page, ui.Toast(errMsg))
+	}
+	render(w, r, title, active, page)
+}
+
 // --- Dashboard ---------------------------------------------------------
 
 func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
@@ -132,8 +143,8 @@ func (h *handlers) renderRecords(w http.ResponseWriter, r *http.Request, editing
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.RecordsData{Records: rs, VLANs: settings.VLANs, Editing: editing, FormError: formErr}
-	render(w, r, "Records", ui.PathRecords, ui.Records(data))
+	data := ui.RecordsData{Records: rs, VLANs: settings.VLANs, Editing: editing}
+	renderError(w, r, "Records", ui.PathRecords, ui.Records(data), formErr)
 }
 
 // renderRecordsAtIdentity re-renders the form in edit mode for name/type (the
@@ -269,8 +280,8 @@ func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, formEr
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.SettingsData{Settings: settings, FormError: formErr}
-	render(w, r, "Settings", ui.PathSettings, ui.Settings(data))
+	data := ui.SettingsData{Settings: settings}
+	renderError(w, r, "Settings", ui.PathSettings, ui.Settings(data), formErr)
 }
 
 func parseSettingsForm(r *http.Request, s *model.Settings) error {
@@ -395,11 +406,11 @@ func (h *handlers) renderMDNSWithError(w http.ResponseWriter, r *http.Request, e
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.MDNSData{Enabled: settings.MDNS.Enabled, Error: errMsg}
+	data := ui.MDNSData{Enabled: settings.MDNS.Enabled}
 	if settings.MDNS.Enabled {
 		if e, err := h.svc.MDNSCandidates(); err == nil {
 			data.Entries = e
 		}
 	}
-	render(w, r, "mDNS", ui.PathMDNS, ui.MDNS(data))
+	renderError(w, r, "mDNS", ui.PathMDNS, ui.MDNS(data), errMsg)
 }
