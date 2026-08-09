@@ -10,6 +10,7 @@ use (
 	./model
 	./plugins/localrecords
 	./plugins/mdnsbridge
+	./pluginreg
 	./selfip
 	./store
 )

@@ -17,6 +17,7 @@ replace (
 	github.com/mallardduck/BrambleGate/model => ./model
 	github.com/mallardduck/BrambleGate/plugins/localrecords => ./plugins/localrecords
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ./plugins/mdnsbridge
+	github.com/mallardduck/BrambleGate/pluginreg => ./pluginreg
 	github.com/mallardduck/BrambleGate/selfip => ./selfip
 	github.com/mallardduck/BrambleGate/store => ./store
 )
