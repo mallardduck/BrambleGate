@@ -112,10 +112,10 @@ templ privateDNSRow(label, stamp, url string) {
 	<div class="rounded bg-bramble-bg-card2 px-3 py-2">
 		<p class="text-xs font-semibold uppercase tracking-wide mb-2">{ label }</p>
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+			@dnsStampField("Query URL", url)
 			if stamp != "" {
 				@dnsStampField("Stamp", stamp)
 			}
-			@dnsStampField("Query URL", url)
 		</div>
 	</div>
 }
