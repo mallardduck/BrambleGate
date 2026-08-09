@@ -33,7 +33,7 @@ func (s *stubIssuer) Obtain(context.Context) ([]byte, []byte, error) {
 
 func testManager(t *testing.T, iss Issuer) *Manager {
 	t.Helper()
-	cfg := Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "cloudflare"}
+	cfg := Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "cloudflare", Enabled: true}
 	m := newManager(cfg, iss, func() error { return nil }, slog.New(slog.DiscardHandler))
 	return m
 }
@@ -231,14 +231,73 @@ func TestReconcileFailureRetriesSoonAndKeepsServing(t *testing.T) {
 	}
 }
 
-func TestNewManagerRejectsUnknownProvider(t *testing.T) {
-	_, err := NewManager(Config{Provider: "nonesuch"}, func() error { return nil }, slog.New(slog.DiscardHandler))
-	if err == nil {
-		t.Fatal("expected error for unknown provider")
+// Provider validity is checked on every reconcile (against the freshly
+// reloaded config), not just once at construction — a bad acme.dns_provider
+// set via the GUI mid-session must be caught too, not just one set at boot.
+func TestReconcileRejectsUnknownProvider(t *testing.T) {
+	iss := &stubIssuer{}
+	m := newManager(Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "nonesuch", Enabled: true},
+		iss, func() error { return nil }, slog.New(slog.DiscardHandler))
+	if wait := m.reconcile(context.Background()); wait != retryInterval {
+		t.Fatalf("unsupported provider should retry, got wait=%s", wait)
 	}
-	// exec/httpreq escape hatches are accepted.
-	if _, err := NewManager(Config{Provider: "exec"}, func() error { return nil }, slog.New(slog.DiscardHandler)); err != nil {
-		t.Fatalf("exec should be accepted: %v", err)
+	if iss.calls != 0 {
+		t.Fatal("must not attempt issuance with an unsupported provider")
+	}
+}
+
+// exec/httpreq are provider escape hatches and must be accepted.
+func TestReconcileAcceptsEscapeHatchProviders(t *testing.T) {
+	iss := &stubIssuer{}
+	m := newManager(Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "exec", Enabled: true},
+		iss, func() error { return nil }, slog.New(slog.DiscardHandler))
+	m.reconcile(context.Background())
+	if iss.calls != 1 {
+		t.Fatalf("exec provider should be accepted and proceed to issuance, got %d calls", iss.calls)
+	}
+}
+
+// A Manager is now started unconditionally regardless of acme.enabled at boot
+// (see internal/cli) — reconcile itself must no-op when the freshly reloaded
+// config says ACME is disabled, rather than needing to never be constructed.
+func TestReconcileNoOpWhenDisabled(t *testing.T) {
+	iss := &stubIssuer{}
+	m := newManager(Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "cloudflare", Enabled: false},
+		iss, func() error { return nil }, slog.New(slog.DiscardHandler))
+	if wait := m.reconcile(context.Background()); wait != checkInterval {
+		t.Fatalf("disabled should just wait the normal interval, got %s", wait)
+	}
+	if iss.calls != 0 {
+		t.Fatal("must not attempt issuance while disabled")
+	}
+}
+
+// The whole point: a config change (e.g. flipping acme.enabled or
+// acme.production via the GUI) must take effect on the Manager's very next
+// reconcile, without recreating it — that's what loadCfg is for.
+func TestReconcilePicksUpLiveConfigChanges(t *testing.T) {
+	iss := &stubIssuer{}
+	cfg := Config{ConfigDir: t.TempDir(), Domain: "dns.example.com", Provider: "cloudflare", Enabled: false}
+	realCert, realKey := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
+	var loads int
+	m := newManager(cfg, iss, func() error { return nil }, slog.New(slog.DiscardHandler))
+	m.loadCfg = func() (Config, error) { loads++; return cfg, nil }
+
+	if wait := m.reconcile(context.Background()); wait != checkInterval || iss.calls != 0 {
+		t.Fatalf("should be a no-op while disabled, got wait=%s calls=%d", wait, iss.calls)
+	}
+
+	// Simulate the GUI flipping acme.enabled on and saving — same *Manager*,
+	// no restart, no reconstruction.
+	cfg.Enabled = true
+	iss.cert, iss.key = realCert, realKey
+
+	m.reconcile(context.Background())
+	if loads < 2 {
+		t.Fatal("reconcile must call loadCfg again on the next tick")
+	}
+	if iss.calls != 1 {
+		t.Fatalf("enabling ACME should trigger issuance on the very next reconcile, got %d calls", iss.calls)
 	}
 }
 

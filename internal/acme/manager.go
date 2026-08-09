@@ -28,27 +28,49 @@ const (
 // the reload callback so the running engine picks up the new certificate — the
 // same store→configgen→engine.Reload path any config change uses
 // (docs/certificates.md). Renewal is just this on a timer.
+//
+// cfg is re-read via loadCfg at the top of every reconcile, not captured once
+// at construction — otherwise a GUI-driven change to any acme.* setting
+// (enabled, domain, production, dns_provider, ...) would silently have no
+// effect until the process was restarted, since nothing else ever pokes a
+// running Manager when settings.yaml changes.
 type Manager struct {
-	cfg    Config
-	issuer Issuer
-	reload func() error
-	log    *slog.Logger
-	now    func() time.Time
+	cfg       Config
+	loadCfg   func() (Config, error)
+	newIssuer func(Config) Issuer // builds a fresh Issuer from the just-loaded cfg
+	reload    func() error
+	log       *slog.Logger
+	now       func() time.Time
 }
 
-// NewManager validates the provider and returns a Manager using the real lego
-// issuer.
-func NewManager(cfg Config, reload func() error, log *slog.Logger) (*Manager, error) {
-	if _, ok := LookupProvider(cfg.Provider); !ok {
-		return nil, fmt.Errorf("unsupported acme dns_provider %q (supported: %s; or use exec/httpreq)",
-			cfg.Provider, strings.Join(SupportedProviders(), ", "))
+// NewManager returns a Manager using the real lego issuer. loadCfg is called
+// once here (its result becomes the initial cfg) and again at the top of
+// every reconcile.
+func NewManager(loadCfg func() (Config, error), reload func() error, log *slog.Logger) (*Manager, error) {
+	cfg, err := loadCfg()
+	if err != nil {
+		return nil, fmt.Errorf("load initial acme config: %w", err)
 	}
 	enableDebugLogging(log)
-	return newManager(cfg, &legoIssuer{cfg: cfg, log: log}, reload, log), nil
+	return &Manager{
+		cfg:       cfg,
+		loadCfg:   loadCfg,
+		newIssuer: func(c Config) Issuer { return &legoIssuer{cfg: c, log: log} },
+		reload:    reload,
+		log:       log,
+		now:       time.Now,
+	}, nil
 }
 
+// newManager is the test constructor: cfg/issuer are fixed, but loadCfg
+// mirrors whatever a test mutates m.cfg to directly (see e.g.
+// TestNeedsIssueOnCAEnvironmentChange), so reconcile's refresh step is a
+// harmless no-op in tests rather than clobbering the mutation back out.
 func newManager(cfg Config, issuer Issuer, reload func() error, log *slog.Logger) *Manager {
-	return &Manager{cfg: cfg, issuer: issuer, reload: reload, log: log, now: time.Now}
+	m := &Manager{cfg: cfg, reload: reload, log: log, now: time.Now}
+	m.loadCfg = func() (Config, error) { return m.cfg, nil }
+	m.newIssuer = func(Config) Issuer { return issuer }
+	return m
 }
 
 func (m *Manager) certFile() string { return filepath.Join(m.cfg.ConfigDir, "certs", "cert.pem") }
@@ -117,8 +139,26 @@ func (m *Manager) Run(ctx context.Context) {
 }
 
 // reconcile issues/renews if needed and returns how long to wait before the next
-// check (sooner after a failure so a transient error recovers quickly).
+// check (sooner after a failure so a transient error recovers quickly). It
+// starts by re-reading the ACME config (see Manager's loadCfg doc) so any
+// GUI-driven settings change is picked up before deciding anything.
 func (m *Manager) reconcile(ctx context.Context) time.Duration {
+	if cfg, err := m.loadCfg(); err != nil {
+		m.log.Error("acme: could not reload settings, using last-known config", "err", err)
+	} else {
+		m.cfg = cfg
+	}
+
+	if !m.cfg.Enabled {
+		m.log.Debug("acme: disabled, nothing to do")
+		return checkInterval
+	}
+	if _, ok := LookupProvider(m.cfg.Provider); !ok {
+		m.log.Error("acme: unsupported acme.dns_provider, will retry once fixed",
+			"provider", m.cfg.Provider, "supported", strings.Join(SupportedProviders(), ", "))
+		return retryInterval
+	}
+
 	need, reason := m.needsIssue()
 	if !need {
 		m.log.Debug("acme: certificate check, no action needed", "domain", m.cfg.Domain,
@@ -139,7 +179,7 @@ func (m *Manager) reconcile(ctx context.Context) time.Duration {
 	m.log.Info("acme: obtaining certificate", "reason", reason, "domain", m.cfg.Domain,
 		"provider", m.cfg.Provider, "ca", caDirURL(m.cfg))
 
-	certPEM, keyPEM, err := m.issuer.Obtain(ctx)
+	certPEM, keyPEM, err := m.newIssuer(m.cfg).Obtain(ctx)
 	if err != nil {
 		m.log.Error("acme: issuance failed, will retry", "err", err, "retry_in", retryInterval)
 		return retryInterval

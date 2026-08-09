@@ -25,7 +25,11 @@ import (
 // provider reads those from the environment. Built from model.ACME by the caller
 // so this package stays decoupled from model.
 type Config struct {
-	ConfigDir       string // /config root
+	ConfigDir string // /config root
+	// Enabled mirrors settings.yaml's acme.enabled — carried here (rather than
+	// gating Manager construction on it) so Manager.reconcile can re-check it on
+	// every tick and a GUI-driven enable/disable takes effect without a restart.
+	Enabled         bool
 	Domain          string
 	Email           string
 	Provider        string // acme.dns_provider

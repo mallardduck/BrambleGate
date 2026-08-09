@@ -166,26 +166,30 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	// ACME goroutine: obtains/renews the real certificate in the background and
 	// reloads the engine in place when it lands. The engine is already serving
 	// (with the self-signed bootstrap cert) — a provider/connectivity problem is
-	// logged and retried, never fatal. A misconfigured provider disables ACME but
-	// leaves the server running on the self-signed cert.
+	// logged and retried, never fatal. A misconfigured provider just skips that
+	// reconcile tick, leaving the server on whatever cert is already in place.
 	//
-	// Deliberately not gated on an encrypted listener being on: issuance can be
-	// verified (e.g. against staging) before flipping dot/doh/doq on, so the cert
-	// is ready and trusted by the time a listener needs it.
-	if !settings.ACME.Enabled {
-		log.Debug("acme: disabled, serving with the self-signed certificate")
-	} else {
-		if !settings.EncryptedListenerEnabled() {
-			log.Info("acme: enabled but no dot/doh/doq listener is on yet — issuing/renewing in the background so a cert is ready once one is enabled")
-		}
-		mgr, err := acme.NewManager(acmeConfig(configDir, settings), reloadFn(st, eng, opts), log)
+	// Started unconditionally, regardless of acme.enabled/settings at this exact
+	// instant: the Manager re-reads settings.yaml on every reconcile (loadCfg
+	// below), so enabling ACME, flipping acme.production, or changing the
+	// domain/provider via the GUI later takes effect on the Manager's next tick
+	// — it must not require a process restart to notice a settings.yaml change.
+	//
+	// Also deliberately not gated on an encrypted listener being on: issuance can
+	// be verified (e.g. against staging) before flipping dot/doh/doq on, so the
+	// cert is ready and trusted by the time a listener needs it.
+	mgr, err := acme.NewManager(func() (acme.Config, error) {
+		s, err := st.LoadSettings()
 		if err != nil {
-			log.Error("acme disabled (config error) — serving with the self-signed certificate", "err", err)
-		} else {
-			log.Info("acme manager started", "provider", settings.ACME.DNSProvider,
-				"production", settings.ACME.Production, "domain", settings.ACME.Domain)
-			go mgr.Run(ctx)
+			return acme.Config{}, err
 		}
+		return acmeConfig(configDir, s), nil
+	}, reloadFn(st, eng, opts), log)
+	if err != nil {
+		log.Error("acme manager could not start — serving with the self-signed certificate", "err", err)
+	} else {
+		log.Info("acme manager started; re-reads acme.* settings on every reconcile")
+		go mgr.Run(ctx)
 	}
 
 	<-ctx.Done()
@@ -210,6 +214,7 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 func acmeConfig(configDir string, s model.Settings) acme.Config {
 	return acme.Config{
 		ConfigDir:       configDir,
+		Enabled:         s.ACME.Enabled,
 		Domain:          s.ACME.Domain,
 		Email:           s.ACME.Email,
 		Provider:        s.ACME.DNSProvider,
