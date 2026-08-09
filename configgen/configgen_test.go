@@ -594,6 +594,52 @@ func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
 	}
 }
 
+func TestRenderBufsizeDefaultAndDisabled(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Count(cf, "bufsize 1232") != 2 { // one per server block (plain + dot)
+		t.Errorf("expected bufsize 1232 in both server blocks by default:\n%s", cf)
+	}
+
+	disabled := baseSettings()
+	disabled.BufsizeDisabled = true
+	out, err = Render(disabled, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf = string(out.Corefile)
+	if strings.Contains(cf, "bufsize") {
+		t.Errorf("bufsize should not be rendered when disabled:\n%s", cf)
+	}
+}
+
+func TestRenderTimeoutsOnEncryptedListenersOnly(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Count(cf, "timeouts {") != 1 { // only the tls://.:853 (dot) block, not plain
+		t.Errorf("expected timeouts only in the encrypted (dot) server block:\n%s", cf)
+	}
+	if !strings.Contains(cf, "idle 3m") {
+		t.Errorf("expected idle 3m inside the timeouts block:\n%s", cf)
+	}
+
+	plainOnly := baseSettings()
+	plainOnly.Listeners.DoT.Enabled = false
+	out, err = Render(plainOnly, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out.Corefile), "timeouts") {
+		t.Errorf("expected no timeouts block with only the plain listener enabled:\n%s", out.Corefile)
+	}
+}
+
 func TestRenderErrorsConsolidateDefaultAndDisabled(t *testing.T) {
 	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {

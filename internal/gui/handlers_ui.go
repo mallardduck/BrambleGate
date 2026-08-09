@@ -327,6 +327,7 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	s.Log.Disabled = r.FormValue("log_disabled") != ""
 	s.Log.Classes = splitAndTrim(r.FormValue("log_classes"))
 	s.Errors.ConsolidateDisabled = r.FormValue("errors_consolidate_disabled") != ""
+	s.BufsizeDisabled = r.FormValue("bufsize_disabled") != ""
 
 	parseListener(r, "plain", &s.Listeners.Plain)
 	parseListener(r, "dot", &s.Listeners.DoT)

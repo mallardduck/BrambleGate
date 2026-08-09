@@ -12,6 +12,15 @@ type Settings struct {
 	Cache       CacheTuning    `yaml:"cache" json:"cache"`
 	Log         LogTuning      `yaml:"log" json:"log"`
 	Errors      ErrorsTuning   `yaml:"errors" json:"errors"`
+	// BufsizeDisabled turns off the bufsize hardening measure (on by default,
+	// rendered as `bufsize 1232` — the plugin's own documented safe default —
+	// in every server block). Caps EDNS0 UDP payload size to prevent IP
+	// fragmentation, an RFC 6891 concern and a mitigation for certain
+	// reflection/amplification vectors. Not a tunable size — 1232 is the value
+	// the plugin's own docs recommend and there's no BrambleGate use case that
+	// needs a different one; this is a disable-only knob for the rare case it
+	// causes trouble with a particular client/upstream.
+	BufsizeDisabled bool `yaml:"bufsize_disabled,omitempty" json:"bufsize_disabled,omitempty"`
 }
 
 // CacheTuning controls the cache plugin's resilience/efficiency knobs.

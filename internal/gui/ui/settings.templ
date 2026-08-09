@@ -125,6 +125,13 @@ templ Settings(data SettingsData) {
 				</label>
 			</div>
 			<div>
+				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Hardening</h3>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="bufsize_disabled" checked?={ data.Settings.BufsizeDisabled }/>
+					Disable EDNS0 buffer-size capping (bufsize)
+				</label>
+			</div>
+			<div>
 				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Errors</h3>
 				<label class="flex items-center gap-2 text-sm">
 					<input type="checkbox" name="errors_consolidate_disabled" checked?={ data.Settings.Errors.ConsolidateDisabled }/>
@@ -133,7 +140,7 @@ templ Settings(data SettingsData) {
 			</div>
 		</div>
 		<p class="text-bramble-muted text-xs mt-2 max-w-prose">
-			By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; and every query is logged to stdout. Each of these is on by default — the checkboxes above only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when "Send client IP to upstream" above is enabled, since a subnet-scoped answer must never be served to a different client.
+			By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; every query is logged to stdout; and outgoing EDNS0 UDP payload sizes are capped to 1232 bytes to avoid IP fragmentation. Each of these is on by default — the checkboxes above only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when "Send client IP to upstream" above is enabled, since a subnet-scoped answer must never be served to a different client. Encrypted listeners (DoT/DoH/DoQ) also get a fixed, non-configurable 3-minute idle-timeout bump to help mobile/NAT'd clients — not shown here since there's nothing to toggle.
 		</p>
 
 		<h2 class="text-sm font-semibold mt-6 mb-3">ACME (DNS-01 certificates)</h2>

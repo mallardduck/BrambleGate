@@ -333,6 +333,16 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.S
 			inner.DirectiveIf(quic.WorkerPoolSize > 0, "worker_pool_size %d", quic.WorkerPoolSize)
 		})
 	}
+	// timeouts is a fixed idle-timeout bump on encrypted listeners only (DoT/DoH/DoQ,
+	// i.e. wherever tls is true) — helps DoT/DoH clients behind NAT/routers that hold
+	// connections open, and mobile clients moving between networks. Plain UDP/TCP has
+	// no persistent connection to tune, so it's left at CoreDNS's own defaults.
+	if tls {
+		blk.SubBlock("timeouts", func(inner *corefile.Block) {
+			inner.Directive("idle 3m")
+		})
+	}
+	blk.DirectiveIf(!s.BufsizeDisabled, "bufsize 1232")
 	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
 	// ahead of localrecords per the directive order. Only rendered when enabled.
 	blk.DirectiveIf(s.MDNS.Enabled, "mdnsbridge")

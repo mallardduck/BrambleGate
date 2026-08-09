@@ -321,9 +321,10 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 		"log_disabled":                {"on"},
 		"log_classes":                 {"denial, error"},
 		"errors_consolidate_disabled": {"on"},
+		"bufsize_disabled":            {"on"},
 	})))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("save (cache/log/errors tuning) status = %d, body = %s", rec.Code, rec.Body.String())
+		t.Fatalf("save (cache/log/errors/bufsize tuning) status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	settings, err := st.LoadSettings()
 	if err != nil {
@@ -341,9 +342,13 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 	if !settings.Errors.ConsolidateDisabled {
 		t.Fatalf("expected errors consolidate disabled, got: %+v", settings.Errors)
 	}
+	if !settings.BufsizeDisabled {
+		t.Fatalf("expected bufsize disabled, got: %+v", settings.BufsizeDisabled)
+	}
 
 	// Blank/unchecked fields clear previously-set tuning back to zero-value
-	// defaults (both cache knobs enabled, log unconditional, errors consolidated).
+	// defaults (both cache knobs enabled, log unconditional, errors consolidated,
+	// bufsize enabled).
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(nil)))
 	if rec.Code != http.StatusOK {
@@ -361,6 +366,9 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 	}
 	if settings.Errors.ConsolidateDisabled {
 		t.Fatalf("expected errors consolidate re-enabled, got: %+v", settings.Errors)
+	}
+	if settings.BufsizeDisabled {
+		t.Fatalf("expected bufsize re-enabled, got: %+v", settings.BufsizeDisabled)
 	}
 }
 
