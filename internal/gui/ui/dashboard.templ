@@ -28,7 +28,7 @@ templ Dashboard(data DashboardData) {
 				Still forwarding to the default upstream ({ data.Settings.UpstreamDNS.Address }). Point BrambleGate at your
 				own ad-block resolver to finish setup.
 			</span>
-			<a href={ templ.SafeURL(PathSettings) } class="shrink-0 px-3 py-1.5 rounded bg-bramble-primary text-white text-xs font-medium hover:bg-bramble-primary-dark">
+			<a href={ templ.SafeURL(PathSettings) } class="shrink-0 px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-xs font-medium hover:bg-bramble-primary/10">
 				Go to settings
 			</a>
 		</div>
@@ -42,7 +42,7 @@ templ Dashboard(data DashboardData) {
 			@statCard("mDNS", "disabled", PathSettings)
 		}
 	</div>
-	<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card p-4">
+	<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 		<h2 class="text-sm font-semibold mb-3">Listeners</h2>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
 			@listenerStat("Plain", data.Settings.Listeners.Plain)
@@ -54,9 +54,9 @@ templ Dashboard(data DashboardData) {
 }
 
 templ statCard(label, value, href string) {
-	<a href={ templ.SafeURL(href) } class="block rounded border border-bramble-border bg-bramble-bg-card p-4 hover:border-bramble-primary transition-colors">
-		<p class="text-xs text-bramble-muted uppercase tracking-wide">{ label }</p>
-		<p class="text-2xl font-bold mt-1">{ value }</p>
+	<a href={ templ.SafeURL(href) } class="block rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 hover:border-bramble-primary transition-colors">
+		<p class="text-xs text-bramble-primary uppercase tracking-wide">{ label }</p>
+		<p class="text-2xl font-heading font-semibold mt-1 tabular-nums">{ value }</p>
 	</a>
 }
 

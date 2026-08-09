@@ -8,9 +8,12 @@ templ Toast(message string) {
 	<div
 		hx-swap-oob="afterbegin:#toast-container"
 		data-toast
-		class="pointer-events-auto flex items-start gap-2 rounded border border-bramble-danger bg-bramble-bg-card px-3 py-2 text-sm text-bramble-danger shadow-lg max-w-sm transition-opacity duration-200"
+		class="pointer-events-auto flex items-start gap-2 rounded border border-bramble-danger bg-bramble-bg-card2 px-3 py-2 text-sm text-bramble-danger shadow-lg max-w-sm transition-opacity duration-200"
 	>
+		@iconAlertTriangle("w-4 h-4 shrink-0 mt-0.5")
 		<span class="flex-1 break-words">{ message }</span>
-		<button type="button" data-toast-close aria-label="Dismiss" class="shrink-0 text-bramble-muted hover:text-bramble-text">✕</button>
+		<button type="button" data-toast-close aria-label="Dismiss" class="shrink-0 text-bramble-muted hover:text-bramble-text">
+			@iconX("w-3.5 h-3.5")
+		</button>
 	</div>
 }

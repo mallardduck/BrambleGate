@@ -24,35 +24,56 @@ templ MDNS(data MDNSData) {
 			<p class="text-xs text-bramble-muted mb-3">
 				Names seen on the network, mapped into home.arpa. Publish serves it live while seen (lost on restart); Promote writes a durable records.yaml entry and takes over the "served" state shown here.
 			</p>
+			<form id="mdns-filters" onsubmit="return false" class="flex flex-wrap gap-4 items-end mb-4">
+				<label class="flex flex-col gap-1 text-sm flex-1 max-w-xs">
+					<span class="text-bramble-muted text-xs">Search</span>
+					<span class="relative">
+						@iconSearch("w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-bramble-muted")
+						<input id="mdns-search" name="q" placeholder="Filter by name, host or service…" class="w-full pl-7 pr-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+					</span>
+				</label>
+				<div class="flex rounded border border-bramble-border overflow-hidden">
+					@segOption("status", "all", "All", true)
+					@segOption("status", "served", "Served", false)
+					@segOption("status", "unserved", "Not served", false)
+				</div>
+			</form>
 			<div
 				id="mdns-grid"
 				hx-get={ PathMDNS + "/grid" }
-				hx-trigger="every 10s"
+				hx-trigger="every 10s, keyup changed delay:300ms from:#mdns-search, change from:[name='status']"
+				hx-include="#mdns-filters"
 				hx-target="#mdns-grid"
 				hx-swap="innerHTML"
 				class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
 			>
-				@MDNSGrid(data.Entries)
+				@MDNSGrid(data.Entries, false)
 			</div>
 		}
 	</div>
 }
 
-// MDNSGrid renders just the card grid's children, so the 10s auto-refresh can
-// fetch and swap this alone (see PathMDNS+"/grid" in internal/gui). Swapping
-// only this node — rather than the whole page's #content — keeps the outer
-// heading/copy and the page's scroll position stable across refreshes.
-templ MDNSGrid(entries []mdnsbridge.Entry) {
+// MDNSGrid renders just the card grid's children, so the 10s auto-refresh (and
+// the search/status filter, see the form above) can fetch and swap this alone
+// (see PathMDNS+"/grid" in internal/gui). Swapping only this node — rather
+// than the whole page's #content — keeps the outer heading/copy and the
+// page's scroll position stable across refreshes. filtered distinguishes
+// "nothing discovered at all" from "nothing matches the current filter".
+templ MDNSGrid(entries []mdnsbridge.Entry, filtered bool) {
 	for _, e := range entries {
 		@mdnsCard(e)
 	}
 	if len(entries) == 0 {
-		<p class="text-bramble-muted text-sm col-span-full">Nothing discovered yet.</p>
+		if filtered {
+			<p class="text-bramble-muted text-sm col-span-full">Nothing matches this filter.</p>
+		} else {
+			<p class="text-bramble-muted text-sm col-span-full">Nothing discovered yet.</p>
+		}
 	}
 }
 
 templ mdnsCard(e mdnsbridge.Entry) {
-	<div class="rounded border border-bramble-border bg-bramble-bg-card p-4 flex flex-col gap-2">
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 flex flex-col gap-2">
 		<div class="flex items-start justify-between gap-2">
 			<p class="font-mono text-sm font-medium break-all">{ e.Name }</p>
 			if e.Promoted {

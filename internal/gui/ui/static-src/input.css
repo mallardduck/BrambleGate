@@ -1,46 +1,79 @@
 @import "tailwindcss";
 
+/* Self-hosted (not Google Fonts CDN — this is a local DNS admin UI, it
+   shouldn't phone home on every page load). Variable fonts: one file per
+   family covers the 400/600 weights we use. */
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+  src: url("/static/fonts/CormorantGaramond-Variable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+  src: url("/static/fonts/Lora-Variable.woff2") format("woff2");
+}
+
 /* BrambleGate palette — a small set of semantic tokens so dark mode is just
-   swapping these values, not rewriting every utility class. */
+   swapping these values, not rewriting every utility class. Derived from the
+   "Classical" design (editorial, book-like, gold accent applied as stroke
+   rather than fill) agreed on in the Claude Design project — reworked here
+   as Tailwind theme tokens rather than adopting its own CSS classes. */
 @theme {
-  --color-bramble-bg:          #F3F4EE;
-  --color-bramble-bg-card:     #FFFFFF;
-  --color-bramble-bg-card2:    #ECEEE4;
-  --color-bramble-bg-input:    #FFFFFF;
-  --color-bramble-border:      #DCDFD3;
-  --color-bramble-text:        #1B1F18;
-  --color-bramble-muted:       #5B6355;
-  --color-bramble-primary:     #3F6B3A;
-  --color-bramble-primary-dark:#2E4F2A;
+  --font-heading: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-body: "Lora", ui-serif, Georgia, serif;
+
+  --color-bramble-bg:          #F3F2F2;
+  --color-bramble-bg-card:     #EAE9E9;
+  --color-bramble-bg-card2:    #EAE9E9;
+  --color-bramble-bg-input:    #F3F2F2;
+  --color-bramble-border:      #DBD8D3;
+  --color-bramble-text:        #201F1D;
+  --color-bramble-muted:       #6B6560;
+  --color-bramble-primary:     #96692A;
+  --color-bramble-primary-dark:#7D5411;
   --color-bramble-danger:      #A3312A;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
-    --color-bramble-bg:           #14170F;
-    --color-bramble-bg-card:      #1C2016;
-    --color-bramble-bg-card2:     #232819;
-    --color-bramble-bg-input:     #14170F;
-    --color-bramble-border:       #2E3524;
-    --color-bramble-text:         #E7EBDE;
-    --color-bramble-muted:        #93A085;
-    --color-bramble-primary:      #6FAE64;
-    --color-bramble-primary-dark: #558A4C;
+    --color-bramble-bg:           #17140F;
+    --color-bramble-bg-card:      #221E17;
+    --color-bramble-bg-card2:     #221E17;
+    --color-bramble-bg-input:     #17140F;
+    --color-bramble-border:       #332C22;
+    --color-bramble-text:         #EDE9E2;
+    --color-bramble-muted:        #A39C90;
+    --color-bramble-primary:      #E1AD66;
+    --color-bramble-primary-dark: #C28D41;
     --color-bramble-danger:       #E0645C;
   }
 }
 
 :root[data-theme="dark"] {
-  --color-bramble-bg:           #14170F;
-  --color-bramble-bg-card:      #1C2016;
-  --color-bramble-bg-card2:     #232819;
-  --color-bramble-bg-input:     #14170F;
-  --color-bramble-border:       #2E3524;
-  --color-bramble-text:         #E7EBDE;
-  --color-bramble-muted:        #93A085;
-  --color-bramble-primary:      #6FAE64;
-  --color-bramble-primary-dark: #558A4C;
+  --color-bramble-bg:           #17140F;
+  --color-bramble-bg-card:      #221E17;
+  --color-bramble-bg-card2:     #221E17;
+  --color-bramble-bg-input:     #17140F;
+  --color-bramble-border:       #332C22;
+  --color-bramble-text:         #EDE9E2;
+  --color-bramble-muted:        #A39C90;
+  --color-bramble-primary:      #E1AD66;
+  --color-bramble-primary-dark: #C28D41;
   --color-bramble-danger:       #E0645C;
+}
+
+body {
+  font-family: var(--font-body);
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 /* Theme toggle: highlight the active segment. */

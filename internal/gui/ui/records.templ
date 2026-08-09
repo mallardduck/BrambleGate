@@ -18,7 +18,7 @@ type RecordsData struct {
 
 templ Records(data RecordsData) {
 	<h1 class="text-lg font-semibold mb-4">Records</h1>
-	<div class="rounded border border-bramble-border bg-bramble-bg-card overflow-x-auto">
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto">
 		<table class="w-full text-sm">
 			<thead>
 				<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
@@ -75,8 +75,9 @@ templ recordRow(r model.Record) {
 				hx-get={ RecordPath(r.Name, string(r.Type)) + "/edit" }
 				hx-target="#content"
 				hx-swap="innerHTML"
-				class="text-bramble-primary hover:underline text-xs mr-3"
+				class="inline-flex items-center gap-1 text-bramble-primary hover:underline text-xs mr-3"
 			>
+				@iconPencil("w-3 h-3")
 				Edit
 			</a>
 			<button
@@ -85,8 +86,9 @@ templ recordRow(r model.Record) {
 				hx-swap="innerHTML"
 				hx-confirm={ fmt.Sprintf("Delete %s record %s?", r.Type, r.Name) }
 				type="button"
-				class="text-bramble-danger hover:underline text-xs"
+				class="inline-flex items-center gap-1 text-bramble-danger hover:underline text-xs"
 			>
+				@iconTrash("w-3 h-3")
 				Delete
 			</button>
 		</td>
@@ -136,7 +138,7 @@ templ recordForm(data RecordsData) {
 		}
 		hx-target="#content"
 		hx-swap="innerHTML"
-		class="mt-6 rounded border border-bramble-border bg-bramble-bg-card p-4"
+		class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4"
 	>
 		<h2 class="text-sm font-semibold mb-3">
 			if data.Editing != nil {
@@ -152,11 +154,11 @@ templ recordForm(data RecordsData) {
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				<span class="text-bramble-muted text-xs">Type</span>
-				<select name="type" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
-					@typeOption("A", rtype)
-					@typeOption("AAAA", rtype)
-					@typeOption("CNAME", rtype)
-				</select>
+				<div class="flex rounded border border-bramble-border overflow-hidden">
+					@segOption("type", "A", "A", rtype == "A")
+					@segOption("type", "AAAA", "AAAA", rtype == "AAAA")
+					@segOption("type", "CNAME", "CNAME", rtype == "CNAME")
+				</div>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				<span class="text-bramble-muted text-xs">Default value</span>
@@ -182,7 +184,7 @@ templ recordForm(data RecordsData) {
 		}
 
 		<div class="mt-4 flex gap-2">
-			<button type="submit" class="px-3 py-1.5 rounded bg-bramble-primary text-white text-sm font-medium hover:bg-bramble-primary-dark">
+			<button type="submit" class="px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-sm font-medium hover:bg-bramble-primary/10">
 				if data.Editing != nil {
 					Save changes
 				} else {
@@ -196,14 +198,6 @@ templ recordForm(data RecordsData) {
 			}
 		</div>
 	</form>
-}
-
-templ typeOption(value, selected string) {
-	if value == selected {
-		<option value={ value } selected>{ value }</option>
-	} else {
-		<option value={ value }>{ value }</option>
-	}
 }
 
 func findOverride(overrides []model.VLANOverride, vlan string) model.VLANOverride {

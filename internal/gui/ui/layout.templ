@@ -27,14 +27,31 @@ templ Base(title string, active string) {
 			// clear it; toasts arrive via hx-swap-oob from any handler/page (see
 			// toast.templ) and are self-dismissing (see static/js/toast.js).
 			<div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite"></div>
+			// A single reusable confirm dialog: static/js/confirm.js intercepts
+			// htmx's htmx:confirm event (fired for every hx-confirm="...") and
+			// shows this instead of the native browser confirm() — no change
+			// needed to any hx-confirm attribute elsewhere.
+			<div id="confirm-dialog" class="hidden fixed inset-0 z-50 grid place-items-center p-4 bg-black/40">
+				<div class="w-full max-w-sm rounded border border-bramble-border bg-bramble-bg-card2 shadow-lg p-4">
+					<div class="flex items-start gap-3">
+						@iconAlertTriangle("w-5 h-5 shrink-0 text-bramble-danger mt-0.5")
+						<p id="confirm-dialog-message" class="text-sm"></p>
+					</div>
+					<div class="mt-4 flex justify-end gap-2">
+						<button type="button" data-confirm-cancel class="px-3 py-1.5 rounded border border-bramble-border text-sm">Cancel</button>
+						<button type="button" data-confirm-ok class="px-3 py-1.5 rounded border border-bramble-danger text-bramble-danger text-sm font-medium hover:bg-bramble-danger/10">Confirm</button>
+					</div>
+				</div>
+			</div>
+			<script src="/static/js/confirm.js"></script>
 		</body>
 	</html>
 }
 
 templ Topbar(active string) {
-	<header class="border-b border-bramble-border bg-bramble-bg-card px-6 py-3 flex items-center justify-between gap-6">
+	<header class="border-b border-bramble-border px-6 py-3 flex items-center justify-between gap-6">
 		<div class="flex items-center gap-6">
-			<span class="font-bold text-bramble-primary tracking-wide">BrambleGate</span>
+			<span class="font-heading font-semibold text-lg text-bramble-primary tracking-wide">BrambleGate</span>
 			<nav class="flex items-center gap-1">
 				@navLink(PathDashboard, "Dashboard", active == PathDashboard)
 				@navLink(PathRecords, "Records", active == PathRecords)
@@ -48,11 +65,11 @@ templ Topbar(active string) {
 
 templ navLink(href string, label string, active bool) {
 	if active {
-		<a href={ templ.SafeURL(href) } class="px-3 py-1.5 rounded text-sm font-medium text-bramble-primary bg-bramble-bg-card2">
+		<a href={ templ.SafeURL(href) } class="px-3 py-1.5 rounded text-sm font-medium text-bramble-primary border border-bramble-primary">
 			{ label }
 		</a>
 	} else {
-		<a href={ templ.SafeURL(href) } class="px-3 py-1.5 rounded text-sm text-bramble-text hover:bg-bramble-bg-card2 hover:text-bramble-primary transition-colors">
+		<a href={ templ.SafeURL(href) } class="px-3 py-1.5 rounded text-sm text-bramble-text border border-transparent hover:text-bramble-primary transition-colors">
 			{ label }
 		</a>
 	}
@@ -60,10 +77,24 @@ templ navLink(href string, label string, active bool) {
 
 templ ThemeToggle() {
 	<div class="flex items-center rounded border border-bramble-border overflow-hidden text-xs">
-		<button data-theme-btn="light" aria-pressed="false" class="px-2 py-1" type="button">Light</button>
-		<button data-theme-btn="dark" aria-pressed="false" class="px-2 py-1" type="button">Dark</button>
-		<button data-theme-btn="system" aria-pressed="false" class="px-2 py-1" type="button">Auto</button>
+		@themeBtn("light", "Light")
+		@themeBtn("dark", "Dark")
+		@themeBtn("system", "Auto")
 	</div>
+}
+
+templ themeBtn(theme, label string) {
+	<button data-theme-btn={ theme } aria-pressed="false" class="flex items-center gap-1 px-2 py-1 border-l border-bramble-border first:border-l-0" type="button">
+		switch theme {
+			case "light":
+				@iconSun("w-3.5 h-3.5")
+			case "dark":
+				@iconMoon("w-3.5 h-3.5")
+			default:
+				@iconMonitor("w-3.5 h-3.5")
+		}
+		{ label }
+	</button>
 }
 
 templ PageFooter() {

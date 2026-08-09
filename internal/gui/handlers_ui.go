@@ -379,7 +379,11 @@ func (h *handlers) mdnsPromote(w http.ResponseWriter, r *http.Request) {
 
 // mdnsGridFragment serves the auto-refresh poll: just the card grid's
 // children, not the whole page, so the swap doesn't disturb the heading,
-// copy, or scroll position (see ui.MDNSGrid doc comment).
+// copy, or scroll position (see ui.MDNSGrid doc comment). It also backs the
+// search box and status filter (see mdns.templ's #mdns-filters form), which
+// htmx re-submits here via hx-include on every poll, keystroke, and filter
+// change — filtering happens server-side rather than duplicating this list
+// client-side in JS.
 func (h *handlers) mdnsGridFragment(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.Settings()
 	if err != nil {
@@ -392,8 +396,42 @@ func (h *handlers) mdnsGridFragment(w http.ResponseWriter, r *http.Request) {
 			entries = e
 		}
 	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	status := r.URL.Query().Get("status")
+	filtered := q != "" || status == "served" || status == "unserved"
+	entries = filterMDNSEntries(entries, q, status)
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = ui.MDNSGrid(entries).Render(r.Context(), w)
+	_ = ui.MDNSGrid(entries, filtered).Render(r.Context(), w)
+}
+
+// filterMDNSEntries applies the search box (matched case-insensitively
+// against name, host, and service) and the status filter (all/served/
+// unserved, where "served" means published or promoted) from the mDNS
+// page's filter form.
+func filterMDNSEntries(entries []mdnsbridge.Entry, q, status string) []mdnsbridge.Entry {
+	if q == "" && status != "served" && status != "unserved" {
+		return entries
+	}
+	q = strings.ToLower(q)
+	out := entries[:0:0]
+	for _, e := range entries {
+		if q != "" {
+			hay := strings.ToLower(e.Name + " " + e.Host + " " + e.Service)
+			if !strings.Contains(hay, q) {
+				continue
+			}
+		}
+		served := e.Published || e.Promoted
+		if status == "served" && !served {
+			continue
+		}
+		if status == "unserved" && served {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func (h *handlers) renderMDNS(w http.ResponseWriter, r *http.Request) {

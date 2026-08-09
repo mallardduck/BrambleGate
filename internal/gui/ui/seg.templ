@@ -1,0 +1,13 @@
+package ui
+
+// segOption is one option of a segmented radio control — a row of
+// mutually-exclusive choices styled as a single bordered strip (used for
+// record type, upstream protocol, and the mDNS status filter) rather than a
+// <select>. Plain radio inputs under the hood, so it submits like any other
+// form field and needs no JS.
+templ segOption(name, value, label string, checked bool) {
+	<label class="flex items-center px-3 py-1.5 text-xs cursor-pointer border-l border-bramble-border first:border-l-0 has-[:checked]:text-bramble-primary has-[:checked]:bg-bramble-primary/10">
+		<input type="radio" name={ name } value={ value } checked?={ checked } class="sr-only"/>
+		{ label }
+	</label>
+}
