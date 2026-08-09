@@ -67,7 +67,6 @@ func NewUDPTransport(ifaceNames []string) (Transport, error) {
 	_ = pc6.SetMulticastHopLimit(255)
 
 	for _, ifi := range ifaces {
-		ifi := ifi
 		// A given interface may only support one address family (e.g.
 		// IPv6-only, or a v4-only Docker bridge) — that's not fatal, just
 		// means this interface won't carry that family's traffic.
@@ -95,7 +94,6 @@ func (t *udpTransport) SendQuery(ifaceName string, msg *dns.Msg) error {
 		if ifaceName != "" && ifi.Name != ifaceName {
 			continue
 		}
-		ifi := ifi
 		if err := t.pc4.SetMulticastInterface(&ifi); err == nil {
 			_, err := t.pc4.WriteTo(packed, nil, addrIPv4)
 			report(err)
