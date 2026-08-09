@@ -76,3 +76,39 @@ func TestEmptyDomainYieldsNoStamp(t *testing.T) {
 		t.Fatalf("DoT with no domain = %q, want empty", s)
 	}
 }
+
+func TestDoHURL(t *testing.T) {
+	if got, want := DoHURL("dns.example.com", 443), "https://dns.example.com/dns-query"; got != want {
+		t.Fatalf("DoHURL default port = %q, want %q", got, want)
+	}
+	if got, want := DoHURL("dns.example.com", 8443), "https://dns.example.com:8443/dns-query"; got != want {
+		t.Fatalf("DoHURL non-default port = %q, want %q", got, want)
+	}
+	if s := DoHURL("", 443); s != "" {
+		t.Fatalf("DoHURL with no domain = %q, want empty", s)
+	}
+}
+
+func TestDoTURL(t *testing.T) {
+	if got, want := DoTURL("dns.example.com", 853), "tls://dns.example.com"; got != want {
+		t.Fatalf("DoTURL default port = %q, want %q", got, want)
+	}
+	if got, want := DoTURL("dns.example.com", 8853), "tls://dns.example.com:8853"; got != want {
+		t.Fatalf("DoTURL non-default port = %q, want %q", got, want)
+	}
+	if s := DoTURL("", 853); s != "" {
+		t.Fatalf("DoTURL with no domain = %q, want empty", s)
+	}
+}
+
+func TestDoQURL(t *testing.T) {
+	if got, want := DoQURL("dns.example.com", 853), "quic://dns.example.com"; got != want {
+		t.Fatalf("DoQURL default port = %q, want %q", got, want)
+	}
+	if got, want := DoQURL("dns.example.com", 8853), "quic://dns.example.com:8853"; got != want {
+		t.Fatalf("DoQURL non-default port = %q, want %q", got, want)
+	}
+	if s := DoQURL("", 853); s != "" {
+		t.Fatalf("DoQURL with no domain = %q, want empty", s)
+	}
+}

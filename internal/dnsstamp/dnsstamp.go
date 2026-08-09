@@ -47,6 +47,34 @@ func DoT(domain string, port int) string {
 	return stamp.String()
 }
 
+// DoHURL returns the plain https:// query URL for a DoH listener at
+// domain:port ("" if domain is empty) — for clients/configs that want a
+// human-readable URL instead of an sdns:// stamp.
+func DoHURL(domain string, port int) string {
+	if domain == "" {
+		return ""
+	}
+	return "https://" + hostWithPort(domain, port, 443) + "/dns-query"
+}
+
+// DoTURL returns the plain tls:// query URL for a DoT listener at
+// domain:port ("" if domain is empty).
+func DoTURL(domain string, port int) string {
+	if domain == "" {
+		return ""
+	}
+	return "tls://" + hostWithPort(domain, port, 853)
+}
+
+// DoQURL returns the plain quic:// query URL for a DoQ listener at
+// domain:port ("" if domain is empty).
+func DoQURL(domain string, port int) string {
+	if domain == "" {
+		return ""
+	}
+	return "quic://" + hostWithPort(domain, port, 853)
+}
+
 // hostWithPort appends :port only when it differs from the protocol default
 // — go-dnsstamps strips a redundant default-port suffix itself, but writing
 // it unconditionally would make every stamp needlessly longer.

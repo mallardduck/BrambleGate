@@ -74,6 +74,7 @@ templ Dashboard(data DashboardData) {
 	@acmeStatusCard(data.Settings, data.Cert)
 	@acmeSelfIPCard(data.Settings, data.ACMESelfRecords)
 	@dnsStampCard(data.Settings)
+	@queryURLCard(data.Settings)
 }
 
 // dnsStampCard shows copy-pasteable DNS Stamps (sdns://…, dnscrypt-proxy's
@@ -91,6 +92,30 @@ templ dnsStampCard(settings model.Settings) {
 				}
 				if settings.Listeners.DoT.Enabled {
 					@dnsStampRow("DoT", dnsstamp.DoT(settings.ACME.Domain, settings.Listeners.DoT.Port))
+				}
+			</div>
+		</div>
+	}
+}
+
+// queryURLCard shows the plain scheme://host:port query URL for each enabled
+// encrypted listener — for clients/configs that want a human-readable URL
+// instead of the sdns:// stamp above. Pure function of settings, same
+// pattern as dnsStampCard, but also covers DoQ (which has no DNS Stamp
+// proto type).
+templ queryURLCard(settings model.Settings) {
+	if settings.ACME.Enabled && settings.ACME.Domain != "" && settings.EncryptedListenerEnabled() {
+		<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3">Default Query URLs</h2>
+			<div class="flex flex-col gap-3">
+				if settings.Listeners.DoH.Enabled {
+					@dnsStampRow("DoH", dnsstamp.DoHURL(settings.ACME.Domain, settings.Listeners.DoH.Port))
+				}
+				if settings.Listeners.DoT.Enabled {
+					@dnsStampRow("DoT", dnsstamp.DoTURL(settings.ACME.Domain, settings.Listeners.DoT.Port))
+				}
+				if settings.Listeners.DoQ.Enabled {
+					@dnsStampRow("DoQ", dnsstamp.DoQURL(settings.ACME.Domain, settings.Listeners.DoQ.Port))
 				}
 			</div>
 		</div>
