@@ -158,7 +158,16 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	// (with the self-signed bootstrap cert) — a provider/connectivity problem is
 	// logged and retried, never fatal. A misconfigured provider disables ACME but
 	// leaves the server running on the self-signed cert.
-	if settings.ACME.Enabled && settings.EncryptedListenerEnabled() {
+	//
+	// Deliberately not gated on an encrypted listener being on: issuance can be
+	// verified (e.g. against staging) before flipping dot/doh/doq on, so the cert
+	// is ready and trusted by the time a listener needs it.
+	if !settings.ACME.Enabled {
+		log.Debug("acme: disabled, serving with the self-signed certificate")
+	} else {
+		if !settings.EncryptedListenerEnabled() {
+			log.Info("acme: enabled but no dot/doh/doq listener is on yet — issuing/renewing in the background so a cert is ready once one is enabled")
+		}
 		mgr, err := acme.NewManager(acmeConfig(configDir, settings), reloadFn(st, eng, opts), log)
 		if err != nil {
 			log.Error("acme disabled (config error) — serving with the self-signed certificate", "err", err)
