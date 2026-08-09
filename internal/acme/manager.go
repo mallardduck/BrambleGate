@@ -50,6 +50,15 @@ func newManager(cfg Config, issuer Issuer, reload func() error, log *slog.Logger
 func (m *Manager) certFile() string { return filepath.Join(m.cfg.ConfigDir, "certs", "cert.pem") }
 func (m *Manager) keyFile() string  { return filepath.Join(m.cfg.ConfigDir, "certs", "key.pem") }
 
+// caFile records which ACME directory URL issued the on-disk cert — the only
+// way to tell a staging cert from a production one after the fact (the cert
+// itself doesn't reliably self-identify this). Written alongside cert.pem/
+// key.pem on every issuance, read back by needsIssue so flipping
+// acme.production (or ca_directory_url) takes effect on the next reconcile
+// instead of silently continuing to serve the old CA's cert until it happens
+// to hit its renewal window.
+func (m *Manager) caFile() string { return filepath.Join(m.cfg.ConfigDir, "certs", "issuer_ca.txt") }
+
 func (m *Manager) renewBefore() time.Duration {
 	d := m.cfg.RenewBeforeDays
 	if d <= 0 {
@@ -127,6 +136,9 @@ func (m *Manager) needsIssue() (bool, string) {
 	if !coversDomain(cert, m.cfg.Domain) {
 		return true, "certificate does not cover the configured domain"
 	}
+	if raw, err := os.ReadFile(m.caFile()); err != nil || string(raw) != caDirURL(m.cfg) {
+		return true, "acme CA environment (production/ca_directory_url) changed since this certificate was issued"
+	}
 	if remaining := cert.NotAfter.Sub(m.now()); remaining < m.renewBefore() {
 		return true, fmt.Sprintf("within renewal window (%s left)", remaining.Round(time.Hour))
 	}
@@ -155,7 +167,10 @@ func (m *Manager) writeCertKey(certPEM, keyPEM []byte) error {
 	if err := writeFileAtomic(m.keyFile(), keyPEM, 0o600); err != nil {
 		return err
 	}
-	return writeFileAtomic(m.certFile(), certPEM, 0o644)
+	if err := writeFileAtomic(m.certFile(), certPEM, 0o644); err != nil {
+		return err
+	}
+	return writeFileAtomic(m.caFile(), []byte(caDirURL(m.cfg)), 0o644)
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {

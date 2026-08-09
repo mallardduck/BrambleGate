@@ -109,6 +109,30 @@ func TestNeedsIssue(t *testing.T) {
 	}
 }
 
+func TestNeedsIssueOnCAEnvironmentChange(t *testing.T) {
+	m := testManager(t, &stubIssuer{})
+	realCert, realKey := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
+	writeCert(t, m, realCert, realKey)
+	if need, reason := m.needsIssue(); need {
+		t.Fatalf("freshly-issued cert should not need issuance yet, got: %s", reason)
+	}
+
+	// Flip staging -> production with no new cert on disk: the old (untrusted
+	// staging) cert must not keep being served silently.
+	m.cfg.Production = true
+	if need, reason := m.needsIssue(); !need {
+		t.Fatal("switching to production should require reissuance")
+	} else if reason == "" {
+		t.Fatal("expected a reason")
+	}
+
+	// Reissuing (writeCertKey records the new CA) clears the mismatch.
+	writeCert(t, m, realCert, realKey)
+	if need, reason := m.needsIssue(); need {
+		t.Fatalf("reissuing under the new CA should satisfy the check, got: %s", reason)
+	}
+}
+
 func TestReconcileIssuesWritesAndReloads(t *testing.T) {
 	realCert, realKey := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
 	iss := &stubIssuer{cert: realCert, key: realKey}
