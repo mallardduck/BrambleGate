@@ -1,0 +1,12 @@
+package ui
+
+// tag is a small status pill (used for listener on/off state and mDNS
+// served/promoted/not-served state) — accent-tinted when "on", a quiet
+// neutral otherwise.
+templ tag(label string, accent bool) {
+	if accent {
+		<span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-bramble-primary/10 text-bramble-primary whitespace-nowrap">{ label }</span>
+	} else {
+		<span class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-bramble-bg-card2 text-bramble-muted whitespace-nowrap">{ label }</span>
+	}
+}

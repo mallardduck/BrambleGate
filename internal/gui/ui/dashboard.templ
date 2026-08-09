@@ -44,12 +44,21 @@ templ Dashboard(data DashboardData) {
 	</div>
 	<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 		<h2 class="text-sm font-semibold mb-3">Listeners</h2>
-		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-			@listenerStat("Plain", data.Settings.Listeners.Plain)
-			@listenerStat("DoT", data.Settings.Listeners.DoT)
-			@listenerStat("DoH", data.Settings.Listeners.DoH)
-			@listenerStat("DoQ", data.Settings.Listeners.DoQ)
-		</div>
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
+					<th class="px-3 py-2">Protocol</th>
+					<th class="px-3 py-2">Status</th>
+					<th class="px-3 py-2 text-right">Port</th>
+				</tr>
+			</thead>
+			<tbody>
+				@listenerRow("Plain", data.Settings.Listeners.Plain)
+				@listenerRow("DoT", data.Settings.Listeners.DoT)
+				@listenerRow("DoH", data.Settings.Listeners.DoH)
+				@listenerRow("DoQ", data.Settings.Listeners.DoQ)
+			</tbody>
+		</table>
 	</div>
 }
 
@@ -60,13 +69,22 @@ templ statCard(label, value, href string) {
 	</a>
 }
 
-templ listenerStat(label string, l model.Listener) {
-	<div class="rounded bg-bramble-bg-card2 px-3 py-2">
-		<p class="text-xs text-bramble-muted">{ label }</p>
-		if l.Enabled {
-			<p class="font-medium">port { fmt.Sprintf("%d", l.Port) }</p>
-		} else {
-			<p class="text-bramble-muted">off</p>
-		}
-	</div>
+templ listenerRow(label string, l model.Listener) {
+	<tr class="border-b border-bramble-border last:border-0">
+		<td class="px-3 py-2">{ label }</td>
+		<td class="px-3 py-2">
+			if l.Enabled {
+				@tag("On", true)
+			} else {
+				@tag("Off", false)
+			}
+		</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">
+			if l.Enabled {
+				{ fmt.Sprintf("%d", l.Port) }
+			} else {
+				—
+			}
+		</td>
+	</tr>
 }

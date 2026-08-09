@@ -396,13 +396,14 @@ func (h *handlers) mdnsGridFragment(w http.ResponseWriter, r *http.Request) {
 			entries = e
 		}
 	}
+	total := len(entries)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	status := r.URL.Query().Get("status")
 	filtered := q != "" || status == "served" || status == "unserved"
 	entries = filterMDNSEntries(entries, q, status)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = ui.MDNSGrid(entries, filtered).Render(r.Context(), w)
+	_ = ui.MDNSGrid(entries, filtered, total).Render(r.Context(), w)
 }
 
 // filterMDNSEntries applies the search box (matched case-insensitively
