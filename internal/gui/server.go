@@ -48,6 +48,7 @@ func NewServer(svc *Service, addr string) *http.Server {
 	r.Post("/settings/vlans", h.vlanAdd)
 	r.Delete("/settings/vlans/{name}", h.vlanRemove)
 	r.Get("/mdns", h.mdnsPage)
+	r.Get("/mdns/grid", h.mdnsGridFragment)
 	r.Post("/mdns/{name}/publish", h.mdnsPublish)
 	r.Post("/mdns/{name}/unpublish", h.mdnsUnpublish)
 	r.Post("/mdns/{name}/promote", h.mdnsPromote)

@@ -13,14 +13,7 @@ type MDNSData struct {
 }
 
 templ MDNS(data MDNSData) {
-	<div
-		if data.Enabled {
-			hx-get={ PathMDNS }
-			hx-trigger="every 5s"
-			hx-target="#content"
-			hx-swap="innerHTML"
-		}
-	>
+	<div>
 		<h1 class="text-lg font-semibold mb-4">Discovered devices (mDNS)</h1>
 		if !data.Enabled {
 			<p class="text-bramble-muted text-sm">
@@ -31,54 +24,64 @@ templ MDNS(data MDNSData) {
 			<p class="text-xs text-bramble-muted mb-3">
 				Names seen on the network, mapped into home.arpa. Publish serves it live; Promote writes a permanent record.
 			</p>
-			<div class="rounded border border-bramble-border bg-bramble-bg-card overflow-x-auto">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
-							<th class="px-3 py-2">Name</th>
-							<th class="px-3 py-2">Host</th>
-							<th class="px-3 py-2">Service</th>
-							<th class="px-3 py-2">Addresses</th>
-							<th class="px-3 py-2">Served</th>
-							<th class="px-3 py-2"></th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, e := range data.Entries {
-							@mdnsRow(e)
-						}
-						if len(data.Entries) == 0 {
-							<tr>
-								<td colspan="6" class="px-3 py-4 text-center text-bramble-muted">Nothing discovered yet.</td>
-							</tr>
-						}
-					</tbody>
-				</table>
+			<div
+				id="mdns-grid"
+				hx-get={ PathMDNS + "/grid" }
+				hx-trigger="every 10s"
+				hx-target="#mdns-grid"
+				hx-swap="innerHTML"
+				class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
+			>
+				@MDNSGrid(data.Entries)
 			</div>
 		}
 	</div>
 }
 
-templ mdnsRow(e mdnsbridge.Entry) {
-	<tr class="border-b border-bramble-border last:border-0">
-		<td class="px-3 py-2 font-mono">{ e.Name }</td>
-		<td class="px-3 py-2 font-mono">{ e.Host }</td>
-		<td class="px-3 py-2">{ e.Service }</td>
-		<td class="px-3 py-2 font-mono">{ strings.Join(append(append([]string{}, e.IPv4...), e.IPv6...), ", ") }</td>
-		<td class="px-3 py-2">
+// MDNSGrid renders just the card grid's children, so the 10s auto-refresh can
+// fetch and swap this alone (see PathMDNS+"/grid" in internal/gui). Swapping
+// only this node — rather than the whole page's #content — keeps the outer
+// heading/copy and the page's scroll position stable across refreshes.
+templ MDNSGrid(entries []mdnsbridge.Entry) {
+	for _, e := range entries {
+		@mdnsCard(e)
+	}
+	if len(entries) == 0 {
+		<p class="text-bramble-muted text-sm col-span-full">Nothing discovered yet.</p>
+	}
+}
+
+templ mdnsCard(e mdnsbridge.Entry) {
+	<div class="rounded border border-bramble-border bg-bramble-bg-card p-4 flex flex-col gap-2">
+		<div class="flex items-start justify-between gap-2">
+			<p class="font-mono text-sm font-medium break-all">{ e.Name }</p>
 			if e.Published {
-				✓
+				<span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-bramble-primary/10 text-bramble-primary whitespace-nowrap">Served</span>
 			} else {
-				—
+				<span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-bramble-bg-card2 text-bramble-muted whitespace-nowrap">Not served</span>
 			}
-		</td>
-		<td class="px-3 py-2 text-right whitespace-nowrap">
+		</div>
+		<dl class="text-xs space-y-1">
+			<div class="flex gap-1">
+				<dt class="text-bramble-muted shrink-0">Host:</dt>
+				<dd class="font-mono break-all">{ e.Host }</dd>
+			</div>
+			<div class="flex gap-1">
+				<dt class="text-bramble-muted shrink-0">Service:</dt>
+				<dd class="break-all">{ e.Service }</dd>
+			</div>
+			<div class="flex gap-1">
+				<dt class="text-bramble-muted shrink-0">Addrs:</dt>
+				<dd class="font-mono break-all">{ strings.Join(append(append([]string{}, e.IPv4...), e.IPv6...), ", ") }</dd>
+			</div>
+		</dl>
+		<div class="mt-auto pt-2 border-t border-bramble-border flex gap-3">
 			<button
 				hx-post={ MDNSActionPath(e.Name, publishAction(e.Published)) }
 				hx-target="#content"
 				hx-swap="innerHTML"
 				type="button"
-				class="text-bramble-primary hover:underline text-xs mr-3"
+				class="text-bramble-primary hover:underline text-xs"
 			>
 				if e.Published {
 					Unpublish
@@ -95,8 +98,8 @@ templ mdnsRow(e mdnsbridge.Entry) {
 			>
 				Promote
 			</button>
-		</td>
-	</tr>
+		</div>
+	</div>
 }
 
 func publishAction(published bool) string {

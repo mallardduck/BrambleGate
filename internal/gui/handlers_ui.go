@@ -10,6 +10,7 @@ import (
 
 	"github.com/mallardduck/BrambleGate/internal/gui/ui"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 )
 
 // render writes page as the full document (wrapped in ui.Base) for a normal
@@ -341,6 +342,25 @@ func (h *handlers) mdnsUnpublish(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) mdnsPromote(w http.ResponseWriter, r *http.Request) {
 	_ = h.svc.PromoteMDNS(chi.URLParam(r, "name"))
 	h.renderMDNS(w, r)
+}
+
+// mdnsGridFragment serves the auto-refresh poll: just the card grid's
+// children, not the whole page, so the swap doesn't disturb the heading,
+// copy, or scroll position (see ui.MDNSGrid doc comment).
+func (h *handlers) mdnsGridFragment(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.svc.Settings()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var entries []mdnsbridge.Entry
+	if settings.MDNS.Enabled {
+		if e, err := h.svc.MDNSCandidates(); err == nil {
+			entries = e
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = ui.MDNSGrid(entries).Render(r.Context(), w)
 }
 
 func (h *handlers) renderMDNS(w http.ResponseWriter, r *http.Request) {
