@@ -9,6 +9,29 @@ type Settings struct {
 	Listeners   Listeners      `yaml:"listeners" json:"listeners"`
 	ACME        ACME           `yaml:"acme" json:"acme"`
 	MDNS        MDNS           `yaml:"mdns" json:"mdns"`
+	Cache       CacheTuning    `yaml:"cache" json:"cache"`
+}
+
+// CacheTuning controls the cache plugin's resilience/efficiency knobs
+// (dev-docs/plugin-audit-inuse.md). Both default ON with a fixed, sane value —
+// unlike CoreDNS's own stock defaults (serve_stale off, prefetch off) — since a
+// homelab appliance benefits out of the box from riding out a brief upstream
+// blip and from not re-fetching popular names right before they expire. Each is
+// a plain "disabled" bool rather than a tunable duration/amount: the rendered
+// values are the plugins' own documented recommended defaults, and there's no
+// BrambleGate use case that needs to move them — only to turn one off if it
+// ever causes surprising behavior for a given upstream.
+//
+// Note: cache is entirely omitted (regardless of these settings) whenever
+// upstream_dns.ecs_enabled is on — see configgen.writeCache.
+type CacheTuning struct {
+	// ServeStaleDisabled turns off `serve_stale` (rendered as `serve_stale 1h
+	// immediate` when enabled — CoreDNS's own default duration/refresh mode,
+	// just switched on rather than left off).
+	ServeStaleDisabled bool `yaml:"serve_stale_disabled,omitempty" json:"serve_stale_disabled,omitempty"`
+	// PrefetchDisabled turns off `prefetch` (rendered as `prefetch 10 1m 10%`
+	// when enabled — the plugin's own documented defaults).
+	PrefetchDisabled bool `yaml:"prefetch_disabled,omitempty" json:"prefetch_disabled,omitempty"`
 }
 
 // VLAN mirrors one of the user's real network VLANs (BrambleGate is not the

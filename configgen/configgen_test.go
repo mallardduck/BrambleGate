@@ -517,7 +517,7 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(string(out.Corefile), "rewrite edns0 subnet") {
 		t.Fatalf("rewrite edns0 subnet should not be rendered when ecs is disabled:\n%s", out.Corefile)
 	}
-	if strings.Count(string(out.Corefile), "\tcache\n") != 2 { // one per server block (plain + dot)
+	if strings.Count(string(out.Corefile), "cache {") != 2 { // one per server block (plain + dot)
 		t.Fatalf("expected cache in both server blocks when ecs is disabled:\n%s", out.Corefile)
 	}
 
@@ -531,8 +531,66 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 	if strings.Count(cf, "rewrite edns0 subnet set 32 128") != 2 { // one per server block (plain + dot)
 		t.Fatalf("expected rewrite edns0 subnet set 32 128 in both server blocks:\n%s", cf)
 	}
-	if strings.Contains(cf, "\tcache\n") {
+	if strings.Contains(cf, "cache") {
 		t.Fatalf("cache should not be rendered when ecs is enabled — it isn't keyed on client subnet and would leak one client's ECS-scoped answer to another:\n%s", cf)
+	}
+}
+
+func TestRenderCacheDefaultsToServeStaleAndPrefetch(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{"cache {", "prefetch 10 1m 10%", "serve_stale 1h immediate"} {
+		if !strings.Contains(cf, want) {
+			t.Errorf("expected default cache tuning to include %q:\n%s", want, cf)
+		}
+	}
+	if strings.Contains(cf, "\tcache\n") {
+		t.Errorf("cache should render as a tuned sub-block by default, not bare:\n%s", cf)
+	}
+}
+
+func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
+	noPrefetch := baseSettings()
+	noPrefetch.Cache.PrefetchDisabled = true
+	out, err := Render(noPrefetch, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Contains(cf, "prefetch") {
+		t.Errorf("prefetch should not be rendered when disabled:\n%s", cf)
+	}
+	if !strings.Contains(cf, "serve_stale 1h immediate") {
+		t.Errorf("serve_stale should still render when only prefetch is disabled:\n%s", cf)
+	}
+
+	noServeStale := baseSettings()
+	noServeStale.Cache.ServeStaleDisabled = true
+	out, err = Render(noServeStale, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf = string(out.Corefile)
+	if strings.Contains(cf, "serve_stale") {
+		t.Errorf("serve_stale should not be rendered when disabled:\n%s", cf)
+	}
+	if !strings.Contains(cf, "prefetch 10 1m 10%") {
+		t.Errorf("prefetch should still render when only serve_stale is disabled:\n%s", cf)
+	}
+
+	bothOff := baseSettings()
+	bothOff.Cache.ServeStaleDisabled = true
+	bothOff.Cache.PrefetchDisabled = true
+	out, err = Render(bothOff, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf = string(out.Corefile)
+	if strings.Count(cf, "\tcache\n") != 2 { // one per server block (plain + dot)
+		t.Errorf("expected a bare cache directive in both server blocks when both knobs are disabled:\n%s", cf)
 	}
 }
 
