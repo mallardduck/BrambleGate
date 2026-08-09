@@ -427,6 +427,28 @@ func TestRenderZoneDataJSON(t *testing.T) {
 	}
 }
 
+func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
+	off := baseSettings() // ecs disabled by default, upstream already private
+	out, err := Render(off, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(string(out.Corefile), "rewrite edns0 subnet") {
+		t.Fatalf("rewrite edns0 subnet should not be rendered when ecs is disabled:\n%s", out.Corefile)
+	}
+
+	on := baseSettings()
+	on.UpstreamDNS.ECS = true // baseSettings upstream (192.168.10.5:53) is private
+	out, err = Render(on, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Count(cf, "rewrite edns0 subnet set 32 128") != 2 { // one per server block (plain + dot)
+		t.Fatalf("expected rewrite edns0 subnet set 32 128 in both server blocks:\n%s", cf)
+	}
+}
+
 func TestValidateRejects(t *testing.T) {
 	cases := map[string]func() (model.Settings, model.RecordSet){
 		"overlapping vlan cidrs": func() (model.Settings, model.RecordSet) {
@@ -445,6 +467,18 @@ func TestValidateRejects(t *testing.T) {
 		"bad upstream": func() (model.Settings, model.RecordSet) {
 			s := baseSettings()
 			s.UpstreamDNS.Address = "nope"
+			return s, model.RecordSet{}
+		},
+		"ecs enabled with public upstream": func() (model.Settings, model.RecordSet) {
+			s := baseSettings()
+			s.UpstreamDNS.Address = "1.1.1.1:53"
+			s.UpstreamDNS.ECS = true
+			return s, model.RecordSet{}
+		},
+		"ecs enabled with hostname upstream": func() (model.Settings, model.RecordSet) {
+			s := baseSettings()
+			s.UpstreamDNS.Address = "resolver.example.com:53"
+			s.UpstreamDNS.ECS = true
 			return s, model.RecordSet{}
 		},
 		"record outside zone": func() (model.Settings, model.RecordSet) {

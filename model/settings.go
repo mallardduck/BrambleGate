@@ -26,6 +26,12 @@ type VLAN struct {
 type UpstreamTarget struct {
 	Address  string `yaml:"address" json:"address"`   // host:port
 	Protocol string `yaml:"protocol" json:"protocol"` // plain | dot | doh
+	// ECS enables EDNS0 Client Subnet: the querying client's real source IP is
+	// attached to the forwarded query so Address can apply per-client policy
+	// (e.g. PiHole/AdGuard/Technitium). Only safe with a private/local upstream
+	// you trust — Validate rejects this combined with a public/hostname address,
+	// since it would otherwise leak client IPs off-network.
+	ECS bool `yaml:"ecs_enabled,omitempty" json:"ecs_enabled,omitempty"`
 }
 
 // Listeners is the set of DNS transports this server terminates.
