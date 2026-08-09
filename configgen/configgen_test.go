@@ -105,7 +105,10 @@ func TestRenderCorefileIncludesACMEDomainAsFallthroughZone(t *testing.T) {
 
 func TestRenderIncludesDDRZoneAndFallthroughIsACMEDomainOnly(t *testing.T) {
 	s := acmeEnabledSettings() // DoT enabled in baseSettings
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
+	}}
+	out, err := Render(s, rs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -186,6 +189,7 @@ func TestRenderDoesNotOverrideExplicitACMERecord(t *testing.T) {
 
 func TestRenderSkipsACMESynthesisWhenNothingDetected(t *testing.T) {
 	s := acmeEnabledSettings()
+	s.Listeners.DoT.Enabled = false // no encrypted listener: DDR doesn't apply, so a missing address is fine
 
 	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"}) // zero ACMESelfIPs
 	if err != nil {
@@ -227,8 +231,11 @@ func TestRenderZoneDataDDRRecords(t *testing.T) {
 	s := acmeEnabledSettings()
 	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
 	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8853}}
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
+	}}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(s, rs, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -306,6 +313,19 @@ func TestRenderNoDDRZoneWhenNoEncryptedListenerEnabled(t *testing.T) {
 	cf := string(out.Corefile)
 	if strings.Contains(cf, "resolver.arpa") {
 		t.Errorf("resolver.arpa should not be served with no encrypted listener enabled:\n%s", cf)
+	}
+}
+
+// A DDR SVCB record whose target has no A/AAAA is worse than useless — it
+// sends clients to an address that will NXDOMAIN, so opportunistic DoT/DoH/DoQ
+// upgrade silently breaks. Render must refuse to produce that config instead
+// of shipping it (regression: this used to succeed when selfip detection
+// found nothing and no explicit record was declared for the ACME domain).
+func TestRenderFailsWhenDDRTargetHasNoAddress(t *testing.T) {
+	s := acmeEnabledSettings() // DoT enabled, no explicit record, zero ACMESelfIPs
+	_, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err == nil {
+		t.Fatal("expected an error: DDR is enabled but nothing resolves the target address")
 	}
 }
 

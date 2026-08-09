@@ -114,8 +114,27 @@ func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 	}
 
 	m.Answer = answers
+	m.Extra = lr.ddrGlue(answers, vlan)
 	_ = w.WriteMsg(m)
 	return dns.RcodeSuccess, nil
+}
+
+// ddrGlue returns the target's own A/AAAA records for any DDR SVCB answers in
+// answers, for the response's Additional section — so a client doesn't need a
+// second query to resolve the designated resolver's address (RFC 9462 §4
+// SHOULD). Resolved per the same client VLAN as the SVCB answer itself, since
+// the target's address may also be split-horizon (e.g. the ACME domain).
+func (lr *LocalRecords) ddrGlue(answers []dns.RR, vlan string) []dns.RR {
+	var extra []dns.RR
+	for _, rr := range answers {
+		svcb, ok := rr.(*dns.SVCB)
+		if !ok {
+			continue
+		}
+		extra = append(extra, lr.buildAnswers(svcb.Target, dns.TypeA, vlan)...)
+		extra = append(extra, lr.buildAnswers(svcb.Target, dns.TypeAAAA, vlan)...)
+	}
+	return extra
 }
 
 // matchVLAN returns the name of the first declared VLAN whose subnets contain ip,

@@ -319,6 +319,47 @@ func svcbHasDoHPath(svcb *dns.SVCB, template string) bool {
 	return false
 }
 
+const ddrZoneWithAddressJSON = `{
+  "default_ttl": 300,
+  "zones": ["home.arpa", "dns.example.com", "resolver.arpa"],
+  "vlans": [],
+  "records": [
+    {"name": "dns.example.com", "type": "A", "default": "192.168.10.53", "ttl": 0, "vlan_overrides": []}
+  ],
+  "ddr": [
+    {"priority": 1, "target": "dns.example.com", "params": [
+      {"key": "alpn", "value": "dot"}, {"key": "port", "value": "853"}
+    ]}
+  ]
+}`
+
+// TestDDRAnswerCarriesAddressGlue guards the DDR SVCB response's Additional
+// section: without the target's own address there, an opportunistic client
+// has to issue a second query to resolve it (RFC 9462 §4 SHOULD avoid this).
+func TestDDRAnswerCarriesAddressGlue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "records.json")
+	if err := os.WriteFile(path, []byte(ddrZoneWithAddressJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corefile := "localrecords home.arpa dns.example.com resolver.arpa {\n\tzonedata " + filepath.ToSlash(path) + "\n}"
+	lr, err := parse(caddy.NewTestController("dns", corefile))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeSVCB)
+	if m.Rcode != dns.RcodeSuccess || len(m.Answer) != 1 {
+		t.Fatalf("want 1 SVCB answer, got rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+	if len(m.Extra) != 1 {
+		t.Fatalf("want 1 glue record in Additional, got %+v", m.Extra)
+	}
+	a, ok := m.Extra[0].(*dns.A)
+	if !ok || a.Hdr.Name != "dns.example.com." || a.A.String() != "192.168.10.53" {
+		t.Fatalf("unexpected glue record: %+v", m.Extra[0])
+	}
+}
+
 func TestDDRWrongTypeIsNODATA(t *testing.T) {
 	lr := buildDDR(t)
 	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeA)

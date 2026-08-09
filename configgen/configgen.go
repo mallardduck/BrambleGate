@@ -110,6 +110,31 @@ func PreviewACMESelfRecords(s model.Settings, declared []model.Record, ips selfi
 	return acmeSelfRecords(s, declared, ips)
 }
 
+// hasAddressRecord reports whether records contains an A or AAAA record for
+// name (case/trailing-dot insensitive) that actually answers for at least one
+// client — a plain Default, or a VLANOverride with a value (an nxdomain-only
+// override doesn't count).
+func hasAddressRecord(records []model.Record, name string) bool {
+	normalized := (model.Record{Name: name}).NormalizedName()
+	for _, r := range records {
+		if r.Type != model.TypeA && r.Type != model.TypeAAAA {
+			continue
+		}
+		if r.NormalizedName() != normalized {
+			continue
+		}
+		if r.Default != "" {
+			return true
+		}
+		for _, ov := range r.VLANOverrides {
+			if ov.Value != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // buildFamilyRecord assembles one A or AAAA record from a selfip.Result: the
 // Default is the primary fallback for that family, and each VLAN with a
 // detected address of that family becomes a VLANOverride — so the record
@@ -254,6 +279,11 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 		}
 	}
 	static = append(static, acmeSelfRecords(s, rs.Records, opts.ACMESelfIPs)...)
+
+	ddr := ddrRecords(s)
+	if len(ddr) > 0 && !hasAddressRecord(static, ddr[0].Target) {
+		return Rendered{}, fmt.Errorf("ddr: an encrypted listener is enabled with acme domain %q but no A/AAAA record resolves for it (no VLAN address detected and none declared) — the DDR SVCB record would point at a name that doesn't resolve", ddr[0].Target)
+	}
 
 	zone, err := json.MarshalIndent(zoneData{
 		DefaultTTL: DefaultTTL,
