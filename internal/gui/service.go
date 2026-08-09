@@ -91,6 +91,11 @@ var runMDNSListener = func(ctx context.Context, tbl *mdnsbridge.Table, services,
 // above).
 var detectSelfIPs = selfip.DetectLive
 
+// detectVLANCandidates finds locally-attached networks not yet covered by any
+// declared VLAN, for the Settings page's "detected networks" suggestions.
+// Same never-cached, overridable-for-tests treatment as detectSelfIPs.
+var detectVLANCandidates = selfip.CandidatesLive
+
 // NewService wires the GUI application layer. ctx bounds the lifetime of the
 // mDNS browse goroutine (started/stopped independently of engine reloads as
 // mdns.enabled is toggled); log is used only for that goroutine's own logging.
@@ -462,6 +467,20 @@ func (s *Service) ACMESelfRecords() ([]model.Record, error) {
 		return nil, err
 	}
 	return configgen.PreviewACMESelfRecords(settings, rs.Records, detectSelfIPs(settings.VLANs)), nil
+}
+
+// VLANCandidates returns locally-attached networks not yet covered by any
+// declared VLAN — suggestions for the Settings page's "detected networks"
+// panel. BrambleGate never declares these on its own; the user names and adds
+// them (same POST /settings/vlans path as a manually-entered VLAN).
+func (s *Service) VLANCandidates() ([]selfip.Candidate, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.store.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	return detectVLANCandidates(settings.VLANs), nil
 }
 
 // reload writes the JSON zone data (which the plugin reads at setup) and a

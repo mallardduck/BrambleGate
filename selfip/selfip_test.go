@@ -96,3 +96,70 @@ func TestDetectLiveNeverErrors(t *testing.T) {
 		t.Fatal("PerVLAN should never be nil")
 	}
 }
+
+func TestCandidatesFindsUndeclaredNetworks(t *testing.T) {
+	// Mirrors a real macvlan-per-VLAN report: three attached networks, none
+	// declared yet.
+	cands := Candidates(nil, []net.Addr{
+		addr("192.168.32.164/24"),
+		addr("192.168.31.164/23"), // network is .30.0/23, not .31.0/24
+		addr("192.168.1.164/24"),
+	})
+	if len(cands) != 3 {
+		t.Fatalf("want 3 candidates, got %+v", cands)
+	}
+	byCIDR := map[string]Candidate{}
+	for _, c := range cands {
+		byCIDR[c.CIDR] = c
+	}
+	for _, want := range []string{"192.168.32.0/24", "192.168.30.0/23", "192.168.1.0/24"} {
+		c, ok := byCIDR[want]
+		if !ok {
+			t.Fatalf("missing candidate for %s, got %+v", want, cands)
+		}
+		if c.Suggested == "" {
+			t.Errorf("candidate %s has no suggested name", want)
+		}
+	}
+	if got := byCIDR["192.168.30.0/23"].SampleIP; got != "192.168.31.164" {
+		t.Errorf("sample IP = %q, want 192.168.31.164", got)
+	}
+}
+
+func TestCandidatesExcludesAlreadyDeclaredVLANs(t *testing.T) {
+	existing := []model.VLAN{{Name: "trusted", CIDRs: []string{"192.168.10.0/24"}}}
+	cands := Candidates(existing, []net.Addr{
+		addr("192.168.10.55/24"), // already covered
+		addr("192.168.30.5/24"),  // new
+	})
+	if len(cands) != 1 || cands[0].CIDR != "192.168.30.0/24" {
+		t.Fatalf("want just the undeclared network, got %+v", cands)
+	}
+}
+
+func TestCandidatesDedupesSameNetwork(t *testing.T) {
+	cands := Candidates(nil, []net.Addr{
+		addr("192.168.10.5/24"),
+		addr("192.168.10.6/24"), // same network, second address
+	})
+	if len(cands) != 1 {
+		t.Fatalf("want 1 deduped candidate, got %+v", cands)
+	}
+}
+
+func TestCandidatesExcludesLoopbackAndLinkLocal(t *testing.T) {
+	cands := Candidates(nil, []net.Addr{
+		addr("127.0.0.1/8"),
+		addr("169.254.1.5/16"),
+	})
+	if len(cands) != 0 {
+		t.Fatalf("want no candidates, got %+v", cands)
+	}
+}
+
+func TestCandidatesLiveNeverErrors(t *testing.T) {
+	if cands := CandidatesLive(nil); cands == nil {
+		// nil is a valid "found nothing" result — just confirm it doesn't panic.
+		_ = cands
+	}
+}

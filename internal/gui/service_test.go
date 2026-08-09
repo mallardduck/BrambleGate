@@ -27,6 +27,14 @@ func stubSelfIPs(t *testing.T, res selfip.Result) {
 	t.Cleanup(func() { detectSelfIPs = orig })
 }
 
+// stubVLANCandidates replaces detectVLANCandidates for the duration of a test.
+func stubVLANCandidates(t *testing.T, cands []selfip.Candidate) {
+	t.Helper()
+	orig := detectVLANCandidates
+	detectVLANCandidates = func(existing []model.VLAN) []selfip.Candidate { return cands }
+	t.Cleanup(func() { detectVLANCandidates = orig })
+}
+
 // stubReloader records the last Corefile and can be made to fail.
 type stubReloader struct {
 	calls    int
@@ -548,5 +556,19 @@ func TestACMESelfRecordsReflectsFreshDetectionOnEachSave(t *testing.T) {
 	second, err := svc.ACMESelfRecords()
 	if err != nil || len(second) != 1 || second[0].Default != "192.168.10.99" {
 		t.Fatalf("expected fresh detection on 2nd save, got: %+v (err %v)", second, err)
+	}
+}
+
+func TestVLANCandidates(t *testing.T) {
+	svc, _, _ := newService(t)
+	want := []selfip.Candidate{{CIDR: "192.168.30.0/23", SampleIP: "192.168.31.164", Suggested: "net-192-168-30-0"}}
+	stubVLANCandidates(t, want)
+
+	got, err := svc.VLANCandidates()
+	if err != nil {
+		t.Fatalf("VLANCandidates: %v", err)
+	}
+	if len(got) != 1 || got[0].CIDR != want[0].CIDR {
+		t.Fatalf("unexpected candidates: %+v", got)
 	}
 }

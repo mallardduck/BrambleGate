@@ -289,7 +289,10 @@ func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, formEr
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.SettingsData{Settings: settings}
+	// Non-fatal: the detected-networks panel is a nice-to-have, not core to
+	// the settings page loading.
+	candidates, _ := h.svc.VLANCandidates()
+	data := ui.SettingsData{Settings: settings, VLANCandidates: candidates}
 	renderError(w, r, "Settings", ui.PathSettings, ui.Settings(data), formErr)
 }
 

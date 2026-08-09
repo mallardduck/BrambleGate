@@ -13,6 +13,7 @@ package selfip
 
 import (
 	"net"
+	"strings"
 
 	"github.com/mallardduck/BrambleGate/model"
 )
@@ -92,6 +93,90 @@ func DetectLive(vlans []model.VLAN) Result {
 		return Result{PerVLAN: map[string]VLANAddrs{}}
 	}
 	return Detect(vlans, addrs)
+}
+
+// Candidate is a locally-attached network not yet covered by any declared
+// VLAN — a suggestion for the Settings page to offer as "add this as a VLAN",
+// not something BrambleGate ever declares on its own (it isn't the authority
+// for VLANs — see model.VLAN).
+type Candidate struct {
+	CIDR      string // network address in CIDR form, e.g. "192.168.30.0/23"
+	SampleIP  string // one address seen in that network, for display
+	Suggested string // a generated, editable default name (e.g. "net-192-168-30")
+}
+
+// Candidates finds locally-attached networks (from addrs, in the shape
+// net.InterfaceAddrs returns) that aren't already covered by any of existing's
+// declared VLAN CIDRs — one Candidate per distinct network. Only *net.IPNet
+// entries carry a usable prefix length (the *net.IPAddr shape extractIPs also
+// accepts has no mask, so it can't be turned into a CIDR and is skipped here).
+func Candidates(existing []model.VLAN, addrs []net.Addr) []Candidate {
+	var existingNets []*net.IPNet
+	for _, v := range existing {
+		for _, c := range v.CIDRs {
+			if _, n, err := net.ParseCIDR(c); err == nil {
+				existingNets = append(existingNets, n)
+			}
+		}
+	}
+
+	seen := map[string]bool{}
+	var out []Candidate
+	for _, a := range addrs {
+		ipnet, ok := a.(*net.IPNet)
+		if !ok || ipnet.IP == nil {
+			continue
+		}
+		ip := ipnet.IP
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			continue
+		}
+
+		alreadyDeclared := false
+		for _, n := range existingNets {
+			if n.Contains(ip) {
+				alreadyDeclared = true
+				break
+			}
+		}
+		if alreadyDeclared {
+			continue
+		}
+
+		network := &net.IPNet{IP: ip.Mask(ipnet.Mask), Mask: ipnet.Mask}
+		cidr := network.String()
+		if seen[cidr] {
+			continue
+		}
+		seen[cidr] = true
+		out = append(out, Candidate{
+			CIDR:      cidr,
+			SampleIP:  ip.String(),
+			Suggested: suggestName(network.IP),
+		})
+	}
+	return out
+}
+
+// CandidatesLive calls Candidates against the real local interfaces. Never
+// errors — enumeration failure just yields no candidates.
+func CandidatesLive(existing []model.VLAN) []Candidate {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	return Candidates(existing, addrs)
+}
+
+// suggestName turns a network address into a readable, editable default VLAN
+// name, e.g. 192.168.30.0 -> "net-192-168-30". Purely a starting point for the
+// user to rename — BrambleGate has no opinion on what a network is actually
+// called (mirrors the user's own gear, per model.VLAN's doc comment).
+func suggestName(networkIP net.IP) string {
+	s := networkIP.String()
+	s = strings.ReplaceAll(s, ".", "-")
+	s = strings.ReplaceAll(s, ":", "-")
+	return "net-" + s
 }
 
 // extractIPs pulls usable IPs out of addrs, skipping loopback/link-local/
