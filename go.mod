@@ -82,6 +82,7 @@ require (
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+	github.com/jedisct1/go-dnsstamps v0.0.0-20260518121737-6579dc73e4a2 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/linode/linodego v1.68.0 // indirect

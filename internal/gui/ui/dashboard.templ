@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mallardduck/BrambleGate/internal/acme"
+	"github.com/mallardduck/BrambleGate/internal/dnsstamp"
 	"github.com/mallardduck/BrambleGate/model"
 )
 
@@ -72,6 +73,35 @@ templ Dashboard(data DashboardData) {
 	</div>
 	@acmeStatusCard(data.Settings, data.Cert)
 	@acmeSelfIPCard(data.Settings, data.ACMESelfRecords)
+	@dnsStampCard(data.Settings)
+}
+
+// dnsStampCard shows copy-pasteable DNS Stamps (sdns://…, dnscrypt-proxy's
+// portable server-config format) for each enabled encrypted listener — a
+// convenience for clients that accept a stamp instead of separate
+// hostname/port/path fields. Pure function of settings, computed on render
+// (no detection/state involved, unlike the self-IP/DDR cards above).
+templ dnsStampCard(settings model.Settings) {
+	if settings.ACME.Enabled && settings.ACME.Domain != "" && (settings.Listeners.DoH.Enabled || settings.Listeners.DoT.Enabled) {
+		<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3" title="A portable sdns:// URI some clients (e.g. dnscrypt-proxy) accept instead of separate host/port/path fields">DNS Stamps</h2>
+			<div class="flex flex-col gap-3">
+				if settings.Listeners.DoH.Enabled {
+					@dnsStampRow("DoH", dnsstamp.DoH(settings.ACME.Domain, settings.Listeners.DoH.Port))
+				}
+				if settings.Listeners.DoT.Enabled {
+					@dnsStampRow("DoT", dnsstamp.DoT(settings.ACME.Domain, settings.Listeners.DoT.Port))
+				}
+			</div>
+		</div>
+	}
+}
+
+templ dnsStampRow(label, stamp string) {
+	<label class="flex flex-col gap-1 text-sm">
+		<span class="text-bramble-muted text-xs uppercase tracking-wide">{ label }</span>
+		<input readonly value={ stamp } onclick="this.select()" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input font-mono text-xs"/>
+	</label>
 }
 
 // acmeSelfIPCard shows what BrambleGate would answer locally, right now, for
