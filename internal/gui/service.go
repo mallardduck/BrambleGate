@@ -136,6 +136,7 @@ func (s *Service) StopMDNS() {
 		mdnsbridge.SetTable(nil)
 		s.mdns = nil
 	}
+	pluginreg.SetLoaded("mdnsbridge", false, "disabled in settings")
 }
 
 // StartAdvertise starts self-advertising this server's own DNS service(s) via
