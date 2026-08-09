@@ -59,7 +59,7 @@ templ MDNS(data MDNSData) {
 						hx-target="#mdns-grid"
 						hx-swap="innerHTML"
 					>
-						@MDNSGrid(data.Entries, false, len(data.Entries))
+						@mdnsRows(data.Entries, false)
 					</tbody>
 				</table>
 			</div>
@@ -67,15 +67,11 @@ templ MDNS(data MDNSData) {
 	</div>
 }
 
-// MDNSGrid renders just the table body's rows, so the 10s auto-refresh (and
-// the search/status filter, see the form above) can fetch and swap this alone
-// (see PathMDNS+"/grid" in internal/gui). Swapping only the tbody — rather
-// than the whole page's #content — keeps the outer heading/copy and the
-// page's scroll position stable across refreshes. filtered distinguishes
-// "nothing discovered at all" from "nothing matches the current filter";
-// total is the unfiltered count, for the "N of total" label (see mdnsCount
-// out-of-band swap below).
-templ MDNSGrid(entries []mdnsbridge.Entry, filtered bool, total int) {
+// mdnsRows renders just the table body's rows (no count span) — used both
+// for the initial page render and, as the base of MDNSGrid below, for the
+// auto-refresh/filter fragment. filtered distinguishes "nothing discovered
+// at all" from "nothing matches the current filter".
+templ mdnsRows(entries []mdnsbridge.Entry, filtered bool) {
 	for _, e := range entries {
 		@mdnsRow(e)
 	}
@@ -90,6 +86,16 @@ templ MDNSGrid(entries []mdnsbridge.Entry, filtered bool, total int) {
 			</td>
 		</tr>
 	}
+}
+
+// MDNSGrid is the response for the auto-refresh/filter poll (see
+// PathMDNS+"/grid" in internal/gui): rows plus an out-of-band update of the
+// "N of total" count in the filter form above (see mdns-count in MDNS).
+// It must only be used for that fragment response, never the initial page
+// render — outside of an actual htmx swap, hx-swap-oob has no effect and the
+// span would just render twice.
+templ MDNSGrid(entries []mdnsbridge.Entry, filtered bool, total int) {
+	@mdnsRows(entries, filtered)
 	<span id="mdns-count" hx-swap-oob="true" class="text-xs text-bramble-muted whitespace-nowrap pb-1.5">{ fmt.Sprintf("%d of %d", len(entries), total) }</span>
 }
 
