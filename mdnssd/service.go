@@ -19,3 +19,7 @@ type AddFunc func(Entry)
 // RmvFunc is called when a service instance is no longer present: a
 // goodbye packet (TTL=0), or its TTL fully elapsing with no refresh answer.
 type RmvFunc func(Entry)
+
+// TypeFunc is called once per distinct service type discovered by
+// BrowseTypes, e.g. "_http._tcp".
+type TypeFunc func(serviceType string)
