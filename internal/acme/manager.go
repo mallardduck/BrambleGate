@@ -3,7 +3,9 @@ package acme
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"log/slog"
@@ -11,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-acme/lego/v4/lego"
 )
 
 const (
@@ -59,6 +63,36 @@ func (m *Manager) keyFile() string  { return filepath.Join(m.cfg.ConfigDir, "cer
 // to hit its renewal window.
 func (m *Manager) caFile() string { return filepath.Join(m.cfg.ConfigDir, "certs", "issuer_ca.txt") }
 
+// cacheDir holds a copy of the last cert/key issued per CA environment, so
+// toggling acme.production back and forth doesn't force a fresh issuance (and
+// burn Let's Encrypt's production rate limit) every time — see
+// promoteFromCache/cacheCurrent.
+func (m *Manager) cacheDir() string { return filepath.Join(m.cfg.ConfigDir, "certs", "cache") }
+
+func (m *Manager) cacheCertFile(slug string) string {
+	return filepath.Join(m.cacheDir(), slug+".cert.pem")
+}
+
+func (m *Manager) cacheKeyFile(slug string) string {
+	return filepath.Join(m.cacheDir(), slug+".key.pem")
+}
+
+// caSlug turns a resolved ACME directory URL into a filesystem-safe cache key:
+// "production"/"staging" for the two Let's Encrypt directories, or a short
+// hash for anything else (a custom ca_directory_url, e.g. a local Pebble
+// instance) so an arbitrary URL never has to be a literal filename.
+func caSlug(caURL string) string {
+	switch caURL {
+	case lego.LEDirectoryProduction:
+		return "production"
+	case lego.LEDirectoryStaging:
+		return "staging"
+	default:
+		sum := sha256.Sum256([]byte(caURL))
+		return "custom-" + hex.EncodeToString(sum[:8])
+	}
+}
+
 func (m *Manager) renewBefore() time.Duration {
 	d := m.cfg.RenewBeforeDays
 	if d <= 0 {
@@ -92,6 +126,16 @@ func (m *Manager) reconcile(ctx context.Context) time.Duration {
 		return checkInterval
 	}
 
+	if m.promoteFromCache() {
+		if err := m.reload(); err != nil {
+			m.log.Error("acme: promoted cached certificate but engine reload failed", "err", err)
+			return retryInterval
+		}
+		m.log.Info("acme: reused cached certificate for this CA environment (no new issuance needed)",
+			"domain", m.cfg.Domain, "ca", caDirURL(m.cfg))
+		return checkInterval
+	}
+
 	m.log.Info("acme: obtaining certificate", "reason", reason, "domain", m.cfg.Domain,
 		"provider", m.cfg.Provider, "ca", caDirURL(m.cfg))
 
@@ -104,6 +148,11 @@ func (m *Manager) reconcile(ctx context.Context) time.Duration {
 		m.log.Error("acme: writing certificate failed, will retry", "err", err)
 		return retryInterval
 	}
+	if err := m.cacheCurrent(certPEM, keyPEM); err != nil {
+		// Non-fatal: the active cert is already written and correct, we've
+		// just lost the fast-path for a future switch back to this environment.
+		m.log.Warn("acme: could not cache issued certificate for future reuse", "err", err)
+	}
 	if err := m.reload(); err != nil {
 		m.log.Error("acme: cert written but engine reload failed", "err", err)
 		return retryInterval
@@ -111,6 +160,58 @@ func (m *Manager) reconcile(ctx context.Context) time.Duration {
 	m.log.Info("acme: certificate installed and applied", "domain", m.cfg.Domain,
 		"production", m.cfg.Production && m.cfg.CADirectoryURL == "")
 	return checkInterval
+}
+
+// promoteFromCache copies a previously-issued, still-valid certificate for the
+// CURRENT CA environment out of the per-environment cache into the active
+// cert.pem/key.pem, if one exists — so a Manager never calls Obtain when a
+// perfectly good cert for this exact environment+domain is already sitting on
+// disk from an earlier issuance. Returns false if there's nothing usable
+// cached (never issued for this environment yet, wrong domain, or itself
+// within the renewal window).
+func (m *Manager) promoteFromCache() bool {
+	slug := caSlug(caDirURL(m.cfg))
+	certPEM, err := os.ReadFile(m.cacheCertFile(slug))
+	if err != nil {
+		return false
+	}
+	keyPEM, err := os.ReadFile(m.cacheKeyFile(slug))
+	if err != nil {
+		return false
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false
+	}
+	if !coversDomain(cert, m.cfg.Domain) {
+		return false
+	}
+	if remaining := cert.NotAfter.Sub(m.now()); remaining < m.renewBefore() {
+		return false
+	}
+	if err := m.writeCertKey(certPEM, keyPEM); err != nil {
+		m.log.Error("acme: promoting cached certificate failed", "err", err)
+		return false
+	}
+	return true
+}
+
+// cacheCurrent saves a just-issued cert/key into the per-environment cache so
+// a future switch back to this CA environment can reuse it via
+// promoteFromCache instead of issuing again.
+func (m *Manager) cacheCurrent(certPEM, keyPEM []byte) error {
+	if err := os.MkdirAll(m.cacheDir(), 0o755); err != nil {
+		return err
+	}
+	slug := caSlug(caDirURL(m.cfg))
+	if err := writeFileAtomic(m.cacheKeyFile(slug), keyPEM, 0o600); err != nil {
+		return err
+	}
+	return writeFileAtomic(m.cacheCertFile(slug), certPEM, 0o644)
 }
 
 // needsIssue reports whether the on-disk cert must be (re)issued, with a reason.

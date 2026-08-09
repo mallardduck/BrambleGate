@@ -133,6 +133,59 @@ func TestNeedsIssueOnCAEnvironmentChange(t *testing.T) {
 	}
 }
 
+func TestReconcileTogglingCAEnvironmentReusesCache(t *testing.T) {
+	stagingCert, stagingKey := makeCert(t, "dns.example.com", "Staging Root CA", time.Now().AddDate(0, 3, 0))
+	prodCert, prodKey := makeCert(t, "dns.example.com", "Production Root CA", time.Now().AddDate(0, 3, 0))
+	iss := &stubIssuer{}
+	m := testManager(t, iss)
+	m.reload = func() error { return nil }
+
+	// Issue for staging (the default): one real Obtain call.
+	iss.cert, iss.key = stagingCert, stagingKey
+	m.reconcile(context.Background())
+	if iss.calls != 1 {
+		t.Fatalf("expected 1 issuance for staging, got %d", iss.calls)
+	}
+	onDisk, _ := os.ReadFile(m.certFile())
+	if string(onDisk) != string(stagingCert) {
+		t.Fatal("staging cert was not written to disk")
+	}
+
+	// Switch to production: no cache yet for production, so a real issuance happens.
+	m.cfg.Production = true
+	iss.cert, iss.key = prodCert, prodKey
+	m.reconcile(context.Background())
+	if iss.calls != 2 {
+		t.Fatalf("expected a 2nd issuance for production, got %d", iss.calls)
+	}
+	onDisk, _ = os.ReadFile(m.certFile())
+	if string(onDisk) != string(prodCert) {
+		t.Fatal("production cert was not written to disk")
+	}
+
+	// Switch back to staging: must reuse the cached staging cert, not call Obtain again.
+	m.cfg.Production = false
+	m.reconcile(context.Background())
+	if iss.calls != 2 {
+		t.Fatalf("switching back to staging should reuse the cache, not reissue; got %d calls", iss.calls)
+	}
+	onDisk, _ = os.ReadFile(m.certFile())
+	if string(onDisk) != string(stagingCert) {
+		t.Fatal("expected the cached staging cert to be promoted back to the active cert")
+	}
+
+	// And back to production once more: also cached now, still no 3rd issuance.
+	m.cfg.Production = true
+	m.reconcile(context.Background())
+	if iss.calls != 2 {
+		t.Fatalf("switching back to production should reuse the cache too; got %d calls", iss.calls)
+	}
+	onDisk, _ = os.ReadFile(m.certFile())
+	if string(onDisk) != string(prodCert) {
+		t.Fatal("expected the cached production cert to be promoted back to the active cert")
+	}
+}
+
 func TestReconcileIssuesWritesAndReloads(t *testing.T) {
 	realCert, realKey := makeCert(t, "dns.example.com", "Test Root CA", time.Now().AddDate(0, 3, 0))
 	iss := &stubIssuer{cert: realCert, key: realKey}
