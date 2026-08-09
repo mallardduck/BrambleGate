@@ -39,7 +39,8 @@ func NewManager(cfg Config, reload func() error, log *slog.Logger) (*Manager, er
 		return nil, fmt.Errorf("unsupported acme dns_provider %q (supported: %s; or use exec/httpreq)",
 			cfg.Provider, strings.Join(SupportedProviders(), ", "))
 	}
-	return newManager(cfg, &legoIssuer{cfg: cfg}, reload, log), nil
+	enableDebugLogging(log)
+	return newManager(cfg, &legoIssuer{cfg: cfg, log: log}, reload, log), nil
 }
 
 func newManager(cfg Config, issuer Issuer, reload func() error, log *slog.Logger) *Manager {
@@ -77,6 +78,8 @@ func (m *Manager) Run(ctx context.Context) {
 func (m *Manager) reconcile(ctx context.Context) time.Duration {
 	need, reason := m.needsIssue()
 	if !need {
+		m.log.Debug("acme: certificate check, no action needed", "domain", m.cfg.Domain,
+			"next_check_in", checkInterval)
 		return checkInterval
 	}
 
@@ -145,6 +148,7 @@ func coversDomain(cert *x509.Certificate, domain string) bool {
 // writeCertKey writes the key then the cert, each atomically (temp + rename in
 // the same dir). We trigger the reload only after both are in place.
 func (m *Manager) writeCertKey(certPEM, keyPEM []byte) error {
+	m.log.Debug("acme: writing certificate and key", "cert_file", m.certFile(), "key_file", m.keyFile())
 	if err := os.MkdirAll(filepath.Dir(m.certFile()), 0o755); err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -56,6 +57,7 @@ func caDirURL(c Config) string {
 // legoIssuer is the real ACME DNS-01 issuer.
 type legoIssuer struct {
 	cfg Config
+	log *slog.Logger
 	// newProvider builds the DNS-01 solver; defaults to the curated registry.
 	// Overridden only in integration tests to solve against a test challenge
 	// server (Pebble challtestsrv).
@@ -77,11 +79,18 @@ func (i *legoIssuer) providerFactory() func(string) (challenge.Provider, error) 
 // Obtain registers the account (idempotent) and issues the certificate via the
 // configured DNS-01 provider.
 func (i *legoIssuer) Obtain(ctx context.Context) ([]byte, []byte, error) {
+	log := i.log
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
+
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 
-	key, err := loadOrCreateAccountKey(accountDir(i.cfg.ConfigDir))
+	dir := accountDir(i.cfg.ConfigDir)
+	log.Debug("acme: loading account key", "dir", dir)
+	key, err := loadOrCreateAccountKey(dir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -90,12 +99,14 @@ func (i *legoIssuer) Obtain(ctx context.Context) ([]byte, []byte, error) {
 	cfg := lego.NewConfig(user)
 	cfg.CADirURL = caDirURL(i.cfg)
 	cfg.Certificate.KeyType = certcrypto.EC256
+	log.Debug("acme: creating client", "ca_dir_url", cfg.CADirURL, "email", i.cfg.Email)
 
 	client, err := lego.NewClient(cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("acme client: %w", err)
 	}
 
+	log.Debug("acme: configuring dns-01 provider", "provider", i.cfg.Provider)
 	provider, err := i.providerFactory()(i.cfg.Provider)
 	if err != nil {
 		return nil, nil, err
@@ -104,12 +115,15 @@ func (i *legoIssuer) Obtain(ctx context.Context) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("configure dns-01 provider %q: %w", i.cfg.Provider, err)
 	}
 
+	log.Debug("acme: registering account", "email", i.cfg.Email)
 	reg, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
 		return nil, nil, fmt.Errorf("acme account registration: %w", err)
 	}
 	user.reg = reg
+	log.Debug("acme: account registered", "uri", reg.URI)
 
+	log.Debug("acme: requesting certificate", "domain", i.cfg.Domain)
 	res, err := client.Certificate.Obtain(certificate.ObtainRequest{
 		Domains: []string{i.cfg.Domain},
 		Bundle:  true,
@@ -117,6 +131,7 @@ func (i *legoIssuer) Obtain(ctx context.Context) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("obtain certificate for %q: %w", i.cfg.Domain, err)
 	}
+	log.Debug("acme: certificate obtained", "domain", i.cfg.Domain, "cert_url", res.CertURL)
 	return res.Certificate, res.PrivateKey, nil
 }
 
