@@ -73,59 +73,57 @@ templ Dashboard(data DashboardData) {
 	</div>
 	@acmeStatusCard(data.Settings, data.Cert)
 	@acmeSelfIPCard(data.Settings, data.ACMESelfRecords)
-	@dnsStampCard(data.Settings)
-	@queryURLCard(data.Settings)
+	@privateDNSCard(data.Settings)
 }
 
-// dnsStampCard shows copy-pasteable DNS Stamps (sdns://…, dnscrypt-proxy's
-// portable server-config format) for each enabled encrypted listener — a
-// convenience for clients that accept a stamp instead of separate
-// hostname/port/path fields. Pure function of settings, computed on render
-// (no detection/state involved, unlike the self-IP/DDR cards above).
-templ dnsStampCard(settings model.Settings) {
-	if settings.ACME.Enabled && settings.ACME.Domain != "" && (settings.Listeners.DoH.Enabled || settings.Listeners.DoT.Enabled) {
-		<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
-			<h2 class="text-sm font-semibold mb-3" title="A portable sdns:// URI some clients (e.g. dnscrypt-proxy) accept instead of separate host/port/path fields">DNS Stamps</h2>
-			<div class="flex flex-col gap-3">
-				if settings.Listeners.DoH.Enabled {
-					@dnsStampRow("DoH", dnsstamp.DoH(settings.ACME.Domain, settings.Listeners.DoH.Port))
-				}
-				if settings.Listeners.DoT.Enabled {
-					@dnsStampRow("DoT", dnsstamp.DoT(settings.ACME.Domain, settings.Listeners.DoT.Port))
-				}
-			</div>
-		</div>
-	}
-}
-
-// queryURLCard shows the plain scheme://host:port query URL for each enabled
-// encrypted listener — for clients/configs that want a human-readable URL
-// instead of the sdns:// stamp above. Pure function of settings, same
-// pattern as dnsStampCard, but also covers DoQ (which has no DNS Stamp
-// proto type).
-templ queryURLCard(settings model.Settings) {
+// privateDNSCard is a client-configuration cheat sheet for every enabled
+// encrypted listener: the sdns:// stamp some clients (e.g. dnscrypt-proxy)
+// accept instead of separate host/port/path fields, alongside the plain
+// query URL for clients that want that instead. Merged from two previously
+// separate cards (DNS Stamps, Default Query URLs) that always listed the
+// same protocols side by side. Pure function of settings, computed on
+// render (no detection/state involved, unlike the self-IP/DDR cards above).
+templ privateDNSCard(settings model.Settings) {
 	if settings.ACME.Enabled && settings.ACME.Domain != "" && settings.EncryptedListenerEnabled() {
 		<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
-			<h2 class="text-sm font-semibold mb-3">Default Query URLs</h2>
+			<h2 class="text-sm font-semibold mb-1">Private DNS</h2>
+			<p class="text-bramble-muted text-xs mb-3">
+				Point a client at this resolver over an encrypted transport — the stamp is for clients that accept an
+				sdns:// URI, the query URL for everything else.
+			</p>
 			<div class="flex flex-col gap-3">
 				if settings.Listeners.DoH.Enabled {
-					@dnsStampRow("DoH", dnsstamp.DoHURL(settings.ACME.Domain, settings.Listeners.DoH.Port))
+					@privateDNSRow("DoH", dnsstamp.DoH(settings.ACME.Domain, settings.Listeners.DoH.Port), dnsstamp.DoHURL(settings.ACME.Domain, settings.Listeners.DoH.Port))
 				}
 				if settings.Listeners.DoT.Enabled {
-					@dnsStampRow("DoT", dnsstamp.DoTURL(settings.ACME.Domain, settings.Listeners.DoT.Port))
+					@privateDNSRow("DoT", dnsstamp.DoT(settings.ACME.Domain, settings.Listeners.DoT.Port), dnsstamp.DoTURL(settings.ACME.Domain, settings.Listeners.DoT.Port))
 				}
 				if settings.Listeners.DoQ.Enabled {
-					@dnsStampRow("DoQ", dnsstamp.DoQURL(settings.ACME.Domain, settings.Listeners.DoQ.Port))
+					@privateDNSRow("DoQ", "", dnsstamp.DoQURL(settings.ACME.Domain, settings.Listeners.DoQ.Port))
 				}
 			</div>
 		</div>
 	}
 }
 
-templ dnsStampRow(label, stamp string) {
+// privateDNSRow groups a protocol's stamp and query URL together — stamp is
+// blank for DoQ, which has no sdns:// proto type.
+templ privateDNSRow(label, stamp, url string) {
+	<div class="rounded bg-bramble-bg-card2 px-3 py-2">
+		<p class="text-xs font-semibold uppercase tracking-wide mb-2">{ label }</p>
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+			if stamp != "" {
+				@dnsStampField("Stamp", stamp)
+			}
+			@dnsStampField("Query URL", url)
+		</div>
+	</div>
+}
+
+templ dnsStampField(label, value string) {
 	<label class="flex flex-col gap-1 text-sm">
 		<span class="text-bramble-muted text-xs uppercase tracking-wide">{ label }</span>
-		<input readonly value={ stamp } onclick="this.select()" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input font-mono text-xs"/>
+		<input readonly value={ value } onclick="this.select()" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input font-mono text-xs"/>
 	</label>
 }
 
