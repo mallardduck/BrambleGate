@@ -240,6 +240,64 @@ func TestSettingsSave_ECS(t *testing.T) {
 	}
 }
 
+// max_fails is a *uint32 specifically so an explicit 0 (disable down-marking)
+// is distinguishable from "unset, use CoreDNS's default" — this exercises
+// both states plus blank clearing an already-set value back to unset.
+func TestSettingsSave_ForwardTuning(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	base := func(extra url.Values) url.Values {
+		form := url.Values{
+			"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+			"plain_enabled": {"on"}, "plain_port": {"53"},
+			"acme_renew_before_days": {"30"},
+		}
+		for k, v := range extra {
+			form[k] = v
+		}
+		return form
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(url.Values{
+		"upstream_max_fails":            {"0"},
+		"upstream_health_check_seconds": {"30"},
+		"upstream_expire_seconds":       {"20"},
+		"upstream_max_concurrent":       {"500"},
+		"upstream_prefer_udp":           {"on"},
+	})))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (forward tuning) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := settings.UpstreamDNS
+	if u.MaxFails == nil || *u.MaxFails != 0 {
+		t.Fatalf("expected max_fails=0 (explicit, not unset), got: %+v", u.MaxFails)
+	}
+	if u.HealthCheckSeconds != 30 || u.ExpireSeconds != 20 || u.MaxConcurrent != 500 || !u.PreferUDP {
+		t.Fatalf("unexpected forward tuning persisted: %+v", u)
+	}
+
+	// Blank fields clear previously-set tuning back to unset/default.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(nil)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (clear tuning) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err = st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	u = settings.UpstreamDNS
+	if u.MaxFails != nil || u.HealthCheckSeconds != 0 || u.ExpireSeconds != 0 || u.MaxConcurrent != 0 || u.PreferUDP {
+		t.Fatalf("expected all forward tuning cleared, got: %+v", u)
+	}
+}
+
 // The mode select is an explicit choice (none/default/all/custom) rather
 // than inferring "none" from a blank text field — a blank field and a
 // never-touched field were otherwise indistinguishable, which made saving

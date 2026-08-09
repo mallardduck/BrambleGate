@@ -32,6 +32,32 @@ type UpstreamTarget struct {
 	// you trust — Validate rejects this combined with a public/hostname address,
 	// since it would otherwise leak client IPs off-network.
 	ECS bool `yaml:"ecs_enabled,omitempty" json:"ecs_enabled,omitempty"`
+
+	// MaxFails is the forward plugin's max_fails: how many consecutive failed
+	// health checks mark Address down before CoreDNS starts routing around it
+	// (CoreDNS default 2). nil means "unset, use the CoreDNS default" — a
+	// pointer rather than a bare uint32 because 0 is itself a meaningful,
+	// distinct setting (disable down-marking entirely, the recommended value
+	// with a single local upstream that has no failover target anyway) and
+	// must be distinguishable from "not configured".
+	MaxFails *uint32 `yaml:"max_fails,omitempty" json:"max_fails,omitempty"`
+	// HealthCheckSeconds is the forward plugin's health_check interval in
+	// seconds (CoreDNS default 500ms when unset/0). Raising this reduces
+	// background ". IN NS" probe traffic hitting Address.
+	HealthCheckSeconds uint32 `yaml:"health_check_seconds,omitempty" json:"health_check_seconds,omitempty"`
+	// ExpireSeconds is the forward plugin's expire: how long an idle
+	// connection to Address is kept pooled before closing (CoreDNS default
+	// 10s when unset/0).
+	ExpireSeconds uint32 `yaml:"expire_seconds,omitempty" json:"expire_seconds,omitempty"`
+	// PreferUDP makes the forward plugin try UDP to Address first even when
+	// the client's own query arrived over TCP, retrying over TCP only if the
+	// UDP reply comes back truncated. Avoids piling up one new TCP connection
+	// per query against a local upstream that handles concurrent TCP poorly.
+	PreferUDP bool `yaml:"prefer_udp,omitempty" json:"prefer_udp,omitempty"`
+	// MaxConcurrent is the forward plugin's max_concurrent: a hard cap on
+	// in-flight forwarded queries, past which new ones are REFUSEd instead of
+	// queuing against an overloaded Address (0 = no cap, CoreDNS default).
+	MaxConcurrent uint32 `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
 }
 
 // Listeners is the set of DNS transports this server terminates.

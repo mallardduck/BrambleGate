@@ -67,6 +67,20 @@ func TestNewAcceptsECSRewriteDirective(t *testing.T) {
 	_ = eng.Stop()
 }
 
+// The forward-tuning settings render a "forward . <addr> { ... }" sub-block
+// (configgen.writeForward); this confirms CoreDNS's own forward plugin
+// actually accepts that block syntax, not just that configgen's
+// string-building is right.
+func TestNewAcceptsForwardTuningDirectives(t *testing.T) {
+	skipIfWindows(t)
+	cf := []byte(".:45356 {\n\tbind 127.0.0.1\n\tforward . 127.0.0.1:53 {\n\t\tmax_fails 0\n\t\thealth_check 30s\n\t\texpire 20s\n\t\tprefer_udp\n\t\tmax_concurrent 500\n\t}\n}\n")
+	eng, err := New(cf)
+	if err != nil {
+		t.Fatalf("New with forward tuning sub-block: %v", err)
+	}
+	_ = eng.Stop()
+}
+
 func TestNewInvalidFails(t *testing.T) {
 	skipIfWindows(t)
 	eng, err := New([]byte("definitely not a corefile {"))

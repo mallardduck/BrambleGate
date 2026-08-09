@@ -350,11 +350,32 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.S
 	// Validate rejects this unless the upstream is private/loopback (docs/plugins.md),
 	// so full-precision masks (32/128, i.e. no truncation) are safe here.
 	blk.DirectiveIf(s.UpstreamDNS.ECS, "rewrite edns0 subnet set 32 128")
-	blk.Directive("forward . %s", forwardTarget(s.UpstreamDNS))
+	writeForward(blk, s.UpstreamDNS)
 	blk.Directive("cache")
 	blk.Directive("errors")
 	blk.Directive("log")
 	return blk.String()
+}
+
+// writeForward renders the forward directive. When none of UpstreamTarget's
+// forward-tuning fields are set, it's a bare "forward . <target>" line and
+// CoreDNS's own defaults apply untouched; otherwise it opens a tuning
+// sub-block with only the explicitly-set knobs (docs/plugins.md).
+func writeForward(blk *corefile.Block, u model.UpstreamTarget) {
+	target := forwardTarget(u)
+	if u.MaxFails == nil && u.HealthCheckSeconds == 0 && u.ExpireSeconds == 0 && !u.PreferUDP && u.MaxConcurrent == 0 {
+		blk.Directive("forward . %s", target)
+		return
+	}
+	blk.SubBlock(fmt.Sprintf("forward . %s", target), func(inner *corefile.Block) {
+		if u.MaxFails != nil {
+			inner.Directive("max_fails %d", *u.MaxFails)
+		}
+		inner.DirectiveIf(u.HealthCheckSeconds > 0, "health_check %ds", u.HealthCheckSeconds)
+		inner.DirectiveIf(u.ExpireSeconds > 0, "expire %ds", u.ExpireSeconds)
+		inner.DirectiveIf(u.PreferUDP, "prefer_udp")
+		inner.DirectiveIf(u.MaxConcurrent > 0, "max_concurrent %d", u.MaxConcurrent)
+	})
 }
 
 // forwardTarget renders the upstream for the forward plugin, honoring an

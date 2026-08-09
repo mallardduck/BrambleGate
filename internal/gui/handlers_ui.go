@@ -316,6 +316,11 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	s.UpstreamDNS.Address = strings.TrimSpace(r.FormValue("upstream_address"))
 	s.UpstreamDNS.Protocol = r.FormValue("upstream_protocol")
 	s.UpstreamDNS.ECS = r.FormValue("upstream_ecs_enabled") != ""
+	parseUintPtr(r, "upstream_max_fails", &s.UpstreamDNS.MaxFails)
+	parseUint32(r, "upstream_health_check_seconds", &s.UpstreamDNS.HealthCheckSeconds)
+	parseUint32(r, "upstream_expire_seconds", &s.UpstreamDNS.ExpireSeconds)
+	parseUint32(r, "upstream_max_concurrent", &s.UpstreamDNS.MaxConcurrent)
+	s.UpstreamDNS.PreferUDP = r.FormValue("upstream_prefer_udp") != ""
 
 	parseListener(r, "plain", &s.Listeners.Plain)
 	parseListener(r, "dot", &s.Listeners.DoT)
@@ -366,6 +371,37 @@ func parseListener(r *http.Request, prefix string, l *model.Listener) {
 	}
 	if port, err := strconv.Atoi(r.FormValue(prefix + "_port")); err == nil && port > 0 {
 		l.Port = port
+	}
+}
+
+// parseUint32 sets *dst from form field name: blank clears it to 0 ("unset,
+// use CoreDNS's own default"), a valid non-negative integer sets it, anything
+// else is left unchanged (matches parseListener's own leave-as-is-on-bad-input
+// behavior for the doq tuning fields above).
+func parseUint32(r *http.Request, name string, dst *uint32) {
+	v := strings.TrimSpace(r.FormValue(name))
+	if v == "" {
+		*dst = 0
+		return
+	}
+	if n, err := strconv.ParseUint(v, 10, 32); err == nil {
+		*dst = uint32(n)
+	}
+}
+
+// parseUintPtr sets *dst from form field name: blank clears it to nil
+// ("unset, use CoreDNS's own default"), a valid non-negative integer
+// (including explicit 0, a meaningful distinct value for max_fails) sets a
+// pointer to it, anything else is left unchanged.
+func parseUintPtr(r *http.Request, name string, dst **uint32) {
+	v := strings.TrimSpace(r.FormValue(name))
+	if v == "" {
+		*dst = nil
+		return
+	}
+	if n, err := strconv.ParseUint(v, 10, 32); err == nil {
+		val := uint32(n)
+		*dst = &val
 	}
 }
 

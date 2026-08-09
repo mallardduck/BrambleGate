@@ -77,6 +77,67 @@ func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 	}
 }
 
+func TestRenderForwardBareByDefault(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, "forward . 192.168.10.5:53\n") {
+		t.Errorf("expected a bare forward line with no tuning set:\n%s", cf)
+	}
+	if strings.Contains(cf, "forward . 192.168.10.5:53 {") {
+		t.Errorf("no forward sub-block should be emitted when nothing is tuned:\n%s", cf)
+	}
+}
+
+func TestRenderForwardTuningSubBlock(t *testing.T) {
+	s := baseSettings()
+	maxFails := uint32(0)
+	s.UpstreamDNS.MaxFails = &maxFails
+	s.UpstreamDNS.HealthCheckSeconds = 30
+	s.UpstreamDNS.ExpireSeconds = 20
+	s.UpstreamDNS.PreferUDP = true
+	s.UpstreamDNS.MaxConcurrent = 500
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{
+		"forward . 192.168.10.5:53 {",
+		"max_fails 0",
+		"health_check 30s",
+		"expire 20s",
+		"prefer_udp",
+		"max_concurrent 500",
+	} {
+		if !strings.Contains(cf, want) {
+			t.Errorf("Corefile missing %q:\n%s", want, cf)
+		}
+	}
+}
+
+func TestRenderForwardTuningOnlySetFieldsEmitted(t *testing.T) {
+	s := baseSettings()
+	s.UpstreamDNS.PreferUDP = true
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, "prefer_udp") {
+		t.Errorf("expected prefer_udp:\n%s", cf)
+	}
+	for _, unwanted := range []string{"max_fails", "health_check", "expire ", "max_concurrent"} {
+		if strings.Contains(cf, unwanted) {
+			t.Errorf("did not expect %q when only prefer_udp is set:\n%s", unwanted, cf)
+		}
+	}
+}
+
 func TestRenderCorefileIncludesACMEDomainAsFallthroughZone(t *testing.T) {
 	s := baseSettings()
 	s.ACME.Enabled = true
