@@ -11,7 +11,7 @@ import (
 const metaQuestion = "_services._dns-sd._udp.local."
 
 func TestTypeBrowserState_InitialQuery_TargetsMetaService(t *testing.T) {
-	state := newTypeBrowserState("local", newFakeClock())
+	state := newTypeBrowserState(newFakeClock())
 	msg := state.initialQuery()
 
 	if msg.Question[0].Name != metaQuestion {
@@ -23,7 +23,7 @@ func TestTypeBrowserState_InitialQuery_TargetsMetaService(t *testing.T) {
 }
 
 func TestTypeBrowserState_Ingest_EmitsDiscoveredType(t *testing.T) {
-	state := newTypeBrowserState("local", newFakeClock())
+	state := newTypeBrowserState(newFakeClock())
 
 	got := state.Ingest(ptrMsg(metaQuestion, "_http._tcp.local.", 100*time.Second), time.Now())
 
@@ -33,7 +33,7 @@ func TestTypeBrowserState_Ingest_EmitsDiscoveredType(t *testing.T) {
 }
 
 func TestTypeBrowserState_Ingest_DedupesRepeatedAnnouncements(t *testing.T) {
-	state := newTypeBrowserState("local", newFakeClock())
+	state := newTypeBrowserState(newFakeClock())
 	now := time.Now()
 	state.Ingest(ptrMsg(metaQuestion, "_http._tcp.local.", 100*time.Second), now)
 
@@ -45,7 +45,7 @@ func TestTypeBrowserState_Ingest_DedupesRepeatedAnnouncements(t *testing.T) {
 }
 
 func TestTypeBrowserState_Ingest_MultipleTypesInOneMessage(t *testing.T) {
-	state := newTypeBrowserState("local", newFakeClock())
+	state := newTypeBrowserState(newFakeClock())
 	msg := ptrMsg(metaQuestion, "_http._tcp.local.", 100*time.Second)
 	msg.Answer = append(msg.Answer, &dns.PTR{
 		Hdr: rrHeader(metaQuestion, dns.TypePTR, 100),
@@ -60,7 +60,7 @@ func TestTypeBrowserState_Ingest_MultipleTypesInOneMessage(t *testing.T) {
 }
 
 func TestTypeBrowserState_Ingest_IgnoresUnrelatedQuestions(t *testing.T) {
-	state := newTypeBrowserState("local", newFakeClock())
+	state := newTypeBrowserState(newFakeClock())
 
 	got := state.Ingest(ptrMsg("_http._tcp.local.", "Foo._http._tcp.local.", 100*time.Second), time.Now())
 
@@ -71,7 +71,7 @@ func TestTypeBrowserState_Ingest_IgnoresUnrelatedQuestions(t *testing.T) {
 
 func TestTypeBrowserState_Tick_RequeriesAtRefreshThreshold(t *testing.T) {
 	clock := newFakeClock()
-	state := newTypeBrowserState("local", clock)
+	state := newTypeBrowserState(clock)
 	state.Ingest(ptrMsg(metaQuestion, "_http._tcp.local.", 100*time.Second), clock.Now())
 
 	clock.Advance(80 * time.Second)

@@ -26,7 +26,7 @@ func (b *Browser) BrowseTypes(ctx context.Context, ifaceNames []string, onType T
 	if b.transport == nil {
 		return errNoTransport
 	}
-	state := newTypeBrowserState("local", b.clock)
+	state := newTypeBrowserState(b.clock)
 
 	allowed := make(map[string]bool, len(ifaceNames))
 	for _, n := range ifaceNames {
@@ -71,8 +71,10 @@ type typeBrowserState struct {
 	seen     map[string]bool // discovered types already reported
 }
 
-func newTypeBrowserState(domain string, clock Clock) *typeBrowserState {
-	question := metaServiceType + "." + domain + "."
+// newTypeBrowserState always targets domain "local" — the only domain mDNS
+// is defined for (RFC 6762 §3; see splitServiceQuestion's doc comment).
+func newTypeBrowserState(clock Clock) *typeBrowserState {
+	question := metaServiceType + ".local."
 	return &typeBrowserState{question: question, cache: NewCache(clock), seen: map[string]bool{}}
 }
 
