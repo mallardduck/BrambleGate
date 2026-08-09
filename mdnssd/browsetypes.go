@@ -96,7 +96,7 @@ func (t *typeBrowserState) Ingest(msg *dns.Msg, now time.Time) []string {
 			t.cache.Remove(ptr.Ptr)
 			continue // no removal semantics for types; just stop refreshing it
 		}
-		t.cache.Store(ptr.Ptr, t.question, ptr.TTL)
+		t.cache.Store(ptr.Ptr, t.question, ptr.RR(), ptr.TTL)
 
 		typ, _ := splitServiceQuestion(ptr.Ptr)
 		if !t.seen[typ] {
@@ -113,7 +113,8 @@ func (t *typeBrowserState) Ingest(msg *dns.Msg, now time.Time) []string {
 func (t *typeBrowserState) Tick(now time.Time) []*dns.Msg {
 	due, _ := t.cache.Tick(now)
 	if len(due) > 0 {
-		return []*dns.Msg{buildQuery(t.question, nil, false)}
+		known := knownAnswers(t.cache.knownAnswersFor(t.question, now), t.question)
+		return []*dns.Msg{buildQuery(t.question, known, false)}
 	}
 	return nil
 }

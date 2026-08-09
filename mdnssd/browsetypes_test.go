@@ -82,6 +82,31 @@ func TestTypeBrowserState_Tick_RequeriesAtRefreshThreshold(t *testing.T) {
 	}
 }
 
+// A refresh re-query should offer other still-fresh discovered types as
+// known answers (RFC 6762 §7.1). The type that actually triggered the
+// refresh does NOT qualify — by the time it's 80%+ through its TTL (the
+// earliest a refresh fires), it has under 50% TTL remaining, below §7.1's
+// known-answer bar — so this test exercises a second, freshly-seen type.
+func TestTypeBrowserState_Tick_IncludesKnownAnswerInRequery(t *testing.T) {
+	clock := newFakeClock()
+	state := newTypeBrowserState(clock)
+	state.Ingest(ptrMsg(metaQuestion, "_http._tcp.local.", 100*time.Second), clock.Now())
+
+	clock.Advance(80 * time.Second) // _http._tcp now needs refreshing...
+	// ...but _ipp._tcp was just seen, well within its own fresh TTL.
+	state.Ingest(ptrMsg(metaQuestion, "_ipp._tcp.local.", 100*time.Second), clock.Now())
+
+	toQuery := state.Tick(clock.Now())
+
+	if len(toQuery) != 1 || len(toQuery[0].Answer) != 1 {
+		t.Fatalf("toQuery = %+v, want 1 message with 1 known answer", toQuery)
+	}
+	ptr, ok := toQuery[0].Answer[0].(*dns.PTR)
+	if !ok || ptr.Ptr != "_ipp._tcp.local." {
+		t.Errorf("known answer = %+v, want the fresh type (_ipp._tcp.local.), not the one being refreshed", toQuery[0].Answer[0])
+	}
+}
+
 func TestBrowseTypes_SendsInitialMetaQuery(t *testing.T) {
 	transport := newFakeTransport()
 	b := New(WithTransport(transport), WithClock(newFakeClock()))

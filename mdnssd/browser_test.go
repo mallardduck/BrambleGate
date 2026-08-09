@@ -181,6 +181,33 @@ func TestBrowserState_ReAnnounceBeforeExpiry_NoSpuriousRemove(t *testing.T) {
 	}
 }
 
+// A refresh re-query should offer other still-fresh records answering the
+// same question as known answers (RFC 6762 §7.1), so a responder can skip
+// re-sending them. The record that actually triggered the refresh does NOT
+// qualify (by the time it's 80%+ through its TTL — the earliest a refresh
+// fires — it has under 50% TTL remaining, below §7.1's known-answer bar) —
+// this test exercises a second, freshly-seen instance instead.
+func TestBrowserState_Tick_IncludesKnownAnswerInRequery(t *testing.T) {
+	const otherInstance = "Bar._http._tcp.local."
+	clock := newFakeClock()
+	state := newBrowserState(testQuestion, clock)
+	state.Ingest(ptrMsg(testQuestion, testInstance, 100*time.Second), "eth0", clock.Now())
+
+	clock.Advance(80 * time.Second) // testInstance now needs refreshing...
+	// ...but otherInstance was just seen, well within its own fresh TTL.
+	state.Ingest(ptrMsg(testQuestion, otherInstance, 100*time.Second), "eth0", clock.Now())
+
+	toQuery, _ := state.Tick(clock.Now())
+
+	if len(toQuery) != 1 || len(toQuery[0].Answer) != 1 {
+		t.Fatalf("toQuery = %+v, want 1 message with 1 known answer", toQuery)
+	}
+	ptr, ok := toQuery[0].Answer[0].(*dns.PTR)
+	if !ok || ptr.Ptr != otherInstance {
+		t.Errorf("known answer = %+v, want the fresh record (%q), not the one being refreshed", toQuery[0].Answer[0], otherInstance)
+	}
+}
+
 // --- Browser.Browse: thin async wiring over a fake Transport -------------
 
 func TestBrowse_SendsInitialQueryOnStart(t *testing.T) {

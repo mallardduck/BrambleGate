@@ -69,11 +69,12 @@ func (c *Cache) Store(key, question string, rr dns.RR, ttl time.Duration) bool {
 	return !existed
 }
 
-// KnownAnswers returns knownRecord values (see knownanswer.go) for every
+// knownAnswersFor returns knownRecord values (see knownanswer.go) for every
 // cached record answering question that was stored with a non-nil rr, as of
-// now. Callers pass this to knownAnswers() to build a re-query's RFC 6762
-// §7.1 known-answer list.
-func (c *Cache) KnownAnswers(question string, now time.Time) []knownRecord {
+// now. Callers pass this to the package-level knownAnswers() to build a
+// re-query's RFC 6762 §7.1 known-answer list. Unexported: internal only,
+// nothing outside this package needs it.
+func (c *Cache) knownAnswersFor(question string, now time.Time) []knownRecord {
 	var out []knownRecord
 	for _, rec := range c.records {
 		if rec.question != question || rec.rr == nil {

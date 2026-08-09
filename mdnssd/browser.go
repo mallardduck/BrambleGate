@@ -190,7 +190,7 @@ func (b *browserState) Ingest(msg *dns.Msg, ifaceName string, now time.Time) (ad
 			}
 			continue
 		}
-		b.cache.Store(ptr.Ptr, b.question, ptr.TTL)
+		b.cache.Store(ptr.Ptr, b.question, ptr.RR(), ptr.TTL)
 		b.ensureEntry(ptr.Ptr, ifaceName)
 	}
 
@@ -244,8 +244,11 @@ func (b *browserState) Tick(now time.Time) (toQuery []*dns.Msg, removed []Entry)
 	due, expired := b.cache.Tick(now)
 	if len(due) > 0 {
 		// All due records share this browse's question, so one re-query
-		// covers every instance that needs refreshing this tick.
-		toQuery = append(toQuery, buildQuery(b.question, nil, false))
+		// covers every instance that needs refreshing this tick. Known
+		// answers (RFC 6762 §7.1) tell the responder what we already have,
+		// so it can skip re-sending records we don't need repeated.
+		known := knownAnswers(b.cache.knownAnswersFor(b.question, now), b.question)
+		toQuery = append(toQuery, buildQuery(b.question, known, false))
 	}
 	for _, instance := range expired {
 		if e, ok := b.entries[instance]; ok {

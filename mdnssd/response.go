@@ -18,6 +18,15 @@ type ptrRecord struct {
 	TTL  time.Duration
 }
 
+// RR reconstructs the wire record this ptrRecord was parsed from, for
+// offering to Cache.Store as a future known answer (RFC 6762 §7.1).
+func (p ptrRecord) RR() dns.RR {
+	return &dns.PTR{
+		Hdr: dns.RR_Header{Name: p.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: uint32(p.TTL.Seconds())},
+		Ptr: p.Ptr,
+	}
+}
+
 // srvRecord is a parsed SRV record for a service instance.
 type srvRecord struct {
 	Name   string
