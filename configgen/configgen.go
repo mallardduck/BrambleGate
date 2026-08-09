@@ -351,7 +351,14 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.S
 	// so full-precision masks (32/128, i.e. no truncation) are safe here.
 	blk.DirectiveIf(s.UpstreamDNS.ECS, "rewrite edns0 subnet set 32 128")
 	writeForward(blk, s.UpstreamDNS)
-	blk.Directive("cache")
+	// cache has no concept of client subnet — it keys purely on qname/qtype/qclass
+	// (plugin/cache), so with ECS on it would cache one client's subnet-scoped
+	// upstream answer and serve it to every other client regardless of their real
+	// subnet, defeating ECS the same way caching a split-horizon localrecords
+	// answer would (see localrecords/mdnsbridge's own cache-bypass ordering
+	// above). Omit cache entirely for this block rather than caching answers that
+	// aren't valid for every client (dev-docs/plugin-audit-inuse.md).
+	blk.DirectiveIf(!s.UpstreamDNS.ECS, "cache")
 	blk.Directive("errors")
 	blk.Directive("log")
 	return blk.String()

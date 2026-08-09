@@ -517,6 +517,9 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(string(out.Corefile), "rewrite edns0 subnet") {
 		t.Fatalf("rewrite edns0 subnet should not be rendered when ecs is disabled:\n%s", out.Corefile)
 	}
+	if strings.Count(string(out.Corefile), "\tcache\n") != 2 { // one per server block (plain + dot)
+		t.Fatalf("expected cache in both server blocks when ecs is disabled:\n%s", out.Corefile)
+	}
 
 	on := baseSettings()
 	on.UpstreamDNS.ECS = true // baseSettings upstream (192.168.10.5:53) is private
@@ -527,6 +530,9 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 	cf := string(out.Corefile)
 	if strings.Count(cf, "rewrite edns0 subnet set 32 128") != 2 { // one per server block (plain + dot)
 		t.Fatalf("expected rewrite edns0 subnet set 32 128 in both server blocks:\n%s", cf)
+	}
+	if strings.Contains(cf, "\tcache\n") {
+		t.Fatalf("cache should not be rendered when ecs is enabled — it isn't keyed on client subnet and would leak one client's ECS-scoped answer to another:\n%s", cf)
 	}
 }
 
