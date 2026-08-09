@@ -221,6 +221,13 @@ func ddrRecords(s model.Settings) []ddrRecord {
 			{Key: "port", Value: strconv.Itoa(s.Listeners.DoQ.Port)},
 		}})
 	}
+	if s.Listeners.DoH3.Enabled {
+		out = append(out, ddrRecord{Priority: 1, Target: domain, Params: []ddrParam{
+			{Key: "alpn", Value: "h3"},
+			{Key: "port", Value: strconv.Itoa(s.Listeners.DoH3.Port)},
+			{Key: "dohpath", Value: "/dns-query{?dns}"},
+		}})
+	}
 	return out
 }
 
@@ -302,33 +309,39 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 func buildCorefile(s model.Settings, opts Options) []byte {
 	var out strings.Builder
 	if s.Listeners.Plain.Enabled {
-		out.WriteString(buildServerBlock(fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, nil, s, opts))
+		out.WriteString(buildServerBlock(fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, nil, "", s, opts))
 	}
 	if s.Listeners.DoT.Enabled {
-		out.WriteString(buildServerBlock(fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, nil, s, opts))
+		out.WriteString(buildServerBlock(fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, nil, "", s, opts))
 	}
 	if s.Listeners.DoH.Enabled {
-		out.WriteString(buildServerBlock(fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, nil, s, opts))
+		out.WriteString(buildServerBlock(fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, nil, "", s, opts))
 	}
 	if s.Listeners.DoQ.Enabled {
 		q := s.Listeners.DoQ
-		out.WriteString(buildServerBlock(fmt.Sprintf("quic://.:%d", q.Port), true, &q, s, opts))
+		out.WriteString(buildServerBlock(fmt.Sprintf("quic://.:%d", q.Port), true, &q, "quic", s, opts))
+	}
+	if s.Listeners.DoH3.Enabled {
+		q := s.Listeners.DoH3
+		out.WriteString(buildServerBlock(fmt.Sprintf("https3://.:%d", q.Port), true, &q, "https3", s, opts))
 	}
 	return []byte(out.String())
 }
 
-// buildServerBlock renders one Corefile server block. quic is non-nil only
-// for the DoQ block, and its quic{} tuning sub-block is itself only rendered
-// when at least one of MaxStreams/WorkerPoolSize is set — 0 isn't a valid
-// value for either (both plugins reject <= 0), so 0 means "leave it to
-// CoreDNS's own default" rather than being written as a literal 0.
-func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.Settings, opts Options) string {
+// buildServerBlock renders one Corefile server block. quic is non-nil for the
+// DoQ and DoH3 blocks (quicPluginName distinguishes which tuning sub-block
+// header to emit, "quic" or "https3" — both take max_streams, only "quic"
+// takes worker_pool_size); its tuning sub-block is itself only rendered when
+// at least one of MaxStreams/WorkerPoolSize is set — 0 isn't a valid value
+// for either (both plugins reject <= 0), so 0 means "leave it to CoreDNS's
+// own default" rather than being written as a literal 0.
+func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPluginName string, s model.Settings, opts Options) string {
 	blk := corefile.NewBlock(addr)
 	if tls {
 		blk.Directive("tls %s %s", opts.CertFile, opts.KeyFile)
 	}
 	if quic != nil && (quic.MaxStreams > 0 || quic.WorkerPoolSize > 0) {
-		blk.SubBlock("quic", func(inner *corefile.Block) {
+		blk.SubBlock(quicPluginName, func(inner *corefile.Block) {
 			inner.DirectiveIf(quic.MaxStreams > 0, "max_streams %d", quic.MaxStreams)
 			inner.DirectiveIf(quic.WorkerPoolSize > 0, "worker_pool_size %d", quic.WorkerPoolSize)
 		})

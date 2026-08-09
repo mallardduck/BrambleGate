@@ -128,6 +128,12 @@ type Listeners struct {
 	DoT   Listener     `yaml:"dot" json:"dot"`
 	DoH   Listener     `yaml:"doh" json:"doh"`
 	DoQ   QUICListener `yaml:"doq" json:"doq"`
+	// DoH3 is DNS-over-HTTPS/3 (RFC 9114 HTTP/3 carrying DoH), a distinct
+	// transport from DoQ (RFC 9250's native QUIC transport) despite both
+	// running over QUIC at the wire level. Reuses QUICListener for its
+	// MaxStreams tuning knob (the https3 plugin's only option); WorkerPoolSize
+	// has no https3 equivalent and must stay 0 (Validate rejects otherwise).
+	DoH3 QUICListener `yaml:"doh3" json:"doh3"`
 }
 
 type Listener struct {
@@ -222,8 +228,8 @@ func DefaultSettings() Settings {
 }
 
 // EncryptedListenerEnabled reports whether any transport that needs a
-// certificate (DoT/DoH/DoQ) is turned on — used by configgen to require ACME
-// settings / a cert.
+// certificate (DoT/DoH/DoQ/DoH3) is turned on — used by configgen to require
+// ACME settings / a cert.
 func (s Settings) EncryptedListenerEnabled() bool {
-	return s.Listeners.DoT.Enabled || s.Listeners.DoH.Enabled || s.Listeners.DoQ.Enabled
+	return s.Listeners.DoT.Enabled || s.Listeners.DoH.Enabled || s.Listeners.DoQ.Enabled || s.Listeners.DoH3.Enabled
 }

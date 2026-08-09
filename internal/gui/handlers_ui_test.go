@@ -372,6 +372,49 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 	}
 }
 
+func TestSettingsSave_DoH3Listener(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", url.Values{
+		"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+		"plain_enabled": {"on"}, "plain_port": {"53"},
+		"doh3_enabled": {"on"}, "doh3_port": {"8443"}, "doh3_max_streams": {"128"},
+		"acme_domain":            {"dns.example.com"},
+		"acme_renew_before_days": {"30"},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (doh3 listener) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doh3 := settings.Listeners.DoH3
+	if !doh3.Enabled || doh3.Port != 8443 || doh3.MaxStreams != 128 {
+		t.Fatalf("unexpected doh3 listener persisted: %+v", doh3)
+	}
+
+	// Disabling clears the port back to 0, same as every other listener.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", url.Values{
+		"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+		"plain_enabled": {"on"}, "plain_port": {"53"},
+		"acme_renew_before_days": {"30"},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (doh3 disabled) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err = st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Listeners.DoH3.Enabled || settings.Listeners.DoH3.Port != 0 {
+		t.Fatalf("expected doh3 disabled and port cleared, got: %+v", settings.Listeners.DoH3)
+	}
+}
+
 // The mode select is an explicit choice (none/default/all/custom) rather
 // than inferring "none" from a blank text field — a blank field and a
 // never-touched field were otherwise indistinguishable, which made saving

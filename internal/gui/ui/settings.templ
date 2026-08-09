@@ -93,11 +93,12 @@ templ Settings(data SettingsData) {
 				Leave a field blank to use CoreDNS's own default. <code>max_fails 0</code> disables marking the upstream down on failures — sensible with a single local resolver that has no failover target anyway. "Prefer UDP" makes BrambleGate try UDP to the upstream first even when a client's own query arrived over TCP, retrying over TCP only if the reply comes back truncated — useful if the upstream struggles with a burst of concurrent TCP connections.
 			</p>
 		</div>
-		<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+		<div class="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
 			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53)
 			@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853)
 			@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443)
 			@doqListenerFields(data.Settings.Listeners.DoQ)
+			@doh3ListenerFields(data.Settings.Listeners.DoH3)
 		</div>
 
 		<h2 class="text-sm font-semibold mt-6 mb-3">Cache, logging &amp; errors</h2>
@@ -365,6 +366,47 @@ templ doqListenerFields(l model.QUICListener) {
 				name="doq_worker_pool_size"
 				if l.WorkerPoolSize != 0 {
 					value={ strconv.Itoa(l.WorkerPoolSize) }
+				}
+				placeholder="default"
+				class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+			/>
+		</label>
+	</div>
+}
+
+// doh3ListenerFields is the DoH3 counterpart to doqListenerFields — same
+// enable/port shape, but only max_streams (the https3 plugin's only tuning
+// knob; there's no worker_pool_size equivalent, so that field is omitted
+// here entirely rather than shown and silently rejected on save).
+templ doh3ListenerFields(l model.QUICListener) {
+	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2">
+		<label class="flex items-center gap-2 text-sm">
+			<input
+				type="checkbox"
+				name="doh3_enabled"
+				checked?={ l.Enabled }
+				onchange={ fillDefaultPort("doh3", 443) }
+			/>
+			DoH3
+		</label>
+		<input
+			type="number"
+			id="doh3_port"
+			name="doh3_port"
+			if l.Port != 0 {
+				value={ strconv.Itoa(l.Port) }
+			}
+			placeholder="443"
+			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+		/>
+		<label class="flex flex-col gap-1 text-xs">
+			<span class="text-bramble-muted">Max streams</span>
+			<input
+				type="number"
+				min="0"
+				name="doh3_max_streams"
+				if l.MaxStreams != 0 {
+					value={ strconv.Itoa(l.MaxStreams) }
 				}
 				placeholder="default"
 				class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"

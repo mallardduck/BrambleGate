@@ -292,6 +292,7 @@ func TestRenderZoneDataDDRRecords(t *testing.T) {
 	s := acmeEnabledSettings()
 	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
 	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8853}}
+	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}}
 	rs := model.RecordSet{Records: []model.Record{
 		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
 	}}
@@ -306,8 +307,8 @@ func TestRenderZoneDataDDRRecords(t *testing.T) {
 	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
 		t.Fatalf("zone data is not valid JSON: %v\n%s", err, out.ZoneData)
 	}
-	if len(zd.DDR) != 3 {
-		t.Fatalf("expected 3 DDR records (DoT/DoH/DoQ), got %+v", zd.DDR)
+	if len(zd.DDR) != 4 {
+		t.Fatalf("expected 4 DDR records (DoT/DoH/DoQ/DoH3), got %+v", zd.DDR)
 	}
 	byAlpn := map[string]ddrRecord{}
 	for _, d := range zd.DDR {
@@ -340,6 +341,13 @@ func TestRenderZoneDataDDRRecords(t *testing.T) {
 	}
 	if !hasParam(doq.Params, "port", "8853") {
 		t.Errorf("doq record missing port 8853: %+v", doq.Params)
+	}
+	h3, ok := byAlpn["h3"]
+	if !ok {
+		t.Fatalf("missing h3 DDR record: %+v", zd.DDR)
+	}
+	if !hasParam(h3.Params, "port", "8443") || !hasParam(h3.Params, "dohpath", "/dns-query{?dns}") {
+		t.Errorf("h3 record missing port/dohpath: %+v", h3.Params)
 	}
 }
 
@@ -447,6 +455,72 @@ func TestValidateRejectsNegativeQUICTuning(t *testing.T) {
 	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 853}, MaxStreams: -1}
 	if err := Validate(s, model.RecordSet{}); err == nil {
 		t.Fatal("expected an error for negative max_streams")
+	}
+}
+
+func TestRenderCorefileDoH3(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, "https3://.:8443 {") {
+		t.Errorf("Corefile missing https3 listener block:\n%s", cf)
+	}
+	// Every encrypted block (dot/doh3 — 2 of them here) needs its own tls line.
+	if strings.Count(cf, "tls /c/cert.pem /c/key.pem") != 2 {
+		t.Errorf("expected a tls line in each of the 2 encrypted blocks:\n%s", cf)
+	}
+	if strings.Contains(cf, "https3 {") {
+		t.Errorf("https3{} tuning block should be omitted when max_streams is unset:\n%s", cf)
+	}
+	if !strings.Contains(cf, "timeouts {") {
+		t.Errorf("expected the encrypted-listener timeouts bump on the https3 block too:\n%s", cf)
+	}
+}
+
+func TestRenderCorefileDoH3Tuning(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoH3 = model.QUICListener{
+		Listener:   model.Listener{Enabled: true, Port: 8443},
+		MaxStreams: 128,
+	}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{
+		"https3://.:8443 {",
+		"https3 {",
+		"max_streams 128",
+	} {
+		if !strings.Contains(cf, want) {
+			t.Errorf("Corefile missing %q:\n%s", want, cf)
+		}
+	}
+	if strings.Contains(cf, "worker_pool_size") {
+		t.Errorf("worker_pool_size has no https3 equivalent and should never be rendered:\n%s", cf)
+	}
+}
+
+func TestValidateRejectsNegativeDoH3MaxStreams(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}, MaxStreams: -1}
+	if err := Validate(s, model.RecordSet{}); err == nil {
+		t.Fatal("expected an error for negative max_streams")
+	}
+}
+
+func TestValidateRejectsDoH3WorkerPoolSize(t *testing.T) {
+	s := baseSettings()
+	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}, WorkerPoolSize: 1}
+	if err := Validate(s, model.RecordSet{}); err == nil {
+		t.Fatal("expected an error: https3 does not support worker_pool_size")
 	}
 }
 

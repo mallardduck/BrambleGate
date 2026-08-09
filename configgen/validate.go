@@ -118,7 +118,7 @@ func validateACME(a model.ACME) error {
 func validateListeners(l model.Listeners) error {
 	enabled := false
 	for name, ln := range map[string]model.Listener{
-		"plain": l.Plain, "dot": l.DoT, "doh": l.DoH, "doq": l.DoQ.Listener,
+		"plain": l.Plain, "dot": l.DoT, "doh": l.DoH, "doq": l.DoQ.Listener, "doh3": l.DoH3.Listener,
 	} {
 		if !ln.Enabled {
 			continue
@@ -129,13 +129,19 @@ func validateListeners(l model.Listeners) error {
 		}
 	}
 	if !enabled {
-		return errors.New("no listeners enabled: enable at least one of plain/dot/doh/doq")
+		return errors.New("no listeners enabled: enable at least one of plain/dot/doh/doq/doh3")
 	}
 	if l.DoQ.MaxStreams < 0 {
 		return errors.New("listeners.doq.max_streams must not be negative")
 	}
 	if l.DoQ.WorkerPoolSize < 0 {
 		return errors.New("listeners.doq.worker_pool_size must not be negative")
+	}
+	if l.DoH3.MaxStreams < 0 {
+		return errors.New("listeners.doh3.max_streams must not be negative")
+	}
+	if l.DoH3.WorkerPoolSize != 0 {
+		return errors.New("listeners.doh3.worker_pool_size is not supported by the https3 plugin (only max_streams applies)")
 	}
 	return nil
 }

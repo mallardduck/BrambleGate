@@ -339,6 +339,10 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	if v, err := strconv.Atoi(r.FormValue("doq_worker_pool_size")); err == nil && v >= 0 {
 		s.Listeners.DoQ.WorkerPoolSize = v
 	}
+	parseListener(r, "doh3", &s.Listeners.DoH3.Listener)
+	if v, err := strconv.Atoi(r.FormValue("doh3_max_streams")); err == nil && v >= 0 {
+		s.Listeners.DoH3.MaxStreams = v
+	}
 
 	s.ACME.Enabled = r.FormValue("acme_enabled") != ""
 	s.ACME.Domain = strings.TrimSpace(r.FormValue("acme_domain"))
