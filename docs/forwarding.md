@@ -12,6 +12,7 @@ resolver. BrambleGate never sees or touches blocklist data; it just forwards.
 upstream_dns:
   address: 192.168.10.5:53   # host:port of your existing resolver
   protocol: plain             # plain | dot | doh — the internal hop to it
+  ecs_enabled: false          # attach the real client IP via EDNS0 Client Subnet
 ```
 
 On first run with no `settings.yaml`, BrambleGate seeds a default that
@@ -25,6 +26,22 @@ file directly).
 [`encrypted-dns.md`](encrypted-dns.md) — that's the client-to-BrambleGate
 hop; this is the BrambleGate-to-upstream hop). Most homelab setups leave this
 `plain` since the upstream is usually on the same trusted network.
+
+### EDNS0 Client Subnet (`ecs_enabled`)
+
+When on, BrambleGate attaches the querying client's real source IP to the
+forwarded query (via CoreDNS's `rewrite edns0 subnet set 32 128`, full
+precision — no truncation), so `upstream_dns.address` can apply per-client
+policy (e.g. PiHole/AdGuard/Technitium group-based blocking). Any
+client-supplied EDNS0 Client Subnet option on the incoming query is
+overwritten, not trusted.
+
+This only makes sense — and is only allowed — when the upstream is a local
+resolver you trust: `Validate` rejects `ecs_enabled: true` combined with an
+upstream address that isn't a literal private/loopback/link-local IP (a
+hostname or a public IP like `1.1.1.1` is rejected outright, with no
+override). Sending real client IPs to a public resolver would leak them
+off your network, which defeats the purpose of running BrambleGate.
 
 ## Verifying it
 

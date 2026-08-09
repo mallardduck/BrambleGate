@@ -196,6 +196,50 @@ func TestSettingsSaveAndVLANLifecycle(t *testing.T) {
 	}
 }
 
+func TestSettingsSave_ECS(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	// A private upstream with ECS enabled must save successfully and persist.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", url.Values{
+		"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+		"upstream_ecs_enabled": {"on"},
+		"plain_enabled":        {"on"}, "plain_port": {"53"},
+		"acme_renew_before_days": {"30"},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (private upstream + ecs) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.UpstreamDNS.ECS {
+		t.Fatalf("expected ecs_enabled to persist as true, got: %+v", settings.UpstreamDNS)
+	}
+
+	// A public upstream with ECS enabled must be rejected, and the prior (valid)
+	// settings must remain on disk unchanged.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", url.Values{
+		"upstream_address": {"1.1.1.1:53"}, "upstream_protocol": {"plain"},
+		"upstream_ecs_enabled": {"on"},
+		"plain_enabled":        {"on"}, "plain_port": {"53"},
+		"acme_renew_before_days": {"30"},
+	}))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "ecs_enabled") {
+		t.Fatalf("expected the public-upstream+ecs save to be rejected with an ecs_enabled error, status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err = st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.UpstreamDNS.Address != "192.168.10.5:53" {
+		t.Fatalf("rejected save must not have overwritten settings.yaml, got: %+v", settings.UpstreamDNS)
+	}
+}
+
 // The mode select is an explicit choice (none/default/all/custom) rather
 // than inferring "none" from a blank text field — a blank field and a
 // never-touched field were otherwise indistinguishable, which made saving

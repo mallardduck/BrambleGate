@@ -37,6 +37,15 @@ templ Settings(data SettingsData) {
 				</div>
 			</label>
 		</div>
+		<div class="mt-3">
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="upstream_ecs_enabled" checked?={ data.Settings.UpstreamDNS.ECS }/>
+				Send client IP to upstream (EDNS0 Client Subnet)
+			</label>
+			<p class="text-bramble-danger text-xs mt-1 max-w-prose">
+				Only enable this if the upstream above is a local resolver you trust (e.g. your own PiHole/AdGuard/Technitium). It reveals each client's real source IP to the upstream so it can apply per-client policy. Saving is rejected unless the upstream address is a private/loopback IP — enabling this with a public resolver (Cloudflare, Google, etc.) would leak client IPs off your network.
+			</p>
+		</div>
 		<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
 			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53)
 			@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853)

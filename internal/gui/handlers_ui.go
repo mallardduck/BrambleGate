@@ -315,6 +315,7 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	}
 	s.UpstreamDNS.Address = strings.TrimSpace(r.FormValue("upstream_address"))
 	s.UpstreamDNS.Protocol = r.FormValue("upstream_protocol")
+	s.UpstreamDNS.ECS = r.FormValue("upstream_ecs_enabled") != ""
 
 	parseListener(r, "plain", &s.Listeners.Plain)
 	parseListener(r, "dot", &s.Listeners.DoT)
