@@ -6,6 +6,7 @@ use (
 	.
 	./configgen
 	./engine
+	./mdnssd
 	./model
 	./plugins/localrecords
 	./plugins/mdnsbridge
