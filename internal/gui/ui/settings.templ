@@ -32,10 +32,10 @@ templ Settings(data SettingsData) {
 			</label>
 		</div>
 		<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain)
-			@listenerFields("dot", "DoT", data.Settings.Listeners.DoT)
-			@listenerFields("doh", "DoH", data.Settings.Listeners.DoH)
-			@listenerFields("doq", "DoQ", data.Settings.Listeners.DoQ)
+			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53)
+			@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853)
+			@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443)
+			@listenerFields("doq", "DoQ", data.Settings.Listeners.DoQ, 853)
 		</div>
 
 		<h2 class="text-sm font-semibold mt-6 mb-3">ACME (DNS-01 certificates)</h2>
@@ -148,22 +148,41 @@ templ Settings(data SettingsData) {
 	</div>
 }
 
-templ listenerFields(prefix, label string, l model.Listener) {
+templ listenerFields(prefix, label string, l model.Listener, defaultPort int) {
 	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2">
 		<label class="flex items-center gap-2 text-sm">
-			<input type="checkbox" name={ prefix + "_enabled" } checked?={ l.Enabled }/>
+			<input
+				type="checkbox"
+				name={ prefix + "_enabled" }
+				checked?={ l.Enabled }
+				onchange={ fillDefaultPort(prefix, defaultPort) }
+			/>
 			{ label }
 		</label>
 		<input
 			type="number"
+			id={ prefix + "_port" }
 			name={ prefix + "_port" }
 			if l.Port != 0 {
 				value={ strconv.Itoa(l.Port) }
 			}
-			placeholder="port"
+			placeholder={ strconv.Itoa(defaultPort) }
 			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
 		/>
 	</div>
+}
+
+// fillDefaultPort populates a listener's port field with its standard default
+// (53/853/443/853) the moment the user enables it — otherwise the port field
+// just shows a placeholder and looks empty/unset until they notice they need
+// to type a port themselves.
+script fillDefaultPort(prefix string, defaultPort int) {
+	if (event.target.checked) {
+		const portInput = document.getElementById(prefix + "_port");
+		if (portInput && !portInput.value) {
+			portInput.value = defaultPort;
+		}
+	}
 }
 
 templ vlanRow(v model.VLAN) {
