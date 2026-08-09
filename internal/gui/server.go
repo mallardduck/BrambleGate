@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/pluginreg"
 )
 
 // NewServer builds the http.Server for the dashboard + JSON API. The engine and
@@ -28,6 +29,8 @@ func NewServer(svc *Service, addr string) *http.Server {
 		r.Delete("/records/{name}/{type}", h.deleteRecord)
 		r.Get("/settings", h.getSettings)
 		r.Put("/settings", h.putSettings)
+
+		r.Get("/plugins", h.listPlugins)
 
 		r.Get("/mdns", h.listMDNS)
 		r.Post("/mdns/{name}/publish", h.publishMDNS)
@@ -129,6 +132,14 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
+}
+
+// listPlugins is a debug/troubleshooting surface: every registered
+// BrambleGate plugin/component (CoreDNS-chain and bramble-only alike) with its
+// current loaded state and reason — see dev-docs/plugin-system.md. Unlike
+// /api/mdns it needs no Service call; pluginreg is a process-wide registry.
+func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"plugins": pluginreg.All()})
 }
 
 func (h *handlers) listMDNS(w http.ResponseWriter, r *http.Request) {

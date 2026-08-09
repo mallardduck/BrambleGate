@@ -13,9 +13,17 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/pluginreg"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise/mdnsresponder"
 )
+
+func init() {
+	pluginreg.Register(pluginreg.Descriptor{
+		Name: "mdnsadvertise",
+		Kind: pluginreg.BrambleOnly,
+	})
+}
 
 // responderBackend is the mDNS responder backend the Advertiser needs.
 // Kept as an interface so tests can supply a fake instead of opening real

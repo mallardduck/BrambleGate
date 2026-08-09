@@ -6,9 +6,20 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	"github.com/mallardduck/BrambleGate/pluginreg"
 )
 
-func init() { plugin.Register("mdnsbridge", setup) }
+func init() {
+	plugin.Register("mdnsbridge", setup)
+	pluginreg.Register(pluginreg.Descriptor{
+		Name: "mdnsbridge",
+		Kind: pluginreg.CoreDNSPlugin,
+		// mdnsbridge runs ahead of localrecords in the chain and falls
+		// through to it on a miss (docs/plugins.md) — advisory, not
+		// enforced here; the real chain order is engine/directives.go.
+		DependsOn: []string{"localrecords"},
+	})
+}
 
 // The discovery Table is created and owned by the host process (cli) and injected
 // here before the engine starts, because it must outlive engine reloads and be
@@ -39,20 +50,26 @@ func sharedTable() *Table {
 func setup(c *caddy.Controller) error {
 	for c.Next() {
 		if len(c.RemainingArgs()) != 0 {
-			return plugin.Error("mdnsbridge", c.ArgErr())
+			err := c.ArgErr()
+			pluginreg.SetLoaded("mdnsbridge", false, "failed to start: "+err.Error())
+			return plugin.Error("mdnsbridge", err)
 		}
 		for c.NextBlock() {
-			return plugin.Error("mdnsbridge", c.Errf("unknown property %q", c.Val()))
+			err := c.Errf("unknown property %q", c.Val())
+			pluginreg.SetLoaded("mdnsbridge", false, "failed to start: "+err.Error())
+			return plugin.Error("mdnsbridge", err)
 		}
 	}
 
 	tbl := sharedTable()
 	if tbl == nil {
+		pluginreg.SetLoaded("mdnsbridge", false, "failed to start: "+errNoTable.Error())
 		return plugin.Error("mdnsbridge", errNoTable)
 	}
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		return &MDNSBridge{Next: next, Table: tbl}
 	})
+	pluginreg.SetLoaded("mdnsbridge", true, "")
 	return nil
 }
 

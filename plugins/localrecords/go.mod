@@ -4,9 +4,13 @@ go 1.26
 
 toolchain go1.26.5
 
+// Sibling library module resolved from disk (see docs/repo-layout.md).
+replace github.com/mallardduck/BrambleGate/pluginreg => ../../pluginreg
+
 require (
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.6
+	github.com/mallardduck/BrambleGate/pluginreg v0.0.0
 	github.com/miekg/dns v1.1.72
 )
 

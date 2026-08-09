@@ -23,6 +23,7 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/gui"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleGate/store"
 )
@@ -127,6 +128,16 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	eng, err := engine.New(rendered.Corefile)
 	if err != nil {
 		return fmt.Errorf("start engine: %w", err)
+	}
+
+	// engine.New has just run every CoreDNS-chain plugin's setup() against the
+	// rendered Corefile, so Required plugins (localrecords) have had their
+	// chance to report Loaded via pluginreg. A failure here means a
+	// Corefile-generation bug omitted a structurally required plugin, not a
+	// user setting — fail loudly at startup rather than silently serving a
+	// broken zone (dev-docs/plugin-system.md).
+	if err := pluginreg.Validate(); err != nil {
+		return fmt.Errorf("plugin registry validation failed: %w", err)
 	}
 
 	if settings.Listeners.Plain.Enabled {

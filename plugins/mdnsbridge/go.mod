@@ -8,6 +8,7 @@ require (
 	github.com/brutella/dnssd v1.2.14
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.6
+	github.com/mallardduck/BrambleGate/pluginreg v0.0.0
 	github.com/miekg/dns v1.1.72
 )
 
@@ -43,4 +44,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/mallardduck/BrambleGate/mdnssd => ../../mdnssd
+replace (
+	github.com/mallardduck/BrambleGate/mdnssd => ../../mdnssd
+	github.com/mallardduck/BrambleGate/pluginreg => ../../pluginreg
+)

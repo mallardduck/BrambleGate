@@ -16,9 +16,10 @@ import (
 
 	"github.com/mallardduck/BrambleGate/configgen"
 	"github.com/mallardduck/BrambleGate/internal/acme"
-	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/pluginreg"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
@@ -144,10 +145,12 @@ func (s *Service) StopMDNS() {
 func (s *Service) StartAdvertise(settings model.Settings) error {
 	advertiser, err := newMDNSAdvertiser(s.baseCtx, s.log)
 	if err != nil {
+		pluginreg.SetLoaded("mdnsadvertise", false, "failed to start: "+err.Error())
 		return fmt.Errorf("start mdns advertiser: %w", err)
 	}
 	advertiser.Reconcile(settings)
 	s.advertiser = advertiser
+	pluginreg.SetLoaded("mdnsadvertise", true, "")
 	return nil
 }
 
@@ -160,6 +163,7 @@ func (s *Service) StopAdvertise() {
 		}
 		s.advertiser = nil
 	}
+	pluginreg.SetLoaded("mdnsadvertise", false, "disabled in settings")
 }
 
 // reconcileAdvertise starts/stops/reconfigures self-advertisement to match the

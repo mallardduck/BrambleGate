@@ -125,6 +125,7 @@ require (
 	github.com/mallardduck/BrambleGate/model v0.0.0
 	github.com/mallardduck/BrambleGate/plugins/localrecords v0.0.0 // indirect
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge v0.0.0
+	github.com/mallardduck/BrambleGate/pluginreg v0.0.0
 	github.com/mallardduck/BrambleGate/selfip v0.0.0
 	github.com/mallardduck/BrambleGate/store v0.0.0
 	github.com/mdlayher/socket v0.6.1 // indirect

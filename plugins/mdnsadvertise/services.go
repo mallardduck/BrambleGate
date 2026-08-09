@@ -3,8 +3,8 @@ package mdnsadvertise
 import (
 	"strings"
 
-	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise/mdnsresponder"
 )
 
 // instanceNamePrefix is the base of every service's mDNS-SD instance name.

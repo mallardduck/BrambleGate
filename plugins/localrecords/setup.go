@@ -10,12 +10,20 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/miekg/dns"
 )
 
 const defaultTTL = 300
 
-func init() { plugin.Register("localrecords", setup) }
+func init() {
+	plugin.Register("localrecords", setup)
+	pluginreg.Register(pluginreg.Descriptor{
+		Name:     "localrecords",
+		Kind:     pluginreg.CoreDNSPlugin,
+		Required: true,
+	})
+}
 
 // setup parses the localrecords stanza and inserts the handler into the chain.
 //
@@ -37,12 +45,14 @@ func init() { plugin.Register("localrecords", setup) }
 func setup(c *caddy.Controller) error {
 	lr, err := parse(c)
 	if err != nil {
+		pluginreg.SetLoaded("localrecords", false, "failed to start: "+err.Error())
 		return plugin.Error("localrecords", err)
 	}
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		lr.Next = next
 		return lr
 	})
+	pluginreg.SetLoaded("localrecords", true, "")
 	return nil
 }
 

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise/mdnsresponder"
 )
 
 // fakeBackend records Register/Unregister calls instead of touching real mDNS

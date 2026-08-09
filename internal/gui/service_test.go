@@ -371,7 +371,7 @@ func TestSaveSettingsDisablesMDNSListenerLive(t *testing.T) {
 
 // stubAdvertiser is a bare mdnsAdvertiser fake — real Reconcile/Close semantics
 // (registering/unregistering mDNS-SD services) are covered by
-// internal/mdnsadvertise's own tests; here we only need to observe that
+// plugins/mdnsadvertise's own tests; here we only need to observe that
 // Service calls the interface correctly.
 type stubAdvertiser struct {
 	reconcileCalls int
