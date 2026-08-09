@@ -448,7 +448,7 @@ func (s *Service) reload(rendered configgen.Rendered) error {
 func indexOf(rs model.RecordSet, name string, rtype model.RecordType) int {
 	target := model.Record{Name: name}.NormalizedName()
 	for i, r := range rs.Records {
-		if r.NormalizedName() == target && r.Type == rtype {
+		if r.NormalizedName() == target && strings.EqualFold(string(r.Type), string(rtype)) {
 			return i
 		}
 	}

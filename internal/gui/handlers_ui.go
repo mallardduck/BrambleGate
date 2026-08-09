@@ -156,7 +156,7 @@ func (h *handlers) renderRecordsAtIdentity(w http.ResponseWriter, r *http.Reques
 func findRecord(rs model.RecordSet, name string, rtype model.RecordType) (model.Record, bool) {
 	target := model.Record{Name: name}.NormalizedName()
 	for _, rec := range rs.Records {
-		if rec.NormalizedName() == target && rec.Type == rtype {
+		if rec.NormalizedName() == target && strings.EqualFold(string(rec.Type), string(rtype)) {
 			return rec, true
 		}
 	}

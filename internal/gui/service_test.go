@@ -93,6 +93,18 @@ func TestMDNSPublishAndPromote(t *testing.T) {
 	if !owned || len(v4) != 1 || v4[0] != "192.168.1.9" {
 		t.Fatalf("promoted name should resolve live, got owned=%v v4=%v", owned, v4)
 	}
+
+	// Deleting a promoted record round-trips its type through a URL path
+	// (handlers_ui.go/server.go uppercase the {type} param for a
+	// case-insensitive API), so the lookup must match "MDNS" against the
+	// stored lowercase model.TypeMDNS, not reject it as not-found.
+	if err := svc.DeleteRecord("printer.home.arpa", model.RecordType(strings.ToUpper(string(model.TypeMDNS)))); err != nil {
+		t.Fatalf("delete promoted record: %v", err)
+	}
+	rs, _ = st.LoadRecords()
+	if len(rs.Records) != 0 {
+		t.Fatalf("expected promoted record to be deleted, got %+v", rs.Records)
+	}
 }
 
 func TestPromoteUnknownIsNotFound(t *testing.T) {
