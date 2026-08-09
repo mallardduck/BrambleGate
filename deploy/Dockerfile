@@ -1,5 +1,11 @@
 # syntax=docker/dockerfile:1
 
+# VARIANT picks the distroless tag used by the runtime stage below. It must be
+# declared here, before the first FROM, to be a global ARG — an ARG declared
+# inside a build stage's scope (i.e. after that stage's FROM) does not carry
+# over into a later stage's FROM, which is what caused it to resolve empty.
+ARG VARIANT=debug
+
 # ---- Build stage -----------------------------------------------------------
 # The whole repo is copied so the root module's `replace` directives resolve the
 # sibling modules (engine/, plugins/*, model/, store/, configgen/) from disk.
@@ -23,9 +29,17 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags='-s -w' -o /out/bramblegate .
 
 # ---- Runtime stage ---------------------------------------------------------
-# distroless static: no shell, no package manager, just the binary + CA certs
-# (CA certs are needed for ACME). Trivially cross-compilable to arm64.
+# distroless static: no package manager, just the binary + CA certs (CA certs
+# are needed for ACME). Trivially cross-compilable to arm64.
 #
+# VARIANT (declared globally above): "debug" (default) layers in a busybox
+# shell for local dev and prerelease images so `docker exec` isn't a dead
+# end; "latest" is the true minimal/secure image with no shell at all and is
+# what real (non-prerelease) release builds pass explicitly via
+# --build-arg VARIANT=latest (see .github/workflows/release.yml).
+ARG VARIANT
+FROM gcr.io/distroless/static-debian12:${VARIANT}
+
 # Runs as root (uid 0), deliberately: this is a DNS front door that binds the
 # privileged port 53 and must seed/rewrite settings.yaml + records.yaml on a
 # freshly bind-mounted /config — both of which a fresh, unconfigured host makes
@@ -33,7 +47,6 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 # root). This matches how Pi-hole/dnsmasq homelab images ship. Operators who want
 # to harden can run nonroot: chown the config volume to their uid, grant
 # CAP_NET_BIND_SERVICE (or use high ports), and add `user:`—see the README.
-FROM gcr.io/distroless/static-debian12:latest
 
 COPY --from=build /out/bramblegate /usr/local/bin/bramblegate
 

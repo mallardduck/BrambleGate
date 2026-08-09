@@ -133,6 +133,11 @@ jobs:
           push: ${{ github.event_name != 'workflow_dispatch' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Prerelease (alpha/beta/rc) images keep the debug shell for
+          # troubleshooting; only a real stable release ships the minimal,
+          # shell-less image (see deploy/Dockerfile).
+          build-args: |
+            VARIANT=${{ steps.semver.outputs.HAS_PRERELEASE == 'true' && 'debug' || 'latest' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

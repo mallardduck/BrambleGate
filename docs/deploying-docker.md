@@ -113,17 +113,25 @@ both `plugins/*` from disk, so the whole repo needs to be in the build
 context, and `go.work*` is excluded via `.dockerignore` so the build runs in
 plain-module + `replace` mode, not workspace mode. Stage 2 is
 `distroless/static-debian12` — just the binary and CA certs (needed for
-ACME), nothing else. The binary is pure Go (`CGO_ENABLED=0`), so
-cross-compiling to `arm64` from an `amd64` builder (or vice versa) is a fast
-native compile, not QEMU-emulated.
+ACME), plus (by default) a `busybox` shell for debugging. The binary is pure
+Go (`CGO_ENABLED=0`), so cross-compiling to `arm64` from an `amd64` builder
+(or vice versa) is a fast native compile, not QEMU-emulated.
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile -t bramblegate:local .
 ```
 
-Release builds do exactly this (both platforms into one manifest) via
-`docker/build-push-action` in `.github/workflows/release.yml`, gated on CI
-passing first — see `dev-docs/roadmap.md` Phase 6.
+The runtime base image is picked via the `VARIANT` build arg, which defaults
+to `debug` (a distroless tag that includes a busybox shell, so
+`docker exec -it <container> sh` works). Build with
+`--build-arg VARIANT=latest` for the true minimal, shell-less image used in
+production.
+
+Release builds pass `VARIANT` based on the tag: prerelease tags
+(alpha/beta/rc) keep the debug shell, real stable releases build with
+`VARIANT=latest`. This happens via `docker/build-push-action` in
+`.github/workflows/release.yml`, gated on CI passing first — see
+`dev-docs/roadmap.md` Phase 6.
 
 ## Troubleshooting
 
