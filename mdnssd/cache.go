@@ -1,6 +1,10 @@
 package mdnssd
 
-import "time"
+import (
+	"time"
+
+	"github.com/miekg/dns"
+)
 
 // refreshThresholds are the fractions of a record's TTL at which RFC 6762
 // §5.2 says a querier should proactively re-query to keep a live record from
@@ -11,6 +15,7 @@ import "time"
 var refreshThresholds = [4]float64{0.80, 0.85, 0.90, 0.95}
 
 type cacheRecord struct {
+	rr            dns.RR // the record as last (re)stored; nil if the caller didn't supply one
 	question      string // query name to reissue when refreshing this record
 	ttl           time.Duration
 	storedAt      time.Time
@@ -53,13 +58,30 @@ func NewCache(clock Clock) *Cache {
 	return &Cache{clock: clock, records: make(map[string]*cacheRecord)}
 }
 
-// Store (re)records key as freshly seen with the given TTL and query name,
-// resetting its refresh schedule. Returns true if key is new, false if it
+// Store (re)records key as freshly seen with the given RR/TTL/query name,
+// resetting its refresh schedule. rr may be nil if the caller has no record
+// to offer as a future known answer (see KnownAnswers) — the TTL/refresh
+// bookkeeping doesn't need it. Returns true if key is new, false if it
 // refreshes an existing record.
-func (c *Cache) Store(key, question string, ttl time.Duration) bool {
+func (c *Cache) Store(key, question string, rr dns.RR, ttl time.Duration) bool {
 	_, existed := c.records[key]
-	c.records[key] = &cacheRecord{question: question, ttl: ttl, storedAt: c.clock.Now()}
+	c.records[key] = &cacheRecord{rr: rr, question: question, ttl: ttl, storedAt: c.clock.Now()}
 	return !existed
+}
+
+// KnownAnswers returns knownRecord values (see knownanswer.go) for every
+// cached record answering question that was stored with a non-nil rr, as of
+// now. Callers pass this to knownAnswers() to build a re-query's RFC 6762
+// §7.1 known-answer list.
+func (c *Cache) KnownAnswers(question string, now time.Time) []knownRecord {
+	var out []knownRecord
+	for _, rec := range c.records {
+		if rec.question != question || rec.rr == nil {
+			continue
+		}
+		out = append(out, knownRecord{RR: rec.rr, Question: rec.question, TTL: rec.ttl, Elapsed: rec.elapsed(now)})
+	}
+	return out
 }
 
 // Remove deletes a record immediately, e.g. on a goodbye packet (TTL=0).
