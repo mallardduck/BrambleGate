@@ -364,7 +364,7 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, s model.S
 // of their real subnet, defeating ECS the same way caching a split-horizon
 // localrecords answer would (see localrecords/mdnsbridge's own cache-bypass
 // ordering above). That correctness rule always wins, before s.Cache's own
-// tuning is even considered (dev-docs/plugin-audit-inuse.md).
+// tuning is even considered.
 func writeCache(blk *corefile.Block, s model.Settings) {
 	if s.UpstreamDNS.ECS {
 		return
@@ -382,9 +382,9 @@ func writeCache(blk *corefile.Block, s model.Settings) {
 
 // writeErrors renders the errors directive with consolidate on by default —
 // collapsing repeated identical failures (a flaky upstream timing out) into a
-// periodic summary instead of one line per error — or bare when disabled
-// (dev-docs/plugin-audit-inuse.md). The window/pattern/level are the plugin's
-// own documented example, not user-tunable (see model.ErrorsTuning).
+// periodic summary instead of one line per error — or bare when disabled.
+// The window/pattern/level are the plugin's own documented example, not
+// user-tunable (see model.ErrorsTuning).
 func writeErrors(blk *corefile.Block, s model.Settings) {
 	if s.Errors.ConsolidateDisabled {
 		blk.Directive("errors")
@@ -396,8 +396,8 @@ func writeErrors(blk *corefile.Block, s model.Settings) {
 }
 
 // writeLog renders the log directive, or omits it entirely when disabled, or
-// scopes it to specific response classes when set (dev-docs/plugin-audit-inuse.md).
-// Default (both fields zero) matches CoreDNS's own unconditional
+// scopes it to specific response classes when set. Default (both fields zero)
+// matches CoreDNS's own unconditional
 // log-everything behavior, unchanged from before these settings existed.
 func writeLog(blk *corefile.Block, s model.Settings) {
 	if s.Log.Disabled {

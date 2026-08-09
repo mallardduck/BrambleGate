@@ -14,8 +14,8 @@ type Settings struct {
 	Errors      ErrorsTuning   `yaml:"errors" json:"errors"`
 }
 
-// CacheTuning controls the cache plugin's resilience/efficiency knobs
-// (dev-docs/plugin-audit-inuse.md). Both default ON with a fixed, sane value —
+// CacheTuning controls the cache plugin's resilience/efficiency knobs.
+// Both default ON with a fixed, sane value —
 // unlike CoreDNS's own stock defaults (serve_stale off, prefetch off) — since a
 // homelab appliance benefits out of the box from riding out a brief upstream
 // blip and from not re-fetching popular names right before they expire. Each is
@@ -36,7 +36,7 @@ type CacheTuning struct {
 	PrefetchDisabled bool `yaml:"prefetch_disabled,omitempty" json:"prefetch_disabled,omitempty"`
 }
 
-// LogTuning controls the log plugin (dev-docs/plugin-audit-inuse.md). Zero
+// LogTuning controls the log plugin. Zero
 // value matches CoreDNS's own default and BrambleGate's prior behavior: log
 // everything, unconditionally — so existing installs aren't silently changed.
 // Unlike CacheTuning, there is a real "turn it off" case here (CoreDNS's own
