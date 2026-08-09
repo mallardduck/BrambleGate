@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/internal/acme"
 	"github.com/mallardduck/BrambleGate/internal/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/model"
@@ -265,6 +266,13 @@ func (s *Service) Settings() (model.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.store.LoadSettings()
+}
+
+// ACMEStatus reads the on-disk cert under <configDir>/certs for display (e.g.
+// the dashboard) — independent of ACME being enabled, since a self-signed
+// placeholder is also worth showing.
+func (s *Service) ACMEStatus() acme.Status {
+	return acme.ReadStatus(s.configDir)
 }
 
 // SaveRecords validates+persists the record set and reloads the engine.

@@ -56,7 +56,7 @@ func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
 			mdnsCount = len(entries)
 		}
 	}
-	data := ui.DashboardData{Settings: settings, RecordCount: len(rs.Records), MDNSCount: mdnsCount}
+	data := ui.DashboardData{Settings: settings, RecordCount: len(rs.Records), MDNSCount: mdnsCount, Cert: h.svc.ACMEStatus()}
 	render(w, r, "Dashboard", ui.PathDashboard, ui.Dashboard(data))
 }
 

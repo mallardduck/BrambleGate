@@ -2,7 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
+	"github.com/mallardduck/BrambleGate/internal/acme"
 	"github.com/mallardduck/BrambleGate/model"
 )
 
@@ -11,6 +14,7 @@ type DashboardData struct {
 	Settings    model.Settings
 	RecordCount int
 	MDNSCount   int // discovered entries; 0 when mDNS is disabled
+	Cert        acme.Status
 }
 
 // IsDefaultUpstream reports whether the upstream forwarder is still the
@@ -60,6 +64,115 @@ templ Dashboard(data DashboardData) {
 			</tbody>
 		</table>
 	</div>
+	@acmeStatusCard(data.Settings, data.Cert)
+}
+
+// acmeStatusCard summarizes the on-disk cert (independent of whether ACME is
+// enabled — a self-signed placeholder shows here too) so a stale/wrong/
+// expiring cert is visible without digging into logs or /config/certs.
+templ acmeStatusCard(settings model.Settings, cert acme.Status) {
+	<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+		<h2 class="text-sm font-semibold mb-3">Certificate (ACME)</h2>
+		if !settings.ACME.Enabled && !cert.Present {
+			<p class="text-bramble-muted text-sm">
+				ACME is disabled and no certificate has been generated yet — encrypted listeners (DoT/DoH/DoQ) will
+				get a self-signed one automatically when enabled.
+				<a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Configure ACME</a>.
+			</p>
+		} else {
+			<div class="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+				<div>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide">ACME</p>
+					if settings.ACME.Enabled {
+						@tag("Enabled", true)
+					} else {
+						@tag("Disabled", false)
+					}
+				</div>
+				<div>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide">Domain</p>
+					<p class="font-mono">
+						if settings.ACME.Domain != "" {
+							{ settings.ACME.Domain }
+						} else {
+							—
+						}
+					</p>
+				</div>
+				<div>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide">Certificate</p>
+					if !cert.Present {
+						@tag("None on disk", false)
+					} else if cert.SelfSigned {
+						@tag("Self-signed (untrusted)", false)
+					} else {
+						switch cert.Environment {
+							case "production":
+								@tag("Production CA", true)
+							case "staging":
+								@tag("Staging CA (untrusted)", false)
+							case "custom":
+								@tag("Custom CA", false)
+							default:
+								@tag("CA unknown", false)
+						}
+					}
+				</div>
+				if cert.Present {
+					<div>
+						<p class="text-bramble-muted text-xs uppercase tracking-wide">Covers</p>
+						<p class="font-mono">
+							if cert.Domain != "" {
+								{ cert.Domain }
+							} else {
+								—
+							}
+							if !cert.SelfSigned && settings.ACME.Domain != "" && !certCoversDomain(cert, settings.ACME.Domain) {
+								<span class="text-bramble-danger ml-1">(does not match configured domain)</span>
+							}
+						</p>
+					</div>
+					<div>
+						<p class="text-bramble-muted text-xs uppercase tracking-wide">Expires</p>
+						<p class={ expiryClass(cert) }>
+							{ cert.NotAfter.Format("2006-01-02") } ({ daysRemainingLabel(cert) })
+						</p>
+					</div>
+				}
+			</div>
+		}
+	</div>
+}
+
+// certCoversDomain mirrors internal/acme's unexported coversDomain — kept as a
+// simple display-only check here rather than exporting Manager internals.
+func certCoversDomain(cert acme.Status, domain string) bool {
+	if strings.EqualFold(cert.Domain, domain) {
+		return true
+	}
+	for _, n := range cert.DNSNames {
+		if strings.EqualFold(n, domain) {
+			return true
+		}
+	}
+	return false
+}
+
+// expiryClass flags an expiring/expired cert in the danger color; a healthy
+// one uses the normal text color.
+func expiryClass(cert acme.Status) string {
+	if cert.DaysRemaining(time.Now()) < 14 {
+		return "text-bramble-danger"
+	}
+	return ""
+}
+
+func daysRemainingLabel(cert acme.Status) string {
+	d := cert.DaysRemaining(time.Now())
+	if d < 0 {
+		return fmt.Sprintf("expired %d days ago", -d)
+	}
+	return fmt.Sprintf("%d days left", d)
 }
 
 templ statCard(label, value, href string) {
