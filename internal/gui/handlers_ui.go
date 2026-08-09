@@ -296,7 +296,20 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 
 	s.MDNS.Enabled = r.FormValue("mdns_enabled") != ""
 	s.MDNS.Interfaces = splitAndTrim(r.FormValue("mdns_interfaces"))
-	s.MDNS.ServiceTypes = splitAndTrim(r.FormValue("mdns_service_types"))
+	// mdns_service_types_mode is an explicit choice (none/default/all/custom)
+	// rather than inferring "none" from a blank text field — a blank field
+	// and a field that's never been touched are otherwise indistinguishable,
+	// which made it look like saving "none" silently turned into "default".
+	switch r.FormValue("mdns_service_types_mode") {
+	case "none":
+		s.MDNS.ServiceTypes = nil
+	case "default":
+		s.MDNS.ServiceTypes = []string{"default"}
+	case "all":
+		s.MDNS.ServiceTypes = []string{"all"}
+	default: // "custom"
+		s.MDNS.ServiceTypes = splitAndTrim(r.FormValue("mdns_service_types"))
+	}
 	s.MDNS.Suffix = strings.TrimSpace(r.FormValue("mdns_suffix"))
 	s.MDNS.Advertise.Enabled = r.FormValue("mdns_advertise_enabled") != ""
 	return nil

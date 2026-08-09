@@ -150,6 +150,61 @@ func TestSettingsSaveAndVLANLifecycle(t *testing.T) {
 	}
 }
 
+// The mode select is an explicit choice (none/default/all/custom) rather
+// than inferring "none" from a blank text field — a blank field and a
+// never-touched field were otherwise indistinguishable, which made saving
+// "none" look like it silently turned into "default" on the next render.
+func TestSettingsSave_MDNSServiceTypesMode(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	post := func(mode, custom string) {
+		t.Helper()
+		form := url.Values{
+			"upstream_address": {"10.0.0.5:53"}, "upstream_protocol": {"plain"},
+			"plain_enabled": {"on"}, "plain_port": {"53"},
+			"acme_renew_before_days":  {"30"},
+			"mdns_service_types_mode": {mode},
+		}
+		if custom != "" {
+			form.Set("mdns_service_types", custom)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", form))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("save (mode=%s) status = %d, body = %s", mode, rec.Code, rec.Body.String())
+		}
+	}
+	loadServiceTypes := func() []string {
+		t.Helper()
+		settings, err := st.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return settings.MDNS.ServiceTypes
+	}
+
+	post("none", "")
+	if got := loadServiceTypes(); len(got) != 0 {
+		t.Errorf("mode=none: ServiceTypes = %v, want empty", got)
+	}
+
+	post("default", "")
+	if got := loadServiceTypes(); len(got) != 1 || got[0] != "default" {
+		t.Errorf("mode=default: ServiceTypes = %v, want [default]", got)
+	}
+
+	post("all", "")
+	if got := loadServiceTypes(); len(got) != 1 || got[0] != "all" {
+		t.Errorf("mode=all: ServiceTypes = %v, want [all]", got)
+	}
+
+	post("custom", "_http._tcp, _ipp._tcp")
+	if got := loadServiceTypes(); len(got) != 2 || got[0] != "_http._tcp" || got[1] != "_ipp._tcp" {
+		t.Errorf("mode=custom: ServiceTypes = %v, want [_http._tcp _ipp._tcp]", got)
+	}
+}
+
 func TestMDNSPageDisabledByDefault(t *testing.T) {
 	h := newTestServer(t)
 	rec := httptest.NewRecorder()

@@ -81,8 +81,17 @@ templ Settings(data SettingsData) {
 				<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Service types ("default", "all", or a comma-separated list; blank = none)</span>
-				<input name="mdns_service_types" value={ mdnsServiceTypesFieldValue(data.Settings.MDNS.ServiceTypes) } placeholder="default" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+				<span class="text-bramble-muted text-xs">Service types</span>
+				<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
+					@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
+					@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
+					@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
+					@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
+				</select>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">Custom list (only used when "Custom list" is selected above)</span>
+				<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				<span class="text-bramble-muted text-xs">Suffix (blank = home.arpa)</span>
@@ -188,9 +197,38 @@ templ vlanRow(v model.VLAN) {
 	</div>
 }
 
-func mdnsServiceTypesFieldValue(types []string) string {
-	if len(types) == 0 {
+templ mdnsServiceTypesModeOption(value, label string, types []string) {
+	if value == mdnsServiceTypesMode(types) {
+		<option value={ value } selected>{ label }</option>
+	} else {
+		<option value={ value }>{ label }</option>
+	}
+}
+
+// mdnsServiceTypesMode derives which of the four service_types sentinel
+// states (plugins/mdnsbridge/listener.go) the current setting represents,
+// so the mode select can be preselected accurately — an explicit choice
+// instead of inferring "none" from a blank text field, which made saving
+// "none" look like it silently turned into "default" on the next render.
+func mdnsServiceTypesMode(types []string) string {
+	switch {
+	case len(types) == 0:
+		return "none"
+	case len(types) == 1 && strings.EqualFold(types[0], "default"):
 		return "default"
+	case len(types) == 1 && strings.EqualFold(types[0], "all"):
+		return "all"
+	default:
+		return "custom"
+	}
+}
+
+// mdnsServiceTypesCustomValue shows the raw list only in "custom" mode —
+// otherwise the field is unused, so leave it blank rather than echoing a
+// sentinel value the user didn't type.
+func mdnsServiceTypesCustomValue(types []string) string {
+	if mdnsServiceTypesMode(types) != "custom" {
+		return ""
 	}
 	return strings.Join(types, ", ")
 }
