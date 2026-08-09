@@ -66,6 +66,40 @@ func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 	}
 }
 
+func TestRenderCorefileIncludesACMEDomainAsFallthroughZone(t *testing.T) {
+	s := baseSettings()
+	s.ACME.Enabled = true
+	s.ACME.Email = "admin@example.com"
+	s.ACME.DNSProvider = "cloudflare"
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
+	}}
+
+	out, err := Render(s, rs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{
+		"localrecords home.arpa dns.example.com {",
+		"fallthrough dns.example.com",
+	} {
+		if !strings.Contains(cf, want) {
+			t.Errorf("Corefile missing %q:\n%s", want, cf)
+		}
+	}
+}
+
+func TestValidateRejectsACMEDomainRecordWhenACMEDisabled(t *testing.T) {
+	s := baseSettings() // ACME.Enabled is false
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
+	}}
+	if err := Validate(s, rs); err == nil {
+		t.Fatal("expected an error: dns.example.com is outside home.arpa while ACME is disabled")
+	}
+}
+
 func TestRenderCorefileDoHAndDoQ(t *testing.T) {
 	s := baseSettings()
 	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}

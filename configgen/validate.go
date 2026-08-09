@@ -32,7 +32,7 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 	if err := validateMDNS(s.MDNS, s.VLANs); err != nil {
 		return err
 	}
-	return validateRecords(rs, s.VLANs)
+	return validateRecords(rs, s.VLANs, ownedZones(s))
 }
 
 // validateMDNS checks the mDNS block: suffixes must stay inside the owned zone,
@@ -189,7 +189,7 @@ func netsOverlap(a, b *net.IPNet) bool {
 	return a.Contains(b.IP) || b.Contains(a.IP)
 }
 
-func validateRecords(rs model.RecordSet, vlans []model.VLAN) error {
+func validateRecords(rs model.RecordSet, vlans []model.VLAN, zones []string) error {
 	vlanNames := map[string]bool{}
 	for _, v := range vlans {
 		vlanNames[v.Name] = true
@@ -201,8 +201,8 @@ func validateRecords(rs model.RecordSet, vlans []model.VLAN) error {
 		if strings.TrimSpace(r.Name) == "" {
 			return errors.New("a record is missing a name")
 		}
-		if !strings.HasSuffix(name, "."+OwnedZone+".") && name != OwnedZone+"." {
-			return fmt.Errorf("record %q is outside the owned zone %q", r.Name, OwnedZone)
+		if !inAnyZone(name, zones) {
+			return fmt.Errorf("record %q is outside the owned zones %v", r.Name, zones)
 		}
 
 		key := name + "/" + string(r.Type)
@@ -302,6 +302,18 @@ func validateOverrides(r model.Record, vlanNames map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+// inAnyZone reports whether name (already NormalizedName'd — lower-cased,
+// trailing dot) is the apex of, or a subdomain of, any of zones.
+func inAnyZone(name string, zones []string) bool {
+	for _, zone := range zones {
+		z := strings.ToLower(strings.TrimSuffix(zone, ".")) + "."
+		if name == z || strings.HasSuffix(name, "."+z) {
+			return true
+		}
+	}
+	return false
 }
 
 func anyOverrideProvidesValue(r model.Record) bool {

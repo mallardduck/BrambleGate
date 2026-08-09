@@ -151,6 +151,78 @@ func TestUnknownNameNXDomainAndOutOfZoneFallsThrough(t *testing.T) {
 	}
 }
 
+const fallthroughZoneJSON = `{
+  "default_ttl": 300,
+  "zones": ["home.arpa", "dns.example.com"],
+  "vlans": [],
+  "records": [
+    {"name": "dns.example.com", "type": "A", "default": "192.168.10.53", "ttl": 300}
+  ]
+}`
+
+func buildFallthrough(t *testing.T) *LocalRecords {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "records.json")
+	if err := os.WriteFile(path, []byte(fallthroughZoneJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corefile := "localrecords home.arpa dns.example.com {\n\tzonedata " + filepath.ToSlash(path) +
+		"\n\tfallthrough dns.example.com\n}"
+	lr, err := parse(caddy.NewTestController("dns", corefile))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	lr.Next = plugin.HandlerFunc(func(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Rcode = dns.RcodeRefused // sentinel: fell through
+		_ = w.WriteMsg(m)
+		return dns.RcodeRefused, nil
+	})
+	return lr
+}
+
+func TestFallthroughZoneAnswersDeclaredRecordLocally(t *testing.T) {
+	lr := buildFallthrough(t)
+	m := queryFrom(lr, "192.168.10.5", "dns.example.com", dns.TypeA)
+	if m.Rcode != dns.RcodeSuccess || len(m.Answer) != 1 {
+		t.Fatalf("want a local answer, got rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+	if a := m.Answer[0].(*dns.A); a.A.String() != "192.168.10.53" {
+		t.Fatalf("want 192.168.10.53, got %s", a.A)
+	}
+}
+
+func TestFallthroughZoneMissDefersToNext(t *testing.T) {
+	lr := buildFallthrough(t)
+	// No record for this name in the fallthrough zone — must fall through, not NXDOMAIN.
+	m := queryFrom(lr, "192.168.10.5", "other.dns.example.com", dns.TypeA)
+	if m.Rcode != dns.RcodeRefused {
+		t.Fatalf("want fallthrough (sentinel REFUSED), got %d", m.Rcode)
+	}
+}
+
+func TestFallthroughZoneWrongTypeDefersToNext(t *testing.T) {
+	lr := buildFallthrough(t)
+	// The name exists locally but not for AAAA — still defers (unlike a
+	// non-fallthrough zone, which would answer NODATA).
+	m := queryFrom(lr, "192.168.10.5", "dns.example.com", dns.TypeAAAA)
+	if m.Rcode != dns.RcodeRefused {
+		t.Fatalf("want fallthrough (sentinel REFUSED), got %d", m.Rcode)
+	}
+}
+
+func TestNonFallthroughZoneUnaffected(t *testing.T) {
+	lr := buildFallthrough(t)
+	// home.arpa is still fully owned: an unknown name there is NXDOMAIN, not a
+	// fallthrough, even though this LocalRecords also has a fallthrough zone.
+	m := queryFrom(lr, "192.168.10.5", "nope.home.arpa", dns.TypeA)
+	if m.Rcode != dns.RcodeNameError {
+		t.Fatalf("want NXDOMAIN, got %d", m.Rcode)
+	}
+}
+
 func TestNODATAForWrongType(t *testing.T) {
 	lr := build(t)
 	m := queryFrom(lr, "192.168.10.5", "nas.home.arpa", dns.TypeAAAA) // exists as A, not AAAA

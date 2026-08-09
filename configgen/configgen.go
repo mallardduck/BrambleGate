@@ -17,9 +17,24 @@ import (
 	"github.com/mallardduck/BrambleGate/model"
 )
 
-// OwnedZone is the zone localrecords is authoritative for. Configurable owned
-// subdomains can be added later; for now everything hangs under home.arpa.
+// OwnedZone is the zone localrecords is fully authoritative for (NXDOMAIN on any
+// miss — nothing under it should ever leak upstream).
 const OwnedZone = "home.arpa"
+
+// ownedZones returns every zone localrecords should serve, in the order they're
+// written to the Corefile line — OwnedZone first, then the ACME domain (as a
+// fallthrough zone; see writeServerBlock) when ACME is enabled and configured.
+// The ACME domain stays real/public-DNS-authoritative for anything not
+// explicitly declared here — only a locally-declared record (e.g. the ACME
+// hostname's own A/AAAA, so a device doesn't need it added to public DNS just
+// to reach a LAN IP) is answered locally.
+func ownedZones(s model.Settings) []string {
+	zones := []string{OwnedZone}
+	if s.ACME.Enabled && strings.TrimSpace(s.ACME.Domain) != "" {
+		zones = append(zones, strings.ToLower(strings.TrimSpace(s.ACME.Domain)))
+	}
+	return zones
+}
 
 // DefaultTTL is the server-wide fallback TTL for records that set none.
 const DefaultTTL = 300
@@ -71,7 +86,7 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 
 	zone, err := json.MarshalIndent(zoneData{
 		DefaultTTL: DefaultTTL,
-		Zones:      []string{OwnedZone},
+		Zones:      ownedZones(s),
 		VLANs:      s.VLANs,
 		Records:    static,
 	}, "", "  ")
@@ -130,8 +145,14 @@ func writeServerBlock(b *strings.Builder, addr string, tls bool, extra string, s
 	if s.MDNS.Enabled {
 		b.WriteString("\tmdnsbridge\n")
 	}
-	fmt.Fprintf(b, "\tlocalrecords %s {\n", OwnedZone)
+	zones := ownedZones(s)
+	fmt.Fprintf(b, "\tlocalrecords %s {\n", strings.Join(zones, " "))
 	fmt.Fprintf(b, "\t\tzonedata %s\n", ZoneDataPath(opts.ConfigDir))
+	if len(zones) > 1 {
+		// Everything after OwnedZone (currently just the ACME domain, if set) is a
+		// fallthrough zone — see ownedZones.
+		fmt.Fprintf(b, "\t\tfallthrough %s\n", strings.Join(zones[1:], " "))
+	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(b, "\tforward . %s\n", forwardTarget(s.UpstreamDNS))
 	b.WriteString("\tcache\n")

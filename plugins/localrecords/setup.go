@@ -23,7 +23,13 @@ func init() { plugin.Register("localrecords", setup) }
 //
 //	localrecords home.arpa [more.zones ...] {
 //	    zonedata /config/.runtime/zones/records.json
+//	    fallthrough [zone ...]
 //	}
+//
+// fallthrough marks zones (a subset of the ones on the localrecords line) where
+// a miss defers to the next plugin instead of answering NXDOMAIN/NODATA — used
+// for the ACME domain, which stays real/public-DNS-authoritative for anything
+// not explicitly declared locally, unlike the fully-owned home.arpa.
 //
 // The referenced JSON file carries the VLAN definitions and records (with per-VLAN
 // overrides); it is written by configgen before New/Reload. Loading it once, here
@@ -67,6 +73,14 @@ func parse(c *caddy.Controller) (*LocalRecords, error) {
 					return nil, c.ArgErr()
 				}
 				zonePath = c.Val()
+			case "fallthrough":
+				args := c.RemainingArgs()
+				if len(args) == 0 {
+					return nil, c.ArgErr()
+				}
+				for _, z := range args {
+					lr.FallthroughZones = append(lr.FallthroughZones, dns.CanonicalName(z))
+				}
 			default:
 				return nil, c.Errf("unknown property %q", c.Val())
 			}

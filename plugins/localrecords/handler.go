@@ -42,10 +42,26 @@ type record struct {
 type LocalRecords struct {
 	Next plugin.Handler
 
-	Zones      []string // normalized, e.g. "home.arpa."
-	defaultTTL uint32
-	vlans      []vlanMatch
-	records    map[string][]*record
+	Zones []string // normalized, e.g. "home.arpa."
+	// FallthroughZones is the subset of Zones (e.g. the ACME domain, unlike the
+	// fully-owned home.arpa) where a miss defers to Next instead of answering
+	// NXDOMAIN/NODATA — so anything not explicitly declared here still resolves
+	// via the real, public-authoritative DNS for that domain (docs/certificates.md).
+	FallthroughZones []string
+	defaultTTL       uint32
+	vlans            []vlanMatch
+	records          map[string][]*record
+}
+
+// isFallthroughZone reports whether zone (as returned by plugin.Zones.Matches,
+// already one of the canonical Zones entries) defers to Next on a miss.
+func (lr *LocalRecords) isFallthroughZone(zone string) bool {
+	for _, z := range lr.FallthroughZones {
+		if z == zone {
+			return true
+		}
+	}
+	return false
 }
 
 // Name implements plugin.Handler.
@@ -66,20 +82,23 @@ func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 
 	vlan := lr.matchVLAN(net.ParseIP(state.IP()))
 
+	answers := lr.buildAnswers(qname, state.QType(), vlan)
+	if len(answers) == 0 && lr.isFallthroughZone(zone) {
+		return plugin.NextOrFailure(lr.Name(), lr.Next, ctx, w, r)
+	}
+
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Authoritative = true
 
-	// Does the name exist at all for this client (any type not suppressed)?
-	if !lr.namePresent(qname, vlan) {
-		m.Rcode = dns.RcodeNameError
-		m.Ns = []dns.RR{lr.soa(zone)}
-		_ = w.WriteMsg(m)
-		return dns.RcodeNameError, nil
-	}
-
-	answers := lr.buildAnswers(qname, state.QType(), vlan)
 	if len(answers) == 0 {
+		// Does the name exist at all for this client (any type not suppressed)?
+		if !lr.namePresent(qname, vlan) {
+			m.Rcode = dns.RcodeNameError
+			m.Ns = []dns.RR{lr.soa(zone)}
+			_ = w.WriteMsg(m)
+			return dns.RcodeNameError, nil
+		}
 		// Name exists for this client but has no record of the requested type.
 		m.Ns = []dns.RR{lr.soa(zone)}
 		_ = w.WriteMsg(m)
