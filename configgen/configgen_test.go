@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/selfip"
 )
 
 func baseSettings() model.Settings {
@@ -21,6 +22,16 @@ func baseSettings() model.Settings {
 		},
 		ACME: model.ACME{Domain: "dns.example.com"},
 	}
+}
+
+// acmeEnabledSettings returns baseSettings with ACME turned on and the other
+// fields Validate requires when it's enabled (email, dns_provider) filled in.
+func acmeEnabledSettings() model.Settings {
+	s := baseSettings()
+	s.ACME.Enabled = true
+	s.ACME.Email = "admin@example.com"
+	s.ACME.DNSProvider = "cloudflare"
+	return s
 }
 
 // The onboarding defaults seeded on first run (model.DefaultSettings) must render
@@ -97,6 +108,96 @@ func TestValidateRejectsACMEDomainRecordWhenACMEDisabled(t *testing.T) {
 	}}
 	if err := Validate(s, rs); err == nil {
 		t.Fatal("expected an error: dns.example.com is outside home.arpa while ACME is disabled")
+	}
+}
+
+func TestRenderSynthesizesACMEAddressRecords(t *testing.T) {
+	s := acmeEnabledSettings()
+	ips := selfip.Result{
+		PerVLAN: map[string]selfip.VLANAddrs{"trusted": {V4: "192.168.10.53"}},
+		Primary: selfip.VLANAddrs{V4: "192.168.10.53"},
+	}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	var zd struct {
+		Records []model.Record `json:"records"`
+	}
+	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
+		t.Fatalf("zone data is not valid JSON: %v\n%s", err, out.ZoneData)
+	}
+	if len(zd.Records) != 1 {
+		t.Fatalf("expected exactly one synthesized record, got %+v", zd.Records)
+	}
+	r := zd.Records[0]
+	if r.Name != "dns.example.com" || r.Type != model.TypeA || r.Default != "192.168.10.53" {
+		t.Fatalf("unexpected synthesized record: %+v", r)
+	}
+	if len(r.VLANOverrides) != 1 || r.VLANOverrides[0].VLAN != "trusted" || r.VLANOverrides[0].Value != "192.168.10.53" {
+		t.Fatalf("unexpected vlan overrides: %+v", r.VLANOverrides)
+	}
+}
+
+func TestRenderDoesNotOverrideExplicitACMERecord(t *testing.T) {
+	s := acmeEnabledSettings()
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "dns.example.com", Type: model.TypeA, Default: "10.0.0.9"},
+	}}
+	ips := selfip.Result{Primary: selfip.VLANAddrs{V4: "192.168.10.53"}}
+
+	out, err := Render(s, rs, Options{ConfigDir: "/config", ACMESelfIPs: ips})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	var zd struct {
+		Records []model.Record `json:"records"`
+	}
+	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
+		t.Fatalf("zone data is not valid JSON: %v\n%s", err, out.ZoneData)
+	}
+	if len(zd.Records) != 1 || zd.Records[0].Default != "10.0.0.9" {
+		t.Fatalf("explicit user record should not be overridden/duplicated: %+v", zd.Records)
+	}
+}
+
+func TestRenderSkipsACMESynthesisWhenNothingDetected(t *testing.T) {
+	s := acmeEnabledSettings()
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"}) // zero ACMESelfIPs
+	if err != nil {
+		t.Fatalf("Render should not fail when nothing was detected: %v", err)
+	}
+	var zd struct {
+		Records []model.Record `json:"records"`
+	}
+	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
+		t.Fatalf("zone data is not valid JSON: %v\n%s", err, out.ZoneData)
+	}
+	if len(zd.Records) != 0 {
+		t.Fatalf("expected no synthesized record, got %+v", zd.Records)
+	}
+}
+
+func TestRenderACMESynthesisRespectsFamilySeparately(t *testing.T) {
+	s := acmeEnabledSettings()
+	ips := selfip.Result{Primary: selfip.VLANAddrs{V4: "192.168.10.53"}} // no V6
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	var zd struct {
+		Records []model.Record `json:"records"`
+	}
+	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
+		t.Fatalf("zone data is not valid JSON: %v\n%s", err, out.ZoneData)
+	}
+	for _, r := range zd.Records {
+		if r.Type == model.TypeAAAA {
+			t.Fatalf("no AAAA record should be synthesized without a detected V6 address: %+v", r)
+		}
 	}
 }
 

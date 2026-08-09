@@ -1,7 +1,9 @@
 // Package configgen validates the model and renders it into (a) Corefile text for
 // engine.Reload and (b) a JSON zone-data file the localrecords plugin loads at
 // setup. records.yaml is the source of truth; both outputs are its derived
-// runtime form (docs/config-schema.md, docs/plugins.md).
+// runtime form (docs/config-schema.md, docs/plugins.md). The one exception is
+// acmeSelfRecords: an A/AAAA record for the ACME domain synthesized at render
+// time from detected local IPs, never written to records.yaml (dev-docs/certificates.md).
 //
 // Why a JSON side-file instead of inlining records in the Corefile: per-VLAN
 // overrides (value/ttl/nxdomain) and multi-CIDR VLANs are a structured, nested
@@ -12,9 +14,11 @@ package configgen
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/selfip"
 )
 
 // OwnedZone is the zone localrecords is fully authoritative for (NXDOMAIN on any
@@ -36,6 +40,82 @@ func ownedZones(s model.Settings) []string {
 	return zones
 }
 
+// acmeSelfRecords returns render-time-only A/AAAA records for the ACME domain
+// synthesized from detected local IPs (selfip) — never persisted to
+// records.yaml (see ownedZones and dev-docs/certificates.md). Only
+// (name,type) combinations the user hasn't already declared in declared are
+// added; an explicit user record always wins. Returns nil when ACME is off,
+// Domain is unset, or detection found nothing usable.
+func acmeSelfRecords(s model.Settings, declared []model.Record, ips selfip.Result) []model.Record {
+	if !s.ACME.Enabled || strings.TrimSpace(s.ACME.Domain) == "" {
+		return nil
+	}
+	name := strings.ToLower(strings.TrimSpace(s.ACME.Domain))
+	normalized := (model.Record{Name: name}).NormalizedName()
+	declaredHas := func(t model.RecordType) bool {
+		for _, r := range declared {
+			if r.NormalizedName() == normalized && r.Type == t {
+				return true
+			}
+		}
+		return false
+	}
+
+	var out []model.Record
+	if rec, ok := buildFamilyRecord(name, model.TypeA, ips, true); ok && !declaredHas(model.TypeA) {
+		out = append(out, rec)
+	}
+	if rec, ok := buildFamilyRecord(name, model.TypeAAAA, ips, false); ok && !declaredHas(model.TypeAAAA) {
+		out = append(out, rec)
+	}
+	return out
+}
+
+// PreviewACMESelfRecords exposes acmeSelfRecords for read-only display (the
+// GUI dashboard's "auto-detected address" panel) without requiring a full
+// Render/Validate pass.
+func PreviewACMESelfRecords(s model.Settings, declared []model.Record, ips selfip.Result) []model.Record {
+	return acmeSelfRecords(s, declared, ips)
+}
+
+// buildFamilyRecord assembles one A or AAAA record from a selfip.Result: the
+// Default is the primary fallback for that family, and each VLAN with a
+// detected address of that family becomes a VLANOverride — so the record
+// answers per client-source-VLAN exactly like a hand-written record would. ok
+// is false when there is no usable value at all (no Default and no VLAN
+// override), mirroring validate.go's "no default and no override" rule,
+// enforced here directly since this record never goes through Validate.
+func buildFamilyRecord(name string, t model.RecordType, ips selfip.Result, v4 bool) (model.Record, bool) {
+	pick := func(va selfip.VLANAddrs) string {
+		if v4 {
+			return va.V4
+		}
+		return va.V6
+	}
+
+	rec := model.Record{Name: name, Type: t, Default: pick(ips.Primary)}
+	for _, vlan := range sortedVLANNames(ips.PerVLAN) {
+		if v := pick(ips.PerVLAN[vlan]); v != "" {
+			rec.VLANOverrides = append(rec.VLANOverrides, model.VLANOverride{VLAN: vlan, Value: v})
+		}
+	}
+	if rec.Default == "" && len(rec.VLANOverrides) == 0 {
+		return model.Record{}, false
+	}
+	return rec, true
+}
+
+// sortedVLANNames returns m's keys sorted, so the synthesized record's
+// VLANOverrides order is deterministic (map iteration order is not).
+func sortedVLANNames(m map[string]selfip.VLANAddrs) []string {
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // DefaultTTL is the server-wide fallback TTL for records that set none.
 const DefaultTTL = 300
 
@@ -47,6 +127,12 @@ type Options struct {
 	// CertFile/KeyFile back the tls directive for encrypted listeners.
 	CertFile string
 	KeyFile  string
+	// ACMESelfIPs is the caller's freshly-detected local IPs per VLAN (see
+	// selfip), used to synthesize an A/AAAA record for acme.domain
+	// when the user hasn't declared one explicitly. A zero value means
+	// "nothing detected" — Render then adds no synthetic record, the same
+	// outcome as a bridge-mode deployment.
+	ACMESelfIPs selfip.Result
 }
 
 // Rendered is the output of Render: the Corefile bytes for the engine, and the
@@ -83,6 +169,7 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 			static = append(static, r)
 		}
 	}
+	static = append(static, acmeSelfRecords(s, rs.Records, opts.ACMESelfIPs)...)
 
 	zone, err := json.MarshalIndent(zoneData{
 		DefaultTTL: DefaultTTL,

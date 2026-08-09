@@ -20,6 +20,7 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
 )
 
@@ -83,6 +84,12 @@ func (c mdnsListenerConfig) equal(other mdnsListenerConfig) bool {
 var runMDNSListener = func(ctx context.Context, tbl *mdnsbridge.Table, services, ifaces []string, log *slog.Logger) {
 	mdnsbridge.NewListener(tbl, services, ifaces, log).Run(ctx)
 }
+
+// detectSelfIPs computes fresh per-VLAN local IPs on every render — interfaces
+// can change across a macvlan reattach/restart, so this is never cached.
+// Overridable for tests (same pattern as newMDNSAdvertiser/runMDNSListener
+// above).
+var detectSelfIPs = selfip.DetectLive
 
 // NewService wires the GUI application layer. ctx bounds the lifetime of the
 // mDNS browse goroutine (started/stopped independently of engine reloads as
@@ -430,11 +437,31 @@ func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) erro
 }
 
 func (s *Service) render(settings model.Settings, rs model.RecordSet) (configgen.Rendered, error) {
-	rendered, err := configgen.Render(settings, rs, s.certOpts)
+	opts := s.certOpts
+	opts.ACMESelfIPs = detectSelfIPs(settings.VLANs)
+	rendered, err := configgen.Render(settings, rs, opts)
 	if err != nil {
 		return configgen.Rendered{}, ValidationError{err}
 	}
 	return rendered, nil
+}
+
+// ACMESelfRecords returns the record(s) that would be auto-answered for
+// acme.domain from local-IP detection right now — for display only (the
+// dashboard's "auto-detected address" panel); never persisted to
+// records.yaml (see configgen.PreviewACMESelfRecords).
+func (s *Service) ACMESelfRecords() ([]model.Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.store.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	rs, err := s.store.LoadRecords()
+	if err != nil {
+		return nil, err
+	}
+	return configgen.PreviewACMESelfRecords(settings, rs.Records, detectSelfIPs(settings.VLANs)), nil
 }
 
 // reload writes the JSON zone data (which the plugin reads at setup) and a

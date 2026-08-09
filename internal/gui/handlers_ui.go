@@ -56,7 +56,16 @@ func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
 			mdnsCount = len(entries)
 		}
 	}
-	data := ui.DashboardData{Settings: settings, RecordCount: len(rs.Records), MDNSCount: mdnsCount, Cert: h.svc.ACMEStatus()}
+	// Non-fatal: the auto-detected panel is a nice-to-have, not core to the
+	// dashboard loading.
+	selfRecords, _ := h.svc.ACMESelfRecords()
+	data := ui.DashboardData{
+		Settings:        settings,
+		RecordCount:     len(rs.Records),
+		MDNSCount:       mdnsCount,
+		Cert:            h.svc.ACMEStatus(),
+		ACMESelfRecords: selfRecords,
+	}
 	render(w, r, "Dashboard", ui.PathDashboard, ui.Dashboard(data))
 }
 

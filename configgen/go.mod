@@ -4,7 +4,13 @@ go 1.26
 
 toolchain go1.26.5
 
-// Sibling library module resolved from disk (see docs/repo-layout.md).
-replace github.com/mallardduck/BrambleGate/model => ../model
+// Sibling library modules resolved from disk (see docs/repo-layout.md).
+replace (
+	github.com/mallardduck/BrambleGate/model => ../model
+	github.com/mallardduck/BrambleGate/selfip => ../selfip
+)
 
-require github.com/mallardduck/BrambleGate/model v0.0.0
+require (
+	github.com/mallardduck/BrambleGate/model v0.0.0
+	github.com/mallardduck/BrambleGate/selfip v0.0.0
+)

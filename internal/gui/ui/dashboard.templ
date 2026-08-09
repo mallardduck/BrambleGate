@@ -15,6 +15,12 @@ type DashboardData struct {
 	RecordCount int
 	MDNSCount   int // discovered entries; 0 when mDNS is disabled
 	Cert        acme.Status
+	// ACMESelfRecords is what would be auto-answered locally for
+	// settings.ACME.Domain right now, detected from local interfaces
+	// (selfip) — never stored in records.yaml. Empty when ACME is
+	// off/unconfigured, or when nothing was detected (e.g. bridge-mode
+	// deployments). See Service.ACMESelfRecords.
+	ACMESelfRecords []model.Record
 }
 
 // IsDefaultUpstream reports whether the upstream forwarder is still the
@@ -65,6 +71,53 @@ templ Dashboard(data DashboardData) {
 		</table>
 	</div>
 	@acmeStatusCard(data.Settings, data.Cert)
+	@acmeSelfIPCard(data.Settings, data.ACMESelfRecords)
+}
+
+// acmeSelfIPCard shows what BrambleGate would answer locally, right now, for
+// settings.ACME.Domain — sourced live from local interface detection
+// (selfip), not from records.yaml. Only shown when ACME is enabled
+// and a domain is configured (the same gate acmeStatusCard uses for its
+// non-empty branch).
+templ acmeSelfIPCard(settings model.Settings, records []model.Record) {
+	if settings.ACME.Enabled && settings.ACME.Domain != "" {
+		<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3">Auto-detected address for { settings.ACME.Domain }</h2>
+			if len(records) == 0 {
+				<p class="text-bramble-muted text-sm">
+					No local interface matched any declared VLAN (or none is configured), so nothing is auto-answered here and queries fall through to public DNS. This is expected in bridge/port-mapped deployments — add an explicit record below to point it at a LAN IP. <a href={ templ.SafeURL(PathRecords) } class="text-bramble-primary hover:underline">Add a record</a>.
+				</p>
+			} else {
+				<p class="text-bramble-muted text-xs mb-3">
+					Auto-detected from local interfaces at render time — not stored in records.yaml. To override { settings.ACME.Domain }, <a href={ templ.SafeURL(PathRecords) } class="text-bramble-primary hover:underline">add an explicit record</a>.
+				</p>
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
+							<th class="px-3 py-2">Type</th>
+							<th class="px-3 py-2">Default</th>
+							<th class="px-3 py-2">Per-VLAN</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, r := range records {
+							<tr class="border-b border-bramble-border last:border-0">
+								<td class="px-3 py-2">{ string(r.Type) }</td>
+								<td class="px-3 py-2 font-mono">
+									if r.Default != "" {
+										{ r.Default }
+									} else {
+										—
+									}
+								</td>
+								<td class="px-3 py-2 text-xs">{ summarizeOverrides(r) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	}
 }
 
 // acmeStatusCard summarizes the on-disk cert (independent of whether ACME is

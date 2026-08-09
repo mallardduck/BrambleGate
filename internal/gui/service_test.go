@@ -13,8 +13,19 @@ import (
 	"github.com/mallardduck/BrambleGate/configgen"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
 )
+
+// stubSelfIPs replaces detectSelfIPs for the duration of a test, then restores
+// it — the same save/restore pattern used for newMDNSAdvertiser/runMDNSListener
+// elsewhere in this package.
+func stubSelfIPs(t *testing.T, res selfip.Result) {
+	t.Helper()
+	orig := detectSelfIPs
+	detectSelfIPs = func(vlans []model.VLAN) selfip.Result { return res }
+	t.Cleanup(func() { detectSelfIPs = orig })
+}
 
 // stubReloader records the last Corefile and can be made to fail.
 type stubReloader struct {
@@ -475,5 +486,67 @@ func TestAdvertiseIsIndependentOfMDNSEnabled(t *testing.T) {
 	}
 	if _, err := svc.MDNSCandidates(); !IsValidation(err) {
 		t.Fatalf("expected discovery to remain disabled, got %v", err)
+	}
+}
+
+func TestACMESelfRecords(t *testing.T) {
+	svc, st, _ := newService(t)
+	stubSelfIPs(t, selfip.Result{
+		PerVLAN: map[string]selfip.VLANAddrs{"trusted": {V4: "192.168.10.53"}},
+		Primary: selfip.VLANAddrs{V4: "192.168.10.53"},
+	})
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.VLANs = []model.VLAN{{Name: "trusted", CIDRs: []string{"192.168.10.0/24"}}}
+	settings.ACME = model.ACME{Enabled: true, Domain: "dns.example.com", Email: "a@example.com", DNSProvider: "cloudflare"}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	recs, err := svc.ACMESelfRecords()
+	if err != nil {
+		t.Fatalf("ACMESelfRecords: %v", err)
+	}
+	if len(recs) != 1 || recs[0].Default != "192.168.10.53" {
+		t.Fatalf("unexpected self records: %+v", recs)
+	}
+
+	// Never persisted to records.yaml.
+	rs, err := st.LoadRecords()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs.Records) != 0 {
+		t.Fatalf("ACMESelfRecords must not write records.yaml, got %+v", rs.Records)
+	}
+}
+
+func TestACMESelfRecordsReflectsFreshDetectionOnEachSave(t *testing.T) {
+	svc, _, _ := newService(t)
+	stubSelfIPs(t, selfip.Result{Primary: selfip.VLANAddrs{V4: "192.168.10.53"}})
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.ACME = model.ACME{Enabled: true, Domain: "dns.example.com", Email: "a@example.com", DNSProvider: "cloudflare"}
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	first, err := svc.ACMESelfRecords()
+	if err != nil || len(first) != 1 || first[0].Default != "192.168.10.53" {
+		t.Fatalf("unexpected first detection: %+v (err %v)", first, err)
+	}
+
+	stubSelfIPs(t, selfip.Result{Primary: selfip.VLANAddrs{V4: "192.168.10.99"}})
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings (2nd): %v", err)
+	}
+	second, err := svc.ACMESelfRecords()
+	if err != nil || len(second) != 1 || second[0].Default != "192.168.10.99" {
+		t.Fatalf("expected fresh detection on 2nd save, got: %+v (err %v)", second, err)
 	}
 }
