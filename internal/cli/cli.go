@@ -82,13 +82,23 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 		return err
 	}
 
+	// Cert paths are always populated, regardless of whether an encrypted
+	// listener happens to be on yet at boot — they're the same fixed
+	// certs/cert.pem, certs/key.pem path acme.Manager writes to, and GUI-driven
+	// settings saves reuse this same opts for the rest of the process's life
+	// (see NewService below and reloadFn). Gating this on
+	// EncryptedListenerEnabled() left opts.CertFile/KeyFile permanently blank
+	// whenever ACME issued its cert before any listener was turned on — the
+	// documented deferred-issuance path just below — so enabling DoT/DoH/DoQ
+	// later via the GUI rendered a `tls` directive with blank args and CoreDNS
+	// rejected it.
 	opts := configgen.Options{ConfigDir: configDir}
+	opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
+	if err != nil {
+		return fmt.Errorf("prepare certificate: %w", err)
+	}
 	if settings.EncryptedListenerEnabled() {
-		opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
-		if err != nil {
-			return fmt.Errorf("prepare certificate: %w", err)
-		}
-		log.Warn("using a self-signed certificate for encrypted listeners — strict clients (e.g. Android Private DNS) will reject it until Phase 4 issues a real ACME cert",
+		log.Warn("using a self-signed certificate for encrypted listeners — strict clients (e.g. Android Private DNS) will reject it until ACME issues a real cert",
 			"cert", opts.CertFile, "cn", settings.ACME.Domain)
 	}
 
