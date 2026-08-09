@@ -187,15 +187,19 @@ func (t *Table) Remove(service, instance, host string) bool {
 	return false
 }
 
-// Expire drops entries not re-announced within the TTL.
-func (t *Table) Expire() {
+// Expire drops entries not re-announced within the TTL, returning how many
+// were dropped.
+func (t *Table) Expire() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	dropped := 0
 	for k, e := range t.entries {
 		if t.expired(e) {
 			delete(t.entries, k)
+			dropped++
 		}
 	}
+	return dropped
 }
 
 func (t *Table) expired(e *Entry) bool { return t.now().Sub(e.LastSeen) > t.ttl }

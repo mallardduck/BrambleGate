@@ -72,7 +72,9 @@ func (l *Listener) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			l.table.Expire()
+			if dropped := l.table.Expire(); dropped > 0 {
+				l.log.Debug("mdns: expired stale entries", "count", dropped, "ttl", l.table.ttl)
+			}
 		}
 	}
 }
@@ -80,6 +82,7 @@ func (l *Listener) Run(ctx context.Context) {
 // browseService runs a continuous browse for one service type until ctx is canceled.
 func (l *Listener) browseService(ctx context.Context, service string) {
 	ifaceNames := l.ifaceNamesForBrowse()
+	l.log.Debug("mdns: browse started", "service", service, "ifaces", ifaceNames)
 	err := l.browser.Browse(ctx, service, ifaceNames,
 		func(e mdnsquery.Entry) { l.ingest(service, e) },
 		func(e mdnsquery.Entry) { l.remove(service, e) },
@@ -112,12 +115,15 @@ func (l *Listener) ingest(service string, e mdnsquery.Entry) {
 	if entry.Host == "" {
 		return
 	}
+	l.log.Debug("mdns: entry discovered", "service", service, "host", entry.Host,
+		"instance", entry.Instance, "ipv4", entry.IPv4, "ipv6", entry.IPv6)
 	l.table.Upsert(entry)
 }
 
 // remove deletes a service instance from the Table (called on goodbye packet or timeout).
 func (l *Listener) remove(service string, e mdnsquery.Entry) {
 	host := strings.ToLower(strings.TrimSuffix(e.Host, "."))
+	l.log.Debug("mdns: entry removed", "service", service, "host", host, "instance", e.Instance)
 	_ = l.table.Remove(service, e.Instance, host)
 }
 
