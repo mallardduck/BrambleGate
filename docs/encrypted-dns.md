@@ -1,10 +1,11 @@
-# Encrypted DNS (DoT / DoH / DoQ) and real certificates
+# Encrypted DNS (DoT / DoH / DoQ / DoH3) and real certificates
 
-BrambleGate can serve DNS over TLS, DNS over HTTPS, and DNS over QUIC, in
-addition to plain `:53`. The listeners work with no certificate setup at all
-(self-signed, bootstrap cert) — but strict clients (Android's Private DNS is
-the classic case) refuse a self-signed cert, so getting a *real* one is what
-makes this feature actually usable from a device.
+BrambleGate can serve DNS over TLS, DNS over HTTPS, DNS over QUIC, and DNS
+over HTTP/3, in addition to plain `:53`. The listeners work with no
+certificate setup at all (self-signed, bootstrap cert) — but strict clients
+(Android's Private DNS is the classic case) refuse a self-signed cert, so
+getting a *real* one is what makes this feature actually usable from a
+device.
 
 ## Enabling a listener
 
@@ -23,14 +24,21 @@ listeners:
     port: 443
   doq:
     enabled: false
-    port: 8853
+    port: 853   # UDP — safe to share with dot's port, since dot is TCP-only
+  doh3:
+    enabled: false
+    port: 443   # UDP — safe to share with doh's port, since doh is TCP-only
 ```
 
-(Also editable from `/settings` in the GUI.) Each transport is independently
-on/off with its own port. As soon as a `dot`/`doh`/`doq` listener is enabled,
-BrambleGate starts serving on a **self-signed bootstrap cert** immediately —
-good enough to test that the listener itself works, not good enough for a
-device that validates the chain.
+(Also editable from `/settings` in the GUI, which fills these same defaults
+in as soon as you enable a listener.) Each transport is independently on/off
+with its own port. DoQ and DoT can share port 853 because the OS keeps TCP
+and UDP socket bindings separate — DoT is TCP-only, DoQ is UDP-only, so
+there's no collision. The same goes for DoH (TCP) and DoH3 (UDP) sharing 443.
+As soon as a `dot`/`doh`/`doq`/`doh3` listener is enabled, BrambleGate starts
+serving on a **self-signed bootstrap cert** immediately — good enough to test
+that the listener itself works, not good enough for a device that validates
+the chain.
 
 ## Getting a real certificate (ACME DNS-01)
 
@@ -95,6 +103,10 @@ openssl s_client -connect <bramblegate-ip>:853 -servername dns.example.com </dev
 # A DoT query, if you have kdig/knot-utils
 kdig @<bramblegate-ip> +tls nas.home.arpa
 ```
+
+DoQ and DoH3 are UDP, so they aren't reachable via a plain `openssl s_client`
+TCP handshake even when the listener is healthy — use a client that speaks
+QUIC/HTTP-3 (e.g. `kdig +quic` for DoQ) to test those.
 
 The real, device-level check is Phase 7 of the roadmap: point a stock
 Android phone's Private DNS setting at `dns.example.com`, with

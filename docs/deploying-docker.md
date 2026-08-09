@@ -29,6 +29,9 @@ services:
       - "53:53/tcp"
       - "853:853/tcp"   # DoT — only used once enabled in settings.yaml
       - "8080:8080/tcp" # web GUI + JSON API
+      # - "443:443/tcp" # DoH — uncomment if you enable listeners.doh
+      # - "443:443/udp" # DoH3 — uncomment if you enable listeners.doh3
+      # - "853:853/udp" # DoQ — uncomment if you enable listeners.doq
     volumes:
       - ./config:/config
     # environment:
@@ -39,9 +42,10 @@ services:
 
 ```bash
 docker run -d --name bramblegate --restart unless-stopped \
-  -p 53:53/udp -p 53:53/tcp -p 853:853 -p 8080:8080 \
+  -p 53:53/udp -p 53:53/tcp -p 853:853/tcp -p 8080:8080 \
   -v "$PWD/config:/config" \
   ghcr.io/mallardduck/bramblegate:latest
+  # add -p 443:443/tcp for doh, -p 443:443/udp for doh3, -p 853:853/udp for doq
 ```
 
 ## Ports and volumes
@@ -52,12 +56,18 @@ docker run -d --name bramblegate --restart unless-stopped \
 | 853 | TCP | DoT. Only actually listens once `listeners.dot.enabled: true`. |
 | 8080 | TCP | Web GUI + JSON API. |
 
-`doh` (default port 443) and `doq` (default port 8853) aren't published by
-default in the example compose file — add `-p`/a `ports:` entry for them if
-you enable those listeners (see [`encrypted-dns.md`](encrypted-dns.md)).
-Whatever ports you enable in `settings.yaml`, make sure the matching
-container port is published — the container binds what's configured, but a
-port only reaches the LAN if it's also exposed on the host.
+Only 5 distinct listener ports exist across all 5 protocols, but there are
+really only **3 numbers** to publish, because the OS keeps TCP and UDP socket
+bindings separate: `doh` (default port 443, TCP) and `doh3` (default port
+443, UDP) can share a port number, and so can `doq` (default port 853, UDP)
+and `dot` (default port 853, TCP). None of `doh`/`doq`/`doh3` are published by
+default in the example compose file — add a `ports:`/`-p` entry (with the
+right `/tcp` or `/udp` suffix) for whichever you enable (see
+[`encrypted-dns.md`](encrypted-dns.md)). Whatever ports you enable in
+`settings.yaml`, make sure the matching container port is published with the
+matching protocol — the container binds what's configured, but a port only
+reaches the LAN if it's also exposed on the host, and exposing `853/tcp` does
+nothing for a `doq` listener, which needs `853/udp`.
 
 `/config` is the **only** state that matters: `settings.yaml`, `records.yaml`,
 issued ACME certs, and generated runtime files (Corefile, zone data) all live

@@ -62,8 +62,13 @@ FROM gcr.io/distroless/static-debian12:${VARIANT}
 COPY --from=build /out/bramblegate /usr/local/bin/bramblegate
 
 # Config volume (settings.yaml, records.yaml, certs, .runtime) and the GUI port.
-# DNS listener ports (53/853/…) are configured at runtime via settings.yaml.
+# DNS listener ports (53/853/443/…) are configured at runtime via
+# settings.yaml. EXPOSE is documentation only (Docker still requires an
+# explicit -p/ports: to actually publish a port) — DoH (443/tcp), DoH3
+# (443/udp), and DoQ (853/udp) are omitted here since they default to off;
+# add them yourself if you enable those listeners (see
+# docs/deploying-docker.md).
 VOLUME ["/config"]
-EXPOSE 53/udp 53/tcp 853 8080
+EXPOSE 53/udp 53/tcp 853/tcp 8080/tcp
 
 ENTRYPOINT ["/usr/local/bin/bramblegate"]

@@ -12,6 +12,11 @@ services:
       - "53:53/tcp"
       - "853:853/tcp"   # DoT (only used once you enable it in settings.yaml)
       - "8080:8080/tcp" # web GUI + JSON API
+      # DoH/DoQ/DoH3 are off by default and need their own port published —
+      # enabling the listener in settings.yaml alone doesn't reach the LAN.
+      # - "443:443/tcp" # DoH
+      # - "443:443/udp" # DoH3 (shares 443 with DoH: separate UDP socket, no collision)
+      # - "853:853/udp" # DoQ (shares 853 with DoT: separate UDP socket, no collision)
     volumes:
       # Persist settings.yaml, records.yaml, issued certs, and generated runtime
       # files. A bind mount (./config) keeps them editable from the host; swap for
