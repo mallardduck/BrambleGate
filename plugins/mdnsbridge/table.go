@@ -15,8 +15,18 @@ import (
 	"time"
 )
 
-// DefaultTTL is how long an entry survives without being re-announced.
-const DefaultTTL = 2 * time.Minute
+// DefaultTTL is the fallback staleness window used only for an entry with
+// no real per-record TTL (e.g. one a test seeded directly, or any future
+// caller that doesn't have one to offer). Deliberately generous: the common
+// case is a real TTL, propagated end-to-end from the mDNS record's own
+// announced TTL (see Entry.TTL and mdnsquery.Entry.TTL) — that's the actual
+// liveness window the device advertised, and mdnssd's own active refresh
+// (RFC 6762 §5.2) already keeps it current via repeated Upsert calls. This
+// constant is a defensive backstop for if that stops happening (e.g. the
+// browse goroutine gets stuck), not a second, independently-invented source
+// of truth — it must not be short enough to expire an entry mdnssd is still
+// correctly refreshing underneath.
+const DefaultTTL = 24 * time.Hour
 
 // Entry is one discovered DNS-SD instance. It is keyed by (service, instance,
 // host); a host advertising multiple services yields multiple entries that share
@@ -31,6 +41,9 @@ type Entry struct {
 	IPv6      []string          `json:"ipv6,omitempty"`
 	Published bool              `json:"published"`
 	LastSeen  time.Time         `json:"last_seen"`
+	// TTL is the record's own most recently announced TTL (0 = unknown).
+	// Table.expired prefers this over the table-wide default — see DefaultTTL.
+	TTL time.Duration `json:"ttl,omitempty"`
 
 	manual bool // GUI approved this entry regardless of auto-publish selectors
 }
@@ -82,6 +95,9 @@ func (t *Table) Upsert(e Entry) {
 		cur.IPv6 = mergeUnique(cur.IPv6, e.IPv6)
 		if len(e.TXT) > 0 {
 			cur.TXT = e.TXT
+		}
+		if e.TTL > 0 {
+			cur.TTL = e.TTL
 		}
 		cur.LastSeen = now
 		t.rederive(cur)
@@ -215,7 +231,16 @@ func (t *Table) Expire() int {
 	return dropped
 }
 
-func (t *Table) expired(e *Entry) bool { return t.now().Sub(e.LastSeen) > t.ttl }
+// expired uses the entry's own real TTL when known, falling back to the
+// table-wide DefaultTTL only when it isn't — see DefaultTTL's doc comment
+// for why the real value must take priority.
+func (t *Table) expired(e *Entry) bool {
+	ttl := t.ttl
+	if e.TTL > 0 {
+		ttl = e.TTL
+	}
+	return t.now().Sub(e.LastSeen) > ttl
+}
 
 func firstLabel(host string) string {
 	h := strings.ToLower(strings.Trim(host, "."))

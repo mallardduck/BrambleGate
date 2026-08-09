@@ -3,7 +3,6 @@ package mdnssd
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -116,20 +115,18 @@ type browserState struct {
 	typ      string
 	domain   string
 
-	cache     *Cache
-	entries   map[string]*Entry // keyed by instance name (PTR target)
-	announced map[string]Entry  // last-announced snapshot per instance
+	cache   *Cache
+	entries map[string]*Entry // keyed by instance name (PTR target)
 }
 
 func newBrowserState(question string, clock Clock) *browserState {
 	typ, domain := splitServiceQuestion(question)
 	return &browserState{
-		question:  question,
-		typ:       typ,
-		domain:    domain,
-		cache:     NewCache(clock),
-		entries:   map[string]*Entry{},
-		announced: map[string]Entry{},
+		question: question,
+		typ:      typ,
+		domain:   domain,
+		cache:    NewCache(clock),
+		entries:  map[string]*Entry{},
 	}
 }
 
@@ -172,10 +169,18 @@ func (b *browserState) ensureEntry(instance, ifaceName string) *Entry {
 
 // Ingest processes one inbound message at time now, merging PTR/SRV/TXT/
 // A/AAAA data into tracked instances and (re)storing PTR-driven cache
-// entries. Returns instances newly resolvable or updated (added) and
-// instances gone via a goodbye packet (TTL=0 PTR; removed).
+// entries. Returns instances that are resolvable and were touched by this
+// message (added) — fired as a liveness heartbeat on every observation, not
+// only when the entry's visible data changed, because a caller (like
+// plugins/mdnsbridge's Table) may track its own independent liveness/TTL
+// driven entirely by add calls; suppressing "unchanged" refreshes here
+// would silently starve that tracking even though this record is still
+// being actively kept alive underneath (this was a real regression: see the
+// dnssd-63-style bug report this fix addresses). Also returns instances
+// gone via a goodbye packet (TTL=0 PTR; removed).
 func (b *browserState) Ingest(msg *dns.Msg, ifaceName string, now time.Time) (added, removed []Entry) {
 	parsed := parseAnswers(msg)
+	touched := make(map[string]bool)
 
 	for _, ptr := range parsed.PTR {
 		if ptr.Name != b.question {
@@ -186,51 +191,52 @@ func (b *browserState) Ingest(msg *dns.Msg, ifaceName string, now time.Time) (ad
 			if e, ok := b.entries[ptr.Ptr]; ok {
 				removed = append(removed, *e)
 				delete(b.entries, ptr.Ptr)
-				delete(b.announced, ptr.Ptr)
 			}
 			continue
 		}
 		b.cache.Store(ptr.Ptr, b.question, ptr.RR(), ptr.TTL)
-		b.ensureEntry(ptr.Ptr, ifaceName)
+		b.ensureEntry(ptr.Ptr, ifaceName).TTL = ptr.TTL
+		touched[ptr.Ptr] = true
 	}
 
 	for _, srv := range parsed.SRV {
 		if e, ok := b.entries[srv.Name]; ok {
 			e.Host = strings.TrimSuffix(srv.Target, ".")
+			touched[srv.Name] = true
 		}
 	}
 
 	for _, txt := range parsed.TXT {
 		if e, ok := b.entries[txt.Name]; ok {
 			e.TXT = txt.Text
+			touched[txt.Name] = true
 		}
 	}
 
 	for _, a := range parsed.A {
 		host := strings.TrimSuffix(a.Name, ".")
-		for _, e := range b.entries {
+		for instance, e := range b.entries {
 			if e.Host != "" && e.Host == host {
 				e.IPv4 = mergeUniqueStr(e.IPv4, a.IP.String())
+				touched[instance] = true
 			}
 		}
 	}
 	for _, aaaa := range parsed.AAAA {
 		host := strings.TrimSuffix(aaaa.Name, ".")
-		for _, e := range b.entries {
+		for instance, e := range b.entries {
 			if e.Host != "" && e.Host == host {
 				e.IPv6 = mergeUniqueStr(e.IPv6, aaaa.IP.String())
+				touched[instance] = true
 			}
 		}
 	}
 
-	for instance, e := range b.entries {
-		if e.Host == "" || len(e.IPv4)+len(e.IPv6) == 0 {
+	for instance := range touched {
+		e, ok := b.entries[instance]
+		if !ok || e.Host == "" || len(e.IPv4)+len(e.IPv6) == 0 {
 			continue // not resolvable yet
 		}
-		if prev, ok := b.announced[instance]; ok && reflect.DeepEqual(prev, *e) {
-			continue // unchanged since last announcement
-		}
-		b.announced[instance] = *e
 		added = append(added, *e)
 	}
 
@@ -254,7 +260,6 @@ func (b *browserState) Tick(now time.Time) (toQuery []*dns.Msg, removed []Entry)
 		if e, ok := b.entries[instance]; ok {
 			removed = append(removed, *e)
 			delete(b.entries, instance)
-			delete(b.announced, instance)
 		}
 	}
 	return toQuery, removed

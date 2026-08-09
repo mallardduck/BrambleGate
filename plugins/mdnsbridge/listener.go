@@ -177,6 +177,7 @@ func (l *Listener) ingest(service string, e mdnsquery.Entry) {
 		TXT:      e.TXT,
 		IPv4:     e.IPv4,
 		IPv6:     e.IPv6,
+		TTL:      e.TTL,
 	}
 	if entry.Host == "" {
 		return

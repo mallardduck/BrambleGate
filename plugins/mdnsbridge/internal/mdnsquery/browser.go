@@ -2,6 +2,7 @@ package mdnsquery
 
 import (
 	"context"
+	"time"
 
 	"github.com/mallardduck/BrambleGate/mdnssd"
 )
@@ -13,6 +14,11 @@ type Entry struct {
 	TXT      map[string]string
 	IPv4     []string
 	IPv6     []string
+	// TTL is the record's own announced TTL, as mdnssd last observed it —
+	// the real liveness window this device advertised. Zero means unknown
+	// (e.g. a FakeBrowser-seeded test entry); callers should treat that as
+	// "use a fallback default," not "expired."
+	TTL time.Duration
 }
 
 // AddFunc is called when a new service instance is discovered.
@@ -73,7 +79,7 @@ func (b *browser) Browse(ctx context.Context, service string, ifaceNames []strin
 }
 
 func toEntry(e mdnssd.Entry) Entry {
-	return Entry{Host: e.Host, Instance: e.Instance, TXT: e.TXT, IPv4: e.IPv4, IPv6: e.IPv6}
+	return Entry{Host: e.Host, Instance: e.Instance, TXT: e.TXT, IPv4: e.IPv4, IPv6: e.IPv6, TTL: e.TTL}
 }
 
 // BrowseTypes implements Browser. Like Browse, it opens its own dedicated

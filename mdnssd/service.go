@@ -1,5 +1,7 @@
 package mdnssd
 
+import "time"
+
 // Entry is a discovered mDNS-SD service instance.
 type Entry struct {
 	Host      string // hostname, e.g. "foo.local" (no trailing dot)
@@ -10,6 +12,14 @@ type Entry struct {
 	IPv4      []string
 	IPv6      []string
 	IfaceName string
+	// TTL is the PTR record's own announced TTL, as last (re)stored by
+	// Cache — the real, authoritative liveness window this device
+	// advertised, not a value this package invents. Callers that track
+	// their own liveness/expiry downstream should use this as the source
+	// of truth rather than a separately-chosen constant, to avoid a second,
+	// potentially-shorter-than-reality TTL silently expiring an entry
+	// mdnssd is still correctly refreshing.
+	TTL time.Duration
 }
 
 // AddFunc is called when a service instance is newly discovered, or when

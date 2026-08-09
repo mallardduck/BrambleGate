@@ -172,6 +172,46 @@ func TestExpire(t *testing.T) {
 	}
 }
 
+// An entry's own real TTL (as propagated from the mDNS record) takes
+// priority over the table-wide fallback — including expiring sooner than a
+// generous fallback would. This is the point of DefaultTTL being a
+// defensive backstop rather than the primary source of truth: a
+// short-TTL'd device must still expire on schedule even though the
+// fallback is deliberately long.
+func TestExpire_UsesEntrysOwnTTLOverFallback(t *testing.T) {
+	now := time.Now()
+	tbl := NewTable(baseCfg(), time.Hour) // generous fallback
+	tbl.now = func() time.Time { return now }
+	tbl.Upsert(Entry{Host: "x.local.", Service: "_http._tcp", IPv4: []string{"10.0.0.1"}, TTL: time.Minute})
+
+	now = now.Add(2 * time.Minute) // past the entry's own TTL, well within the fallback
+	tbl.Expire()
+
+	if len(tbl.Snapshot()) != 0 {
+		t.Fatal("entry with a short real TTL should expire on its own schedule, not the longer fallback")
+	}
+}
+
+// An entry with no real TTL (unknown) falls back to the table-wide default.
+func TestExpire_FallsBackToTableTTLWhenEntryTTLUnknown(t *testing.T) {
+	now := time.Now()
+	tbl := NewTable(baseCfg(), time.Minute)
+	tbl.now = func() time.Time { return now }
+	tbl.Upsert(Entry{Host: "x.local.", Service: "_http._tcp", IPv4: []string{"10.0.0.1"}}) // TTL unset
+
+	now = now.Add(30 * time.Second) // within the table's fallback TTL
+	tbl.Expire()
+	if len(tbl.Snapshot()) != 1 {
+		t.Fatal("entry should still be present within the fallback TTL")
+	}
+
+	now = now.Add(time.Minute) // now past the fallback TTL
+	tbl.Expire()
+	if len(tbl.Snapshot()) != 0 {
+		t.Fatal("entry with no real TTL should expire per the table's fallback TTL")
+	}
+}
+
 func TestClear(t *testing.T) {
 	tbl := NewTable(baseCfg(), time.Minute)
 	tbl.Upsert(Entry{Host: "x.local.", Service: "_http._tcp", Instance: "X", IPv4: []string{"10.0.0.1"}})

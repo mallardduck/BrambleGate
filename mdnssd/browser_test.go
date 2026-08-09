@@ -72,20 +72,53 @@ func TestBrowserState_Ingest_FiresAddOnceHostAndAddressKnown(t *testing.T) {
 	if len(e.IPv4) != 1 || e.IPv4[0] != "192.168.1.5" {
 		t.Errorf("IPv4 = %v, want [192.168.1.5]", e.IPv4)
 	}
+	if e.TTL != 100*time.Second {
+		t.Errorf("TTL = %v, want 100s (the PTR record's own announced TTL, not an invented default)", e.TTL)
+	}
 }
 
-func TestBrowserState_Ingest_DoesNotReAddUnchangedEntry(t *testing.T) {
+// The entry's TTL must track the record's own most recently announced
+// value, so a downstream consumer's liveness check uses the same real
+// truth mdnssd is tracking rather than a second, independently-chosen
+// number that could expire it too early (or too late).
+func TestBrowserState_Ingest_TTLTracksMostRecentAnnouncement(t *testing.T) {
 	state := newBrowserState(testQuestion, newFakeClock())
 	now := time.Now()
 	state.Ingest(ptrMsg(testQuestion, testInstance, 100*time.Second), "eth0", now)
 	state.Ingest(srvMsg(testInstance, "foo.local.", 8080, 100*time.Second), "eth0", now)
 	state.Ingest(aMsg("foo.local.", net.ParseIP("192.168.1.5"), 100*time.Second), "eth0", now)
 
-	// A periodic re-announcement of the exact same PTR shouldn't re-fire add.
+	added, _ := state.Ingest(ptrMsg(testQuestion, testInstance, 4500*time.Second), "eth0", now)
+
+	if len(added) != 1 || added[0].TTL != 4500*time.Second {
+		t.Errorf("added = %+v, want TTL updated to the freshly announced 4500s", added)
+	}
+}
+
+// A re-announcement/refresh answer for an already-known, unchanged entry
+// must still fire added — this is a liveness heartbeat, not just a change
+// notification. A caller (like plugins/mdnsbridge's Table) may track its
+// own independent TTL driven entirely by add calls; suppressing "unchanged"
+// refreshes here would silently starve that tracking even though the
+// record is still being actively kept alive underneath by this package's
+// own Cache. This was a real regression caught in production: entries with
+// static data (most devices) went stale and disappeared from the
+// downstream Table after ~2 minutes despite mdnssd correctly refreshing
+// them internally, while devices with frequently-changing TXT data (e.g.
+// Google Cast) survived by accident.
+func TestBrowserState_Ingest_ReFiresAddOnUnchangedRefresh(t *testing.T) {
+	state := newBrowserState(testQuestion, newFakeClock())
+	now := time.Now()
+	state.Ingest(ptrMsg(testQuestion, testInstance, 100*time.Second), "eth0", now)
+	state.Ingest(srvMsg(testInstance, "foo.local.", 8080, 100*time.Second), "eth0", now)
+	state.Ingest(aMsg("foo.local.", net.ParseIP("192.168.1.5"), 100*time.Second), "eth0", now)
+
+	// A periodic re-announcement of the exact same PTR must still re-fire
+	// add, as the liveness heartbeat a downstream consumer depends on.
 	added, _ := state.Ingest(ptrMsg(testQuestion, testInstance, 100*time.Second), "eth0", now)
 
-	if len(added) != 0 {
-		t.Errorf("added = %+v, want none — nothing changed", added)
+	if len(added) != 1 || added[0].Instance != "Foo" {
+		t.Errorf("added = %+v, want the unchanged entry re-fired as a heartbeat", added)
 	}
 }
 

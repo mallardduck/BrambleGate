@@ -62,6 +62,41 @@ func TestListenerIngestsAndRemoves(t *testing.T) {
 	}
 }
 
+// Regression: mdnssd.Browser correctly keeps a device's record alive
+// internally (RFC 6762 §5.2 active refresh), but Table has its own,
+// independent liveness clock (LastSeen/TTL) that only advances when
+// Listener.ingest is actually called. A device whose discovered data never
+// changes (most devices — a printer's IP doesn't change) was silently
+// dropped from Table ~2 minutes after first discovery, even while mdnssd
+// kept refreshing it underneath, because nothing re-called ingest for an
+// "unchanged" rediscovery. This proves repeated identical rediscoveries —
+// exactly what a live device produces on every refresh — keep the Table
+// entry from expiring.
+func TestListener_RepeatedIdenticalIngestKeepsEntryAlive(t *testing.T) {
+	cfg := Config{DefaultSuffix: "home.arpa", AutoPublish: SelectorSet{{}}}
+	table := NewTable(cfg, time.Minute) // 1-minute TTL for a fast test
+	now := time.Now()
+	table.now = func() time.Time { return now }
+
+	listener := &Listener{table: table, log: slog.New(slog.DiscardHandler)}
+	entry := mdnsquery.Entry{Host: "printer.local.", Instance: "Office Printer", IPv4: []string{"192.168.1.10"}}
+
+	listener.ingest("_http._tcp", entry)
+
+	// Advance well past the original TTL in steps, re-ingesting the exact
+	// same (unchanged) entry each time — simulating mdnssd's refresh
+	// heartbeat for a live, unchanging device.
+	for range 5 {
+		now = now.Add(20 * time.Second)
+		listener.ingest("_http._tcp", entry)
+	}
+
+	table.Expire()
+	if len(table.Snapshot()) != 1 {
+		t.Fatal("entry should survive repeated identical re-ingests past its original TTL")
+	}
+}
+
 func TestListenerRemovesEntry(t *testing.T) {
 	cfg := Config{DefaultSuffix: "home.arpa", AutoPublish: SelectorSet{{}}}
 	table := NewTable(cfg, time.Minute)
