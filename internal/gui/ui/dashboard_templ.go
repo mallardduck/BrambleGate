@@ -88,7 +88,7 @@ func Dashboard(data DashboardData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"shrink-0 px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-xs font-medium hover:bg-bramble-primary/10\">Go to settings</a></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"shrink-0 px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-xs font-semibold hover:bg-bramble-primary/10\">Go to settings</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -116,7 +116,7 @@ func Dashboard(data DashboardData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h2 class=\"text-sm font-semibold mb-3\">Listeners</h2><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide\"><th class=\"px-3 py-2\">Protocol</th><th class=\"px-3 py-2\">Status</th><th class=\"px-3 py-2 text-right\">Port</th></tr></thead> <tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h2 class=\"text-sm font-semibold mb-3\">Listeners</h2><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide font-semibold\"><th class=\"px-3 py-2\">Protocol</th><th class=\"px-3 py-2\">Status</th><th class=\"px-3 py-2 text-right\">Port</th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -249,7 +249,7 @@ func privateDNSRow(label, stamp, url string) templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"rounded bg-bramble-bg-card2 px-3 py-2\"><p class=\"text-xs font-semibold uppercase tracking-wide mb-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"rounded bg-bramble-bg px-3 py-2\"><p class=\"text-xs font-semibold uppercase tracking-wide mb-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -443,7 +443,7 @@ func acmeSelfIPCard(settings model.Settings, records []model.Record) templ.Compo
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" class=\"text-bramble-primary hover:underline\">add an explicit record</a>.</p><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide\"><th class=\"px-3 py-2\">Type</th><th class=\"px-3 py-2\">Default</th><th class=\"px-3 py-2\">Per-VLAN</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" class=\"text-bramble-primary hover:underline\">add an explicit record</a>.</p><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide font-semibold\"><th class=\"px-3 py-2\">Type</th><th class=\"px-3 py-2\">Default</th><th class=\"px-3 py-2\">Per-VLAN</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -563,7 +563,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div class=\"flex flex-wrap gap-x-8 gap-y-3 text-sm\"><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide\">ACME</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div class=\"flex flex-wrap gap-x-7 gap-y-3 text-sm\"><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide mb-1\">ACME</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -578,7 +578,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide\">Domain</p><p class=\"font-mono\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide mb-1\">Domain</p><p class=\"font-mono\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -598,7 +598,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</p></div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide flex items-center\"><abbr title=\"Discovery of Designated Resolvers\" class=\"no-underline cursor-help\">DDR</abbr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</p></div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide mb-1 flex items-center\"><abbr title=\"Discovery of Designated Resolvers\" class=\"no-underline cursor-help\">DDR</abbr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -621,7 +621,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide\">Certificate</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide mb-1\">Certificate</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -664,7 +664,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if cert.Present {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div><p class=\"text-bramble-muted text-xs uppercase tracking-wide\">Covers</p><p class=\"font-mono\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div><p class=\"text-bramble-muted text-xs uppercase tracking-wide mb-1\">Covers</p><p class=\"font-mono\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -694,7 +694,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</p></div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide\">Expires</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</p></div><div><p class=\"text-bramble-muted text-xs uppercase tracking-wide mb-1\">Expires</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -39,7 +39,7 @@ templ Dashboard(data DashboardData) {
 				Still forwarding to the default upstream ({ data.Settings.UpstreamDNS.Address }). Point BrambleGate at your
 				own ad-block resolver to finish setup.
 			</span>
-			<a href={ templ.SafeURL(PathSettings) } class="shrink-0 px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-xs font-medium hover:bg-bramble-primary/10">
+			<a href={ templ.SafeURL(PathSettings) } class="shrink-0 px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-xs font-semibold hover:bg-bramble-primary/10">
 				Go to settings
 			</a>
 		</div>
@@ -57,7 +57,7 @@ templ Dashboard(data DashboardData) {
 		<h2 class="text-sm font-semibold mb-3">Listeners</h2>
 		<table class="w-full text-sm">
 			<thead>
-				<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
+				<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide font-semibold">
 					<th class="px-3 py-2">Protocol</th>
 					<th class="px-3 py-2">Status</th>
 					<th class="px-3 py-2 text-right">Port</th>
@@ -113,7 +113,7 @@ templ privateDNSCard(settings model.Settings) {
 // privateDNSRow groups a protocol's stamp and query URL together — stamp is
 // blank for DoQ, which has no sdns:// proto type.
 templ privateDNSRow(label, stamp, url string) {
-	<div class="rounded bg-bramble-bg-card2 px-3 py-2">
+	<div class="rounded bg-bramble-bg px-3 py-2">
 		<p class="text-xs font-semibold uppercase tracking-wide mb-2">{ label }</p>
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 			@dnsStampField("Query URL", url)
@@ -157,7 +157,7 @@ templ acmeSelfIPCard(settings model.Settings, records []model.Record) {
 				</p>
 				<table class="w-full text-sm">
 					<thead>
-						<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide">
+						<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide font-semibold">
 							<th class="px-3 py-2">Type</th>
 							<th class="px-3 py-2">Default</th>
 							<th class="px-3 py-2">Per-VLAN</th>
@@ -199,9 +199,9 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 				<a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Configure ACME</a>.
 			</p>
 		} else {
-			<div class="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+			<div class="flex flex-wrap gap-x-7 gap-y-3 text-sm">
 				<div>
-					<p class="text-bramble-muted text-xs uppercase tracking-wide">ACME</p>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1">ACME</p>
 					if settings.ACME.Enabled {
 						@tag("Enabled", true)
 					} else {
@@ -209,7 +209,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 					}
 				</div>
 				<div>
-					<p class="text-bramble-muted text-xs uppercase tracking-wide">Domain</p>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1">Domain</p>
 					<p class="font-mono">
 						if settings.ACME.Domain != "" {
 							{ settings.ACME.Domain }
@@ -219,7 +219,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 					</p>
 				</div>
 				<div>
-					<p class="text-bramble-muted text-xs uppercase tracking-wide flex items-center">
+					<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1 flex items-center">
 						<abbr title="Discovery of Designated Resolvers" class="no-underline cursor-help">DDR</abbr>
 						@helpTooltip("Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from plain DNS")
 					</p>
@@ -230,7 +230,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 					}
 				</div>
 				<div>
-					<p class="text-bramble-muted text-xs uppercase tracking-wide">Certificate</p>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1">Certificate</p>
 					if !cert.Present {
 						@tag("None on disk", false)
 					} else if cert.SelfSigned {
@@ -250,7 +250,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 				</div>
 				if cert.Present {
 					<div>
-						<p class="text-bramble-muted text-xs uppercase tracking-wide">Covers</p>
+						<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1">Covers</p>
 						<p class="font-mono">
 							if cert.Domain != "" {
 								{ cert.Domain }
@@ -263,7 +263,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 						</p>
 					</div>
 					<div>
-						<p class="text-bramble-muted text-xs uppercase tracking-wide">Expires</p>
+						<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1">Expires</p>
 						<p class={ expiryClass(cert) }>
 							{ cert.NotAfter.Format("2006-01-02") } ({ daysRemainingLabel(cert) })
 						</p>

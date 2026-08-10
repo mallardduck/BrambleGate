@@ -65,7 +65,7 @@ templ Topbar(active string) {
 
 templ navLink(href string, label string, active bool) {
 	if active {
-		<a href={ templ.SafeURL(href) } class="px-3 py-1.5 rounded text-sm font-medium text-bramble-primary border border-bramble-primary">
+		<a href={ templ.SafeURL(href) } class="px-3 py-1.5 rounded text-sm font-semibold text-bramble-primary border border-bramble-primary">
 			{ label }
 		</a>
 	} else {

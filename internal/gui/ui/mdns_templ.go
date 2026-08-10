@@ -110,7 +110,7 @@ func MDNS(data MDNSData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span></form><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto\"><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide\"><th class=\"px-3 py-2\">Name</th><th class=\"px-3 py-2\">Status</th><th class=\"px-3 py-2\">Service</th><th class=\"px-3 py-2\">Addresses</th><th class=\"px-3 py-2\"></th></tr></thead> <tbody id=\"mdns-grid\" hx-get=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span></form><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto\"><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase\"><th class=\"px-3 py-2\">Name</th><th class=\"px-3 py-2\">Status</th><th class=\"px-3 py-2\">Service</th><th class=\"px-3 py-2\">Addresses</th><th class=\"px-3 py-2\"></th></tr></thead> <tbody id=\"mdns-grid\" hx-get=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
