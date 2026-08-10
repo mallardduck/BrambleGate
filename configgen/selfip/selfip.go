@@ -6,9 +6,10 @@
 // "nothing detected" under a plain bridge/port-mapped deployment, where the
 // container only sees Docker's internal bridge IP (dev-docs/certificates.md).
 //
-// A sibling library module (not internal/), matching model/engine/mdnssd's
-// layout, since both configgen and the root module (internal/gui) need to
-// import it — see docs/repo-layout.md.
+// A subpackage of configgen (not its own sibling module): its only consumers
+// are configgen itself and the root module, which already depends on
+// configgen — so it needs no go.mod/replace of its own. See
+// dev-docs/repo-layout.md.
 package selfip
 
 import (

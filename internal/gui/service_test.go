@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
 )
 

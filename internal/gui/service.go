@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/internal/acme"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/internal/vlancfg"
@@ -22,7 +23,6 @@ import (
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )

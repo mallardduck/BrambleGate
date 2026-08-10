@@ -19,8 +19,8 @@ import (
 	"strings"
 
 	"github.com/mallardduck/BrambleGate/configgen/corefile"
+	"github.com/mallardduck/BrambleGate/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
-	"github.com/mallardduck/BrambleGate/selfip"
 )
 
 // OwnedZone is the zone localrecords is fully authoritative for (NXDOMAIN on any

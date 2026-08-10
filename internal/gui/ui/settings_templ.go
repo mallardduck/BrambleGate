@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mallardduck/BrambleGate/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise/mdnsresponder"
-	"github.com/mallardduck/BrambleGate/selfip"
 )
 
 // SettingsData is everything the settings page needs to render.

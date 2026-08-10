@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mallardduck/BrambleGate/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
-	"github.com/mallardduck/BrambleGate/selfip"
 )
 
 func baseSettings() model.Settings {
