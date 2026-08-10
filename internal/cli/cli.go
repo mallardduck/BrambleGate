@@ -25,6 +25,7 @@ import (
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
 )
 
@@ -93,7 +94,7 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	// documented deferred-issuance path just below — so enabling DoT/DoH/DoQ
 	// later via the GUI rendered a `tls` directive with blank args and CoreDNS
 	// rejected it.
-	opts := configgen.Options{ConfigDir: configDir}
+	opts := configgen.Options{ConfigDir: configDir, ACMESelfIPs: selfip.DetectLive(settings.VLANs)}
 	opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
 	if err != nil {
 		return fmt.Errorf("prepare certificate: %w", err)
