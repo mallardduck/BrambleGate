@@ -30,6 +30,13 @@ func instanceNameFor(serviceType string) string {
 // UDP and TCP, so both service types are advertised). Encrypted transports
 // follow draft-liu-add-dnssd-edns-01; DoH/DoQ aren't rendered by configgen yet,
 // so they're not advertised until a later phase implements those listeners.
+// DesiredServices is the exported form of desiredServices, for callers (the
+// settings UI) that want to show what would be/is being advertised without
+// needing a live Advertiser — the service set is a pure function of settings.
+func DesiredServices(settings model.Settings) []*mdnsresponder.ServiceSpec {
+	return desiredServices(settings)
+}
+
 func desiredServices(settings model.Settings) []*mdnsresponder.ServiceSpec {
 	var out []*mdnsresponder.ServiceSpec
 

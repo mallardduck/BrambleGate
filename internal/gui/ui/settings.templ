@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise/mdnsresponder"
 	"github.com/mallardduck/BrambleGate/selfip"
 )
 
@@ -20,6 +22,13 @@ type SettingsData struct {
 	// form pre-fills from it and switches to a PUT-to-update submission,
 	// mirroring RecordsData.Editing.
 	Editing *model.VLAN
+	// AdvertisedServices is what mdnsadvertise.DesiredServices computes for
+	// the current settings — the exact mDNS-SD records self-advertisement
+	// would publish. Shown under the mDNS self-advertisement section so the
+	// effect of enabling it is visible, not just the toggle itself. Computed
+	// regardless of whether advertising is enabled; the template only shows
+	// it while Settings.MDNS.Advertise.Enabled is checked.
+	AdvertisedServices []*mdnsresponder.ServiceSpec
 }
 
 // uint32Str renders 0 as blank (the "unset, use CoreDNS's default" state)
@@ -291,6 +300,20 @@ templ Settings(data SettingsData) {
 					Enabled
 				</label>
 			</div>
+			if data.Settings.MDNS.Advertise.Enabled {
+				<div class="mt-3 pl-0.5">
+					<p class="text-bramble-muted text-xs mb-2">Currently published:</p>
+					if len(data.AdvertisedServices) == 0 {
+						<p class="text-bramble-muted text-sm">Nothing to advertise yet — enable a DNS listener above (plain DNS or DoT).</p>
+					} else {
+						<div class="flex flex-col gap-1">
+							for _, svc := range data.AdvertisedServices {
+								@advertisedServiceRow(svc)
+							}
+						</div>
+					}
+				</div>
+			}
 		</div>
 
 		<div class="mt-4">
@@ -563,6 +586,38 @@ templ doh3ListenerFields(l model.QUICListener) {
 				/>
 			</label>
 		</div>
+	</div>
+}
+
+// advertisedServiceTXT renders a ServiceSpec's TXT records as "k=v" pairs
+// joined for a single-line summary, sorted for a stable render (map
+// iteration order isn't).
+func advertisedServiceTXT(svc *mdnsresponder.ServiceSpec) string {
+	if len(svc.TXT) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(svc.TXT))
+	for k := range svc.TXT {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+svc.TXT[k])
+	}
+	return strings.Join(parts, " ")
+}
+
+templ advertisedServiceRow(svc *mdnsresponder.ServiceSpec) {
+	<div class="flex items-center justify-between rounded bg-bramble-bg px-3 py-2 text-sm">
+		<span>
+			<span class="font-mono font-medium">{ svc.Type }</span>
+			<span class="text-bramble-muted ml-2">{ svc.Name }</span>
+			if txt := advertisedServiceTXT(svc); txt != "" {
+				<span class="text-bramble-muted ml-2 font-mono text-xs">{ txt }</span>
+			}
+		</span>
+		<span class="text-bramble-muted font-mono text-xs">:{ strconv.Itoa(int(svc.Port)) }</span>
 	</div>
 }
 

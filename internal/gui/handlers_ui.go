@@ -10,6 +10,7 @@ import (
 
 	"github.com/mallardduck/BrambleGate/internal/gui/ui"
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 )
 
@@ -360,7 +361,12 @@ func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, editin
 	// Non-fatal: the detected-networks panel is a nice-to-have, not core to
 	// the settings page loading.
 	candidates, _ := h.svc.VLANCandidates()
-	data := ui.SettingsData{Settings: settings, VLANCandidates: candidates, Editing: editing}
+	data := ui.SettingsData{
+		Settings:           settings,
+		VLANCandidates:     candidates,
+		Editing:            editing,
+		AdvertisedServices: mdnsadvertise.DesiredServices(settings),
+	}
 	renderError(w, r, "Settings", ui.PathSettings, ui.Settings(data), formErr)
 }
 
