@@ -231,7 +231,7 @@ func parseRecordForm(r *http.Request, vlans []model.VLAN) (model.Record, error) 
 // --- Settings --------------------------------------------------------------
 
 func (h *handlers) settingsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderSettings(w, r, "")
+	h.renderSettings(w, r, nil, "")
 }
 
 func (h *handlers) settingsSave(w http.ResponseWriter, r *http.Request) {
@@ -241,14 +241,14 @@ func (h *handlers) settingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := parseSettingsForm(r, &settings); err != nil {
-		h.renderSettings(w, r, err.Error())
+		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
 	if err := h.svc.SaveSettings(settings); err != nil {
-		h.renderSettings(w, r, err.Error())
+		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
-	h.renderSettings(w, r, "")
+	h.renderSettings(w, r, nil, "")
 }
 
 func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
@@ -258,21 +258,73 @@ func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		h.renderSettings(w, r, err.Error())
+		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
 	name := strings.TrimSpace(r.FormValue("vlan_name"))
 	cidrs := splitAndTrim(r.FormValue("vlan_cidrs"))
 	if name == "" || len(cidrs) == 0 {
-		h.renderSettings(w, r, "a VLAN needs a name and at least one CIDR")
+		h.renderSettings(w, r, nil, "a VLAN needs a name and at least one CIDR")
 		return
 	}
 	settings.VLANs = append(settings.VLANs, model.VLAN{Name: name, CIDRs: cidrs})
 	if err := h.svc.SaveSettings(settings); err != nil {
-		h.renderSettings(w, r, err.Error())
+		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
-	h.renderSettings(w, r, "")
+	h.renderSettings(w, r, nil, "")
+}
+
+func (h *handlers) vlanEdit(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	settings, err := h.svc.Settings()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, v := range settings.VLANs {
+		if v.Name == name {
+			h.renderSettings(w, r, &v, "")
+			return
+		}
+	}
+	http.NotFound(w, r)
+}
+
+func (h *handlers) vlanUpdate(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	settings, err := h.svc.Settings()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		h.renderSettings(w, r, nil, err.Error())
+		return
+	}
+	newName := strings.TrimSpace(r.FormValue("vlan_name"))
+	cidrs := splitAndTrim(r.FormValue("vlan_cidrs"))
+	if newName == "" || len(cidrs) == 0 {
+		h.renderSettings(w, r, nil, "a VLAN needs a name and at least one CIDR")
+		return
+	}
+	found := false
+	for i, v := range settings.VLANs {
+		if v.Name == name {
+			settings.VLANs[i] = model.VLAN{Name: newName, CIDRs: cidrs}
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.SaveSettings(settings); err != nil {
+		h.renderSettings(w, r, nil, err.Error())
+		return
+	}
+	h.renderSettings(w, r, nil, "")
 }
 
 func (h *handlers) vlanRemove(w http.ResponseWriter, r *http.Request) {
@@ -290,13 +342,16 @@ func (h *handlers) vlanRemove(w http.ResponseWriter, r *http.Request) {
 	}
 	settings.VLANs = kept
 	if err := h.svc.SaveSettings(settings); err != nil {
-		h.renderSettings(w, r, err.Error())
+		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
-	h.renderSettings(w, r, "")
+	h.renderSettings(w, r, nil, "")
 }
 
-func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, formErr string) {
+// renderSettings renders the settings page with the current on-disk
+// settings. editing, when non-nil, pre-fills the Add-VLAN form for an
+// update instead of an add — mirrors renderRecords's editing param.
+func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, editing *model.VLAN, formErr string) {
 	settings, err := h.svc.Settings()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -305,7 +360,7 @@ func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, formEr
 	// Non-fatal: the detected-networks panel is a nice-to-have, not core to
 	// the settings page loading.
 	candidates, _ := h.svc.VLANCandidates()
-	data := ui.SettingsData{Settings: settings, VLANCandidates: candidates}
+	data := ui.SettingsData{Settings: settings, VLANCandidates: candidates, Editing: editing}
 	renderError(w, r, "Settings", ui.PathSettings, ui.Settings(data), formErr)
 }
 

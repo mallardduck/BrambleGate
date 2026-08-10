@@ -16,6 +16,10 @@ type SettingsData struct {
 	// auto-added; the user names and submits each one via the same "Add VLAN"
 	// form a manual entry uses.
 	VLANCandidates []selfip.Candidate
+	// Editing is set when a VLAN's Edit link has been clicked: the Add-VLAN
+	// form pre-fills from it and switches to a PUT-to-update submission,
+	// mirroring RecordsData.Editing.
+	Editing *model.VLAN
 }
 
 // uint32Str renders 0 as blank (the "unset, use CoreDNS's default" state)
@@ -37,10 +41,19 @@ func uintPtrStr(v *uint32) string {
 	return strconv.FormatUint(uint64(*v), 10)
 }
 
+// forwardTuningOpen decides the Forward tuning section's default open/closed
+// state: open only when it holds a non-default value worth drawing
+// attention to, closed otherwise. Server-computed so it's correct on first
+// render and after every htmx swap, with no persisted "user expanded this"
+// client state.
+func forwardTuningOpen(u model.UpstreamTarget) bool {
+	return u.MaxFails != nil || u.HealthCheckSeconds != 0 || u.ExpireSeconds != 0 || u.MaxConcurrent != 0 || u.PreferUDP
+}
+
 templ Settings(data SettingsData) {
 	<h1 class="text-lg font-semibold mb-4">Settings</h1>
 
-	<form hx-post={ PathSettings } hx-target="#content" hx-swap="innerHTML" class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+	<form hx-post={ PathSettings } hx-target="#content" hx-swap="innerHTML" autocomplete="off" class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 		<h2 class="text-sm font-semibold mb-3">Upstream &amp; listeners</h2>
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex flex-col gap-1 text-sm">
@@ -65,19 +78,29 @@ templ Settings(data SettingsData) {
 				Only enable this if the upstream above is a local resolver you trust (e.g. your own PiHole/AdGuard/Technitium). It reveals each client's real source IP to the upstream so it can apply per-client policy. Saving is rejected unless the upstream address is a private/loopback IP — enabling this with a public resolver (Cloudflare, Google, etc.) would leak client IPs off your network.
 			</p>
 		</div>
-		<div class="mt-4">
-			<h3 class="text-xs font-semibold text-bramble-muted mb-2">Forward tuning (optional)</h3>
-			<div class="flex flex-wrap gap-3 items-end">
+		<details class="mt-4 group" open?={ forwardTuningOpen(data.Settings.UpstreamDNS) }>
+			<summary class="text-xs font-semibold text-bramble-muted mb-2 flex items-center gap-1 cursor-pointer select-none">
+				<span class="text-[10px] transition-transform group-open:rotate-90">▸</span>
+				Forward tuning (optional)
+				@helpTooltip("Leave a field blank to use CoreDNS's own default. max_fails 0 disables marking the upstream down on failures — sensible with a single local resolver that has no failover target anyway. \"Prefer UDP\" makes BrambleGate try UDP to the upstream first even when a client's own query arrived over TCP, retrying over TCP only if the reply comes back truncated — useful if the upstream struggles with a burst of concurrent TCP connections.")
+			</summary>
+			<div class="flex flex-wrap gap-3 items-end pl-3.5">
 				<label class="flex flex-col gap-1 text-sm">
 					<span class="text-bramble-muted text-xs">max_fails</span>
 					<input name="upstream_max_fails" value={ uintPtrStr(data.Settings.UpstreamDNS.MaxFails) } placeholder="default: 2" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-28"/>
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">health_check (seconds)</span>
+					<span class="text-bramble-muted text-xs flex items-center">
+						health_check
+						@helpTooltip("How often, in seconds, to probe a failed upstream before trying it again. Blank uses CoreDNS's default (0.5s).")
+					</span>
 					<input name="upstream_health_check_seconds" value={ uint32Str(data.Settings.UpstreamDNS.HealthCheckSeconds) } placeholder="default: 0.5" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-28"/>
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">expire (seconds)</span>
+					<span class="text-bramble-muted text-xs flex items-center">
+						expire
+						@helpTooltip("How long, in seconds, an upstream connection can sit idle before it's closed. Blank uses CoreDNS's default (10s).")
+					</span>
 					<input name="upstream_expire_seconds" value={ uint32Str(data.Settings.UpstreamDNS.ExpireSeconds) } placeholder="default: 10" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-28"/>
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
@@ -85,27 +108,28 @@ templ Settings(data SettingsData) {
 					<input name="upstream_max_concurrent" value={ uint32Str(data.Settings.UpstreamDNS.MaxConcurrent) } placeholder="default: unlimited" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-28"/>
 				</label>
 			</div>
-			<label class="flex items-center gap-2 text-sm mt-2">
+			<label class="flex items-center gap-2 text-sm mt-2 pl-3.5">
 				<input type="checkbox" name="upstream_prefer_udp" checked?={ data.Settings.UpstreamDNS.PreferUDP }/>
 				Prefer UDP to upstream
 			</label>
-			<p class="text-bramble-muted text-xs mt-1 max-w-prose">
-				Leave a field blank to use CoreDNS's own default. <code>max_fails 0</code> disables marking the upstream down on failures — sensible with a single local resolver that has no failover target anyway. "Prefer UDP" makes BrambleGate try UDP to the upstream first even when a client's own query arrived over TCP, retrying over TCP only if the reply comes back truncated — useful if the upstream struggles with a burst of concurrent TCP connections.
-			</p>
-		</div>
-		<div class="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53)
-			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2" title="Share a default port number (443) — the OS keeps TCP/UDP bindings separate, see docs/deploying-docker.md">
-				@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443)
+		</details>
+		<h3 class="text-xs font-semibold text-bramble-muted mt-4 mb-2">Listeners</h3>
+		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53, "")
+			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
+				@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443, "DoH and DoH3 can share the same default port number (443) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
 				@doh3ListenerFields(data.Settings.Listeners.DoH3)
 			</div>
-			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2" title="Share a default port number (853) — the OS keeps TCP/UDP bindings separate, see docs/deploying-docker.md">
-				@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853)
+			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
+				@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853, "DoT and DoQ can share the same default port number (853) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
 				@doqListenerFields(data.Settings.Listeners.DoQ)
 			</div>
 		</div>
 
-		<h2 class="text-sm font-semibold mt-6 mb-3">Cache, logging &amp; errors</h2>
+		<h2 class="text-sm font-semibold mt-6 mb-3 flex items-center">
+			Cache, logging &amp; errors
+			@helpTooltip("By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; every query is logged to stdout; and outgoing EDNS0 UDP payload sizes are capped to 1232 bytes to avoid IP fragmentation. Each of these is on by default — the checkboxes below only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when \"Send client IP to upstream\" above is enabled, since a subnet-scoped answer must never be served to a different client. Encrypted listeners (DoT/DoH/DoQ) also get a fixed, non-configurable 3-minute idle-timeout bump to help mobile/NAT'd clients — not shown here since there's nothing to toggle. Observability endpoints are off by default (opt-in instrumentation, not core behavior) and, when enabled, run on fixed ports in the first enabled listener's block only — CoreDNS treats each as a process-wide singleton.")
+		</h2>
 		<div class="flex flex-wrap gap-6 items-start">
 			<div>
 				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Cache</h3>
@@ -125,7 +149,10 @@ templ Settings(data SettingsData) {
 					Disable query log
 				</label>
 				<label class="flex flex-col gap-1 text-sm mt-2">
-					<span class="text-bramble-muted text-xs">Classes (comma-separated, blank = all)</span>
+					<span class="text-bramble-muted text-xs flex items-center">
+						Classes
+						@helpTooltip("Which query-log classes to record (e.g. success, denial, error), comma-separated. Leave blank to log every class.")
+					</span>
 					<input name="log_classes" value={ strings.Join(data.Settings.Log.Classes, ", ") } placeholder="success, denial, error" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
 				</label>
 			</div>
@@ -159,86 +186,93 @@ templ Settings(data SettingsData) {
 				</label>
 			</div>
 		</div>
-		<p class="text-bramble-muted text-xs mt-2 max-w-prose">
-			By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; every query is logged to stdout; and outgoing EDNS0 UDP payload sizes are capped to 1232 bytes to avoid IP fragmentation. Each of these is on by default — the checkboxes above only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when "Send client IP to upstream" above is enabled, since a subnet-scoped answer must never be served to a different client. Encrypted listeners (DoT/DoH/DoQ) also get a fixed, non-configurable 3-minute idle-timeout bump to help mobile/NAT'd clients — not shown here since there's nothing to toggle. Observability endpoints are off by default (opt-in instrumentation, not core behavior) and, when enabled, run on fixed ports in the first enabled listener's block only — CoreDNS treats each as a process-wide singleton.
-		</p>
 
 		<h2 class="text-sm font-semibold mt-6 mb-3">ACME (DNS-01 certificates)</h2>
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled }/>
+				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ toggleHiddenByChecked("acme_fields") }/>
 				Enabled
 			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Domain</span>
-				<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Email</span>
-				<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">DNS provider</span>
-				<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-			</label>
-			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
-				Production CA
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Renew before (days)</span>
-				<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
-			</label>
+			<div id="acme_fields" class="contents" hidden?={ !data.Settings.ACME.Enabled }>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Domain</span>
+					<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Email</span>
+					<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">DNS provider</span>
+					<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
+					Production CA
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Renew before
+						@helpTooltip("Start renewing the certificate this many days before it expires.")
+					</span>
+					<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
+				</label>
+			</div>
 		</div>
 
-		<h2 class="text-sm font-semibold mt-6 mb-3">mDNS discovery</h2>
+		<h2 class="text-sm font-semibold mt-6 mb-3 flex items-center">
+			mDNS discovery
+			@helpTooltip("Auto-publish selectors and naming rules are YAML-only for now; discoveries can be approved/promoted individually from the mDNS page. Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.")
+		</h2>
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled }/>
+				<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled } onchange={ toggleHiddenByChecked("mdns_fields") }/>
 				Enabled
 			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Interfaces (comma-separated, blank/"all" = all)</span>
-				<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Service types</span>
-				<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
-					@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
-					@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
-					@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
-					@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
-				</select>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Custom list (only used when "Custom list" is selected above)</span>
-				<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Suffix (blank = home.arpa)</span>
-				<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-			</label>
+			<div id="mdns_fields" class="contents" hidden?={ !data.Settings.MDNS.Enabled }>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Interfaces
+						@helpTooltip("Network interfaces to listen for mDNS on, comma-separated. Leave blank or type \"all\" to listen on every interface.")
+					</span>
+					<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Service types</span>
+					<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm" onchange={ toggleHiddenBySelectValue("mdns_custom_group", "custom") }>
+						@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
+						@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
+						@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
+						@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
+					</select>
+				</label>
+				<label id="mdns_custom_group" class="flex flex-col gap-1 text-sm" hidden?={ mdnsServiceTypesMode(data.Settings.MDNS.ServiceTypes) != "custom" }>
+					<span class="text-bramble-muted text-xs flex items-center">
+						Custom list
+						@helpTooltip("The exact mDNS service types to discover (e.g. _http._tcp, _ipp._tcp). Only read when Service types above is set to Custom list.")
+					</span>
+					<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Suffix
+						@helpTooltip("Domain suffix appended to discovered mDNS names. Leave blank to use the default, home.arpa.")
+					</span>
+					<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+			</div>
 		</div>
-		<p class="mt-2 text-xs text-bramble-muted">
-			Auto-publish selectors and naming rules are YAML-only for now; discoveries can be approved/promoted
-			individually from the <a href={ templ.SafeURL(PathMDNS) } class="text-bramble-primary hover:underline">mDNS</a> page.
-			Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.
-		</p>
 
-		<h2 class="text-sm font-semibold mt-6 mb-3">mDNS self-advertisement</h2>
+		<h2 class="text-sm font-semibold mt-6 mb-3 flex items-center">
+			mDNS self-advertisement
+			@helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: plain DNS as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.")
+		</h2>
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" name="mdns_advertise_enabled" checked?={ data.Settings.MDNS.Advertise.Enabled }/>
 				Enabled
 			</label>
 		</div>
-		<p class="mt-2 text-xs text-bramble-muted">
-			Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other
-			devices/apps on the LAN can find it: plain DNS as <span class="font-mono">_domain._udp</span>/<span class="font-mono">_domain._tcp</span>,
-			plus <span class="font-mono">_dot._tcp</span> when DoT is enabled. Off by default —
-			broadcasting "there is a DNS resolver here" to the whole network segment is a bigger exposure than
-			passively discovering other devices. Takes effect immediately — no restart needed.
-		</p>
 
 		<div class="mt-4">
 			<button type="submit" class="px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-sm font-medium hover:bg-bramble-primary/10">
@@ -257,25 +291,49 @@ templ Settings(data SettingsData) {
 				<p class="text-bramble-muted text-sm">No VLANs declared — records can only have one default answer.</p>
 			}
 		</div>
-		<form hx-post={ PathSettings + "/vlans" } hx-target="#content" hx-swap="innerHTML" class="mt-4 flex flex-wrap gap-2 items-end">
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Name</span>
-				<input name="vlan_name" placeholder="untrusted-wifi" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">CIDRs (comma-separated)</span>
-				<input name="vlan_cidrs" placeholder="192.168.20.0/24" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
-			</label>
-			<button type="submit" class="px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-sm hover:bg-bramble-primary/10">
-				Add VLAN
-			</button>
-		</form>
+		if data.Editing != nil {
+			<form hx-put={ PathSettings + "/vlans/" + data.Editing.Name } hx-target="#content" hx-swap="innerHTML" class="mt-4 flex flex-wrap gap-2 items-end">
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Name</span>
+					<input name="vlan_name" value={ data.Editing.Name } placeholder="untrusted-wifi" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						CIDRs
+						@helpTooltip("One or more CIDR ranges belonging to this VLAN, comma-separated (e.g. 192.168.20.0/24).")
+					</span>
+					<input name="vlan_cidrs" value={ strings.Join(data.Editing.CIDRs, ", ") } placeholder="192.168.20.0/24" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+				</label>
+				<button type="submit" class="px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-sm hover:bg-bramble-primary/10">
+					Save changes
+				</button>
+				<a href={ templ.SafeURL(PathSettings) } hx-get={ PathSettings } hx-target="#content" hx-swap="innerHTML" class="px-3 py-1.5 rounded border border-bramble-border text-sm hover:bg-bramble-bg-card2">
+					Cancel
+				</a>
+			</form>
+		} else {
+			<form hx-post={ PathSettings + "/vlans" } hx-target="#content" hx-swap="innerHTML" class="mt-4 flex flex-wrap gap-2 items-end">
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Name</span>
+					<input name="vlan_name" placeholder="untrusted-wifi" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						CIDRs
+						@helpTooltip("One or more CIDR ranges belonging to this VLAN, comma-separated (e.g. 192.168.20.0/24).")
+					</span>
+					<input name="vlan_cidrs" placeholder="192.168.20.0/24" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+				</label>
+				<button type="submit" class="px-3 py-1.5 rounded border border-bramble-primary text-bramble-primary text-sm hover:bg-bramble-primary/10">
+					Add VLAN
+				</button>
+			</form>
+		}
 		if len(data.VLANCandidates) > 0 {
 			<div class="mt-4 pt-4 border-t border-bramble-border">
-				<p class="text-bramble-muted text-xs uppercase tracking-wide mb-2">Detected networks</p>
-				<p class="text-bramble-muted text-xs mb-3">
-					Locally-attached networks not yet declared as a VLAN (e.g. from macvlan interfaces). Name each one
-					and add it to enable per-VLAN answers there — nothing is added automatically.
+				<p class="text-bramble-muted text-xs uppercase tracking-wide mb-2 flex items-center">
+					Detected networks
+					@helpTooltip("Locally-attached networks not yet declared as a VLAN (e.g. from macvlan interfaces). Name each one and add it to enable per-VLAN answers there — nothing is added automatically.")
 				</p>
 				<div class="flex flex-col gap-2">
 					for _, c := range data.VLANCandidates {
@@ -302,8 +360,8 @@ templ vlanCandidateRow(c selfip.Candidate) {
 	</form>
 }
 
-templ listenerFields(prefix, label string, l model.Listener, defaultPort int) {
-	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2">
+templ listenerFields(prefix, label string, l model.Listener, defaultPort int, sharedPortNote string) {
+	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2 min-w-0 flex-1">
 		<label class="flex items-center gap-2 text-sm">
 			<input
 				type="checkbox"
@@ -312,6 +370,9 @@ templ listenerFields(prefix, label string, l model.Listener, defaultPort int) {
 				onchange={ fillDefaultPort(prefix, defaultPort) }
 			/>
 			{ label }
+			if sharedPortNote != "" {
+				@helpTooltip(sharedPortNote)
+			}
 		</label>
 		<input
 			type="number"
@@ -321,7 +382,8 @@ templ listenerFields(prefix, label string, l model.Listener, defaultPort int) {
 				value={ strconv.Itoa(l.Port) }
 			}
 			placeholder={ strconv.Itoa(defaultPort) }
-			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+			hidden?={ !l.Enabled }
+			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs w-full min-w-0"
 		/>
 	</div>
 }
@@ -329,13 +391,41 @@ templ listenerFields(prefix, label string, l model.Listener, defaultPort int) {
 // fillDefaultPort populates a listener's port field with its standard default
 // (53/853/443/853) the moment the user enables it — otherwise the port field
 // just shows a placeholder and looks empty/unset until they notice they need
-// to type a port themselves.
+// to type a port themselves. It also shows/hides the port field (and, for
+// DoQ/DoH3, the tuning fields alongside it) as a conditional group keyed to
+// this same checkbox — visibility is a pure function of the checkbox's
+// current value, re-derived fresh on every render, never persisted.
 script fillDefaultPort(prefix string, defaultPort int) {
-	if (event.target.checked) {
-		const portInput = document.getElementById(prefix + "_port");
-		if (portInput && !portInput.value) {
+	const checked = event.target.checked;
+	const portInput = document.getElementById(prefix + "_port");
+	if (portInput) {
+		portInput.hidden = !checked;
+		if (checked && !portInput.value) {
 			portInput.value = defaultPort;
 		}
+	}
+	const tuning = document.getElementById(prefix + "_tuning");
+	if (tuning) {
+		tuning.hidden = !checked;
+	}
+}
+
+// toggleHiddenByChecked shows/hides a conditional field group keyed to a
+// sibling checkbox's live value — same stateless, re-derived-on-every-render
+// approach as fillDefaultPort above, just without the default-port fill.
+script toggleHiddenByChecked(groupID string) {
+	const el = document.getElementById(groupID);
+	if (el) {
+		el.hidden = !event.target.checked;
+	}
+}
+
+// toggleHiddenBySelectValue shows/hides a conditional field group keyed to a
+// sibling select's live value matching a specific option.
+script toggleHiddenBySelectValue(groupID string, matchValue string) {
+	const el = document.getElementById(groupID);
+	if (el) {
+		el.hidden = event.target.value !== matchValue;
 	}
 }
 
@@ -344,7 +434,7 @@ script fillDefaultPort(prefix string, defaultPort int) {
 // means unset — the quic{} directive is omitted and CoreDNS's own defaults
 // apply, so leaving these blank is a valid, common choice, not an error.
 templ doqListenerFields(l model.QUICListener) {
-	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2">
+	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2 min-w-0 flex-1">
 		<label class="flex items-center gap-2 text-sm">
 			<input
 				type="checkbox"
@@ -362,34 +452,37 @@ templ doqListenerFields(l model.QUICListener) {
 				value={ strconv.Itoa(l.Port) }
 			}
 			placeholder="853"
-			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+			hidden?={ !l.Enabled }
+			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs w-full min-w-0"
 		/>
-		<label class="flex flex-col gap-1 text-xs">
-			<span class="text-bramble-muted">Max streams</span>
-			<input
-				type="number"
-				min="0"
-				name="doq_max_streams"
-				if l.MaxStreams != 0 {
-					value={ strconv.Itoa(l.MaxStreams) }
-				}
-				placeholder="default"
-				class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
-			/>
-		</label>
-		<label class="flex flex-col gap-1 text-xs">
-			<span class="text-bramble-muted">Worker pool size</span>
-			<input
-				type="number"
-				min="0"
-				name="doq_worker_pool_size"
-				if l.WorkerPoolSize != 0 {
-					value={ strconv.Itoa(l.WorkerPoolSize) }
-				}
-				placeholder="default"
-				class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
-			/>
-		</label>
+		<div id="doq_tuning" class="contents" hidden?={ !l.Enabled }>
+			<label class="flex flex-col gap-1 text-xs min-w-0">
+				<span class="text-bramble-muted">Max streams</span>
+				<input
+					type="number"
+					min="0"
+					name="doq_max_streams"
+					if l.MaxStreams != 0 {
+						value={ strconv.Itoa(l.MaxStreams) }
+					}
+					placeholder="default"
+					class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs w-full min-w-0"
+				/>
+			</label>
+			<label class="flex flex-col gap-1 text-xs min-w-0">
+				<span class="text-bramble-muted">Worker pool size</span>
+				<input
+					type="number"
+					min="0"
+					name="doq_worker_pool_size"
+					if l.WorkerPoolSize != 0 {
+						value={ strconv.Itoa(l.WorkerPoolSize) }
+					}
+					placeholder="default"
+					class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs w-full min-w-0"
+				/>
+			</label>
+		</div>
 	</div>
 }
 
@@ -398,7 +491,7 @@ templ doqListenerFields(l model.QUICListener) {
 // knob; there's no worker_pool_size equivalent, so that field is omitted
 // here entirely rather than shown and silently rejected on save).
 templ doh3ListenerFields(l model.QUICListener) {
-	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2">
+	<div class="rounded bg-bramble-bg-card2 shadow-sm px-3 py-2 flex flex-col gap-2 min-w-0 flex-1">
 		<label class="flex items-center gap-2 text-sm">
 			<input
 				type="checkbox"
@@ -416,21 +509,24 @@ templ doh3ListenerFields(l model.QUICListener) {
 				value={ strconv.Itoa(l.Port) }
 			}
 			placeholder="443"
-			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
+			hidden?={ !l.Enabled }
+			class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs w-full min-w-0"
 		/>
-		<label class="flex flex-col gap-1 text-xs">
-			<span class="text-bramble-muted">Max streams</span>
-			<input
-				type="number"
-				min="0"
-				name="doh3_max_streams"
-				if l.MaxStreams != 0 {
-					value={ strconv.Itoa(l.MaxStreams) }
-				}
-				placeholder="default"
-				class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs"
-			/>
-		</label>
+		<div id="doh3_tuning" class="contents" hidden?={ !l.Enabled }>
+			<label class="flex flex-col gap-1 text-xs min-w-0">
+				<span class="text-bramble-muted">Max streams</span>
+				<input
+					type="number"
+					min="0"
+					name="doh3_max_streams"
+					if l.MaxStreams != 0 {
+						value={ strconv.Itoa(l.MaxStreams) }
+					}
+					placeholder="default"
+					class="px-2 py-1 rounded border border-bramble-border bg-bramble-bg-input text-xs w-full min-w-0"
+				/>
+			</label>
+		</div>
 	</div>
 }
 
@@ -440,17 +536,29 @@ templ vlanRow(v model.VLAN) {
 			<span class="font-mono font-medium">{ v.Name }</span>
 			<span class="text-bramble-muted ml-2 select-all">{ strings.Join(v.CIDRs, ", ") }</span>
 		</span>
-		<button
-			hx-delete={ PathSettings + "/vlans/" + v.Name }
-			hx-target="#content"
-			hx-swap="innerHTML"
-			hx-confirm={ "Remove VLAN " + v.Name + "? Any records overriding it will keep their override entries but they'll no longer apply." }
-			type="button"
-			class="inline-flex items-center gap-1 text-bramble-danger hover:underline text-xs"
-		>
-			@iconTrash("w-3 h-3")
-			Remove
-		</button>
+		<span class="flex items-center gap-3">
+			<button
+				hx-get={ PathSettings + "/vlans/" + v.Name + "/edit" }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				type="button"
+				class="inline-flex items-center gap-1 text-bramble-primary hover:underline text-xs"
+			>
+				@iconPencil("w-3 h-3")
+				Edit
+			</button>
+			<button
+				hx-delete={ PathSettings + "/vlans/" + v.Name }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-confirm={ "Remove VLAN " + v.Name + "? Any records overriding it will keep their override entries but they'll no longer apply." }
+				type="button"
+				class="inline-flex items-center gap-1 text-bramble-danger hover:underline text-xs"
+			>
+				@iconTrash("w-3 h-3")
+				Remove
+			</button>
+		</span>
 	</div>
 }
 

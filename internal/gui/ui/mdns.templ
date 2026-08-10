@@ -15,16 +15,16 @@ type MDNSData struct {
 
 templ MDNS(data MDNSData) {
 	<div>
-		<h1 class="text-lg font-semibold mb-4">Discovered devices (mDNS)</h1>
+		<h1 class="text-lg font-semibold mb-4 flex items-center">
+			Discovered devices (mDNS)
+			@helpTooltip("Names seen on the network, mapped into home.arpa. Publish serves it live while seen (lost on restart); Promote writes a durable records.yaml entry and takes over the \"served\" state shown here.")
+		</h1>
 		if !data.Enabled {
 			<p class="text-bramble-muted text-sm">
 				mDNS discovery is disabled. Enable it in
 				<a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Settings</a>.
 			</p>
 		} else {
-			<p class="text-xs text-bramble-muted mb-3">
-				Names seen on the network, mapped into home.arpa. Publish serves it live while seen (lost on restart); Promote writes a durable records.yaml entry and takes over the "served" state shown here.
-			</p>
 			<form id="mdns-filters" onsubmit="return false" class="flex flex-wrap gap-4 items-end mb-4">
 				<label class="flex flex-col gap-1 text-sm flex-1 max-w-xs">
 					<span class="text-bramble-muted text-xs">Search</span>

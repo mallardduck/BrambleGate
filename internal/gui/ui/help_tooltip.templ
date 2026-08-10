@@ -1,0 +1,28 @@
+package ui
+
+// helpTooltip is the early-2000s-style "?" contextual help affordance: a
+// small circular button that reveals a verbose explanation on hover, focus,
+// or click/tap. CSS-only (Tailwind's group-hover/group-focus-within
+// variants) — no JS needed for the show/hide mechanic. The button carries no
+// border/background of its own (bare glyph) since the glyph itself is
+// already a circle outline — a bordered round button around it would draw
+// two concentric circles.
+//
+// The popover is a <span>, not a <div>, deliberately: helpTooltip gets
+// called from inside <p>/<label> elements (phrasing content only), and a
+// <div> there triggers the HTML parser's "close the open p" rule, which
+// pops our positioning <span> off the open-elements stack too — the
+// popover ends up reparented outside it, losing its containing block and
+// rendering at the page's top-left instead of by the "?" icon. A <span>
+// is valid phrasing content, side-steps that entirely, and position:
+// absolute still blockifies it visually, so nothing else changes.
+templ helpTooltip(text string) {
+	<span class="relative inline-flex items-center group/help ml-1">
+		<button type="button" aria-label="Help" class="inline-flex items-center justify-center text-bramble-primary cursor-help">
+			@iconHelp("w-3.5 h-3.5")
+		</button>
+		<span role="tooltip" class="invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 absolute bottom-full left-0 mb-1.5 w-64 max-w-[70vw] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20">
+			{ text }
+		</span>
+	</span>
+}

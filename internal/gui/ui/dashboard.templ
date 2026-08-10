@@ -126,7 +126,14 @@ templ privateDNSRow(label, stamp, url string) {
 
 templ dnsStampField(label, value string) {
 	<label class="flex flex-col gap-1 text-sm">
-		<span class="text-bramble-muted text-xs uppercase tracking-wide">{ label }</span>
+		<span class="text-bramble-muted text-xs uppercase tracking-wide flex items-center">
+			{ label }
+			if label == "Query URL" {
+				@helpTooltip("The plain address to enter in clients that just want a host/URL — e.g. a DoH endpoint or DoT host:port — rather than an sdns:// stamp.")
+			} else if label == "Stamp" {
+				@helpTooltip("An sdns:// URI that encodes this resolver's protocol, address and certificate info in one string — paste it into clients that support DNSCrypt-style stamps (e.g. dnscrypt-proxy).")
+			}
+		</span>
 		<input readonly value={ value } onclick="this.select()" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input font-mono text-xs"/>
 	</label>
 }
@@ -212,7 +219,10 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 					</p>
 				</div>
 				<div>
-					<p class="text-bramble-muted text-xs uppercase tracking-wide" title="Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from plain DNS">DDR</p>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide flex items-center">
+						<abbr title="Discovery of Designated Resolvers" class="no-underline cursor-help">DDR</abbr>
+						@helpTooltip("Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from plain DNS")
+					</p>
 					if settings.ACME.Enabled && settings.ACME.Domain != "" && settings.EncryptedListenerEnabled() {
 						@tag("Served", true)
 					} else {

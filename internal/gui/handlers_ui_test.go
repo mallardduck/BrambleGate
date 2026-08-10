@@ -190,8 +190,22 @@ func TestSettingsSaveAndVLANLifecycle(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, hxRequest(t, http.MethodDelete, "/settings/vlans/guest", nil))
-	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "guest") {
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/settings/vlans/guest/edit", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `value="guest"`) || !strings.Contains(rec.Body.String(), "Save changes") {
+		t.Fatalf("vlan edit status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPut, "/settings/vlans/guest", url.Values{
+		"vlan_name": {"guest-wifi"}, "vlan_cidrs": {"192.168.31.0/24"},
+	}))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "guest-wifi") || strings.Contains(rec.Body.String(), "192.168.30.0/24") {
+		t.Fatalf("vlan update status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodDelete, "/settings/vlans/guest-wifi", nil))
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "guest-wifi") {
 		t.Fatalf("vlan remove status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 }

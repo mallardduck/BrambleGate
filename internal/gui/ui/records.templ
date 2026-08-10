@@ -184,11 +184,17 @@ templ recordForm(data RecordsData) {
 				</div>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Default value</span>
+				<span class="text-bramble-muted text-xs flex items-center">
+					Default value
+					@helpTooltip("What this record resolves to for clients with no matching VLAN override below: an IP address for A/AAAA, or another hostname for CNAME.")
+				</span>
 				<input name="default" value={ def } placeholder="192.168.10.20" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[160px]"/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">TTL (blank = 300)</span>
+				<span class="text-bramble-muted text-xs flex items-center">
+					TTL
+					@helpTooltip("Time-to-live in seconds for this record's answers. Leave blank to use the default, 300.")
+				</span>
 				<input name="ttl" type="number" min="1" value={ ttl } placeholder="300" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
 			</label>
 		</div>
@@ -245,6 +251,7 @@ templ overrideRow(v model.VLAN, o model.VLANOverride) {
 	<label class="flex items-center gap-1 text-xs">
 		<input type="checkbox" name={ "override_nx_" + v.Name } checked?={ o.NXDomain }/>
 		NXDOMAIN
+		@helpTooltip("Hide this name from clients on this VLAN entirely — the resolver returns NXDOMAIN (name does not exist) instead of the default value. Use this to keep a record invisible to a VLAN rather than pointing it somewhere else.")
 	</label>
 	<input
 		type="text"
