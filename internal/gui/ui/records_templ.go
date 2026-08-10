@@ -45,7 +45,7 @@ func Records(data RecordsData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1 class=\"text-lg font-semibold mb-4\">Records</h1><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto\"><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide\"><th class=\"px-3 py-2\">Name</th><th class=\"px-3 py-2\">Type</th><th class=\"px-3 py-2\">Default</th><th class=\"px-3 py-2\">TTL</th><th class=\"px-3 py-2\">Per-VLAN</th><th class=\"px-3 py-2\"></th></tr></thead> <tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1 class=\"text-xl font-semibold mb-4\">Records</h1><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto\"><table class=\"w-full text-sm\"><thead><tr class=\"border-b border-bramble-border text-left text-xs text-bramble-muted uppercase tracking-wide\"><th class=\"px-3 py-2\">Name</th><th class=\"px-3 py-2\">Type</th><th class=\"px-3 py-2\">Default</th><th class=\"px-3 py-2\">TTL</th><th class=\"px-3 py-2\">Per-VLAN</th><th class=\"px-3 py-2\"></th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

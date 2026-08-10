@@ -70,10 +70,21 @@
 body {
   font-family: var(--font-body);
 }
-h1, h2, h3, h4, h5, h6 {
+/* Cormorant Garamond (the display/heading font) is reserved for page-level
+   h1 titles — matching the design handoff mockup, which only ever applies
+   it there (plus the dashboard's big stat-card numbers, which aren't
+   headings). Card/section h2-h6 stay in the body font at bold weight: at
+   14px/12px, Cormorant Garamond's lighter optical weight reads as smaller
+   and thinner than a bold Lora heading of the same pixel size, which is
+   why blanket-applying it to every heading level made small sub-headers
+   look undersized next to the mockup. */
+h1 {
   font-family: var(--font-heading);
   font-weight: 600;
   letter-spacing: -0.015em;
+}
+h2, h3, h4, h5, h6 {
+  font-weight: 600;
 }
 
 /* Theme toggle: highlight the active segment. */
