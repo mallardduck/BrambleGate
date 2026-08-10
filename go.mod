@@ -20,6 +20,7 @@ replace (
 	github.com/mallardduck/BrambleGate/pluginreg => ./pluginreg
 	github.com/mallardduck/BrambleGate/selfip => ./selfip
 	github.com/mallardduck/BrambleGate/store => ./store
+	github.com/mallardduck/BrambleGate/vlanmatch => ./vlanmatch
 )
 
 require (
@@ -28,6 +29,7 @@ require (
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/mallardduck/BrambleGate/engine v0.0.0
+	github.com/mallardduck/BrambleGate/vlanmatch v0.0.0
 )
 
 require (

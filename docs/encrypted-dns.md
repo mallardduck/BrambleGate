@@ -64,6 +64,18 @@ provider API). Nothing needs to be port-forwarded on your router, and the
 "open port 80 for Let's Encrypt" advice elsewhere, that's HTTP-01 (e.g.
 certbot's standalone mode) — a different, unused-here challenge type.
 
+**A note on Android's manual Private DNS mode specifically:** it does a
+bootstrap hostname→IP lookup over the public DNS system before attempting the
+TLS handshake, so `domain` needs to be resolvable by a public resolver for
+that mode to work at all — a name BrambleGate only answers inside its own
+served zone isn't enough, even from a device on the same LAN. That said, do
+**not** "fix" this by publishing a private/RFC1918 address in the domain's
+public zone — `draft-ietf-dnsop-dontpublish-unreachable` documents this as a
+real anti-pattern (private addresses are ambiguous outside your own LAN), and
+it doesn't actually satisfy the spirit of the requirement anyway. Getting
+Android's strict mode working against a LAN-only resolver without exposing it
+to the public internet is an open design question, not yet solved here.
+
 Provider credentials are **environment variables on the container, never in
 `settings.yaml`**. Supported `dns_provider` values and their primary env vars:
 

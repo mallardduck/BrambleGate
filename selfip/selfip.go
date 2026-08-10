@@ -16,7 +16,23 @@ import (
 	"strings"
 
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
+
+// toVLANMatch converts model.VLAN to vlanmatch's own minimal shape — a
+// one-line adapter, not a reimplementation of CIDR parsing/matching, so
+// selfip stays on the single vlanmatch.Table primitive like every other VLAN
+// CIDR consumer (dev-docs/query-log.md). selfip builds its own throwaway
+// Tables here rather than reading vlanmatch.Current(): Detect/Candidates are
+// pure functions over whatever []model.VLAN the caller passes in, not
+// readers of the app's global configured-VLANs state.
+func toVLANMatch(vlans []model.VLAN) []vlanmatch.VLAN {
+	out := make([]vlanmatch.VLAN, len(vlans))
+	for i, v := range vlans {
+		out[i] = vlanmatch.VLAN{Name: v.Name, CIDRs: v.CIDRs}
+	}
+	return out
+}
 
 // VLANAddrs is the local IP(s) found for one VLAN. Either field may be empty.
 type VLANAddrs struct {
@@ -38,35 +54,20 @@ type Result struct {
 // entry point.
 func Detect(vlans []model.VLAN, addrs []net.Addr) Result {
 	ips := extractIPs(addrs)
+	tbl := vlanmatch.NewTable(toVLANMatch(vlans))
 
 	res := Result{PerVLAN: map[string]VLANAddrs{}}
-	for _, v := range vlans {
-		var nets []*net.IPNet
-		for _, c := range v.CIDRs {
-			_, ipnet, err := net.ParseCIDR(c)
-			if err != nil {
-				continue
-			}
-			nets = append(nets, ipnet)
-		}
-
-		var va VLANAddrs
-		for _, ip := range ips {
-			for _, n := range nets {
-				if !n.Contains(ip) {
-					continue
+	for _, ip := range ips {
+		if name, ok := tbl.Lookup(ip); ok {
+			va := res.PerVLAN[name]
+			if ip4 := ip.To4(); ip4 != nil {
+				if va.V4 == "" {
+					va.V4 = ip4.String()
 				}
-				if ip4 := ip.To4(); ip4 != nil {
-					if va.V4 == "" {
-						va.V4 = ip4.String()
-					}
-				} else if va.V6 == "" {
-					va.V6 = ip.String()
-				}
+			} else if va.V6 == "" {
+				va.V6 = ip.String()
 			}
-		}
-		if va.V4 != "" || va.V6 != "" {
-			res.PerVLAN[v.Name] = va
+			res.PerVLAN[name] = va
 		}
 	}
 
@@ -111,14 +112,7 @@ type Candidate struct {
 // entries carry a usable prefix length (the *net.IPAddr shape extractIPs also
 // accepts has no mask, so it can't be turned into a CIDR and is skipped here).
 func Candidates(existing []model.VLAN, addrs []net.Addr) []Candidate {
-	var existingNets []*net.IPNet
-	for _, v := range existing {
-		for _, c := range v.CIDRs {
-			if _, n, err := net.ParseCIDR(c); err == nil {
-				existingNets = append(existingNets, n)
-			}
-		}
-	}
+	tbl := vlanmatch.NewTable(toVLANMatch(existing))
 
 	seen := map[string]bool{}
 	var out []Candidate
@@ -132,14 +126,7 @@ func Candidates(existing []model.VLAN, addrs []net.Addr) []Candidate {
 			continue
 		}
 
-		alreadyDeclared := false
-		for _, n := range existingNets {
-			if n.Contains(ip) {
-				alreadyDeclared = true
-				break
-			}
-		}
-		if alreadyDeclared {
+		if _, ok := tbl.Lookup(ip); ok {
 			continue
 		}
 

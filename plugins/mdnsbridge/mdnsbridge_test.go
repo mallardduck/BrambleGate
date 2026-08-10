@@ -2,7 +2,6 @@ package mdnsbridge
 
 import (
 	"context"
-	"net"
 	"testing"
 	"time"
 
@@ -11,16 +10,9 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
-)
 
-func mustCIDR(t *testing.T, c string) *net.IPNet {
-	t.Helper()
-	_, n, err := net.ParseCIDR(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return n
-}
+	"github.com/mallardduck/BrambleGate/vlanmatch"
+)
 
 func TestGlob(t *testing.T) {
 	cases := []struct {
@@ -43,7 +35,8 @@ func TestGlob(t *testing.T) {
 }
 
 func TestSelectorMatch(t *testing.T) {
-	vlans := map[string][]*net.IPNet{"trusted": {mustCIDR(t, "192.168.10.0/24")}}
+	t.Cleanup(func() { vlanmatch.SetCurrent(vlanmatch.Table{}) })
+	vlanmatch.SetCurrent(vlanmatch.NewTable([]vlanmatch.VLAN{{Name: "trusted", CIDRs: []string{"192.168.10.0/24"}}}))
 	e := Entry{
 		Service:  "_airplay._tcp",
 		Instance: "Living Room TV",
@@ -61,7 +54,7 @@ func TestSelectorMatch(t *testing.T) {
 		{Family: "ipv4"},
 	}
 	for i, s := range yes {
-		if !s.Match(e, vlans) {
+		if !s.Match(e) {
 			t.Errorf("selector[%d] %+v should match", i, s)
 		}
 	}
@@ -73,7 +66,7 @@ func TestSelectorMatch(t *testing.T) {
 		{Family: "ipv6"},
 	}
 	for i, s := range no {
-		if s.Match(e, vlans) {
+		if s.Match(e) {
 			t.Errorf("selector[%d] %+v should NOT match", i, s)
 		}
 	}

@@ -17,12 +17,14 @@ import (
 	"github.com/mallardduck/BrambleGate/configgen"
 	"github.com/mallardduck/BrambleGate/internal/acme"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
+	"github.com/mallardduck/BrambleGate/internal/vlancfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
+	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
 // Reloader is the slice of the engine the GUI needs: a graceful in-process
@@ -447,6 +449,12 @@ func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) erro
 }
 
 func (s *Service) render(settings model.Settings, rs model.RecordSet) (configgen.Rendered, error) {
+	// The process-wide configured-VLANs table localrecords/mdnsbridge read as
+	// their source of truth at request time. render is the single choke
+	// point every settings/records change (SaveSettings, Add/Update/Delete
+	// Record, mDNS promotion) passes through, so this is the one place the
+	// GUI side needs to refresh it (dev-docs/query-log.md).
+	vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
 	opts := s.certOpts
 	opts.ACMESelfIPs = detectSelfIPs(settings.VLANs)
 	rendered, err := configgen.Render(settings, rs, opts)

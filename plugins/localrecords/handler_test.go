@@ -12,16 +12,13 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
+
+	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
 const zoneJSON = `{
   "default_ttl": 300,
   "zones": ["home.arpa"],
-  "vlans": [
-    {"name": "trusted",   "cidrs": ["192.168.10.0/24"]},
-    {"name": "untrusted", "cidrs": ["192.168.30.0/24"]},
-    {"name": "guests",    "cidrs": ["192.168.40.0/24"]}
-  ],
   "records": [
     {"name": "nas.home.arpa", "type": "A", "default": "192.168.10.20", "ttl": 300,
      "vlan_overrides": [
@@ -35,6 +32,12 @@ const zoneJSON = `{
 
 func build(t *testing.T) *LocalRecords {
 	t.Helper()
+	t.Cleanup(func() { vlanmatch.SetCurrent(vlanmatch.Table{}) })
+	vlanmatch.SetCurrent(vlanmatch.NewTable([]vlanmatch.VLAN{
+		{Name: "trusted", CIDRs: []string{"192.168.10.0/24"}},
+		{Name: "untrusted", CIDRs: []string{"192.168.30.0/24"}},
+		{Name: "guests", CIDRs: []string{"192.168.40.0/24"}},
+	}))
 	dir := t.TempDir()
 	path := filepath.Join(dir, "records.json")
 	if err := os.WriteFile(path, []byte(zoneJSON), 0o644); err != nil {
@@ -154,7 +157,6 @@ func TestUnknownNameNXDomainAndOutOfZoneFallsThrough(t *testing.T) {
 const fallthroughZoneJSON = `{
   "default_ttl": 300,
   "zones": ["home.arpa", "dns.example.com"],
-  "vlans": [],
   "records": [
     {"name": "dns.example.com", "type": "A", "default": "192.168.10.53", "ttl": 300}
   ]
@@ -162,6 +164,8 @@ const fallthroughZoneJSON = `{
 
 func buildFallthrough(t *testing.T) *LocalRecords {
 	t.Helper()
+	t.Cleanup(func() { vlanmatch.SetCurrent(vlanmatch.Table{}) })
+	vlanmatch.SetCurrent(vlanmatch.Table{})
 	dir := t.TempDir()
 	path := filepath.Join(dir, "records.json")
 	if err := os.WriteFile(path, []byte(fallthroughZoneJSON), 0o644); err != nil {
@@ -237,7 +241,6 @@ func TestNODATAForWrongType(t *testing.T) {
 const ddrZoneJSON = `{
   "default_ttl": 300,
   "zones": ["home.arpa", "resolver.arpa"],
-  "vlans": [],
   "records": [],
   "ddr": [
     {"priority": 1, "target": "dns.example.com", "params": [
@@ -251,6 +254,8 @@ const ddrZoneJSON = `{
 
 func buildDDR(t *testing.T) *LocalRecords {
 	t.Helper()
+	t.Cleanup(func() { vlanmatch.SetCurrent(vlanmatch.Table{}) })
+	vlanmatch.SetCurrent(vlanmatch.Table{})
 	dir := t.TempDir()
 	path := filepath.Join(dir, "records.json")
 	if err := os.WriteFile(path, []byte(ddrZoneJSON), 0o644); err != nil {
@@ -322,7 +327,6 @@ func svcbHasDoHPath(svcb *dns.SVCB, template string) bool {
 const ddrZoneWithAddressJSON = `{
   "default_ttl": 300,
   "zones": ["home.arpa", "dns.example.com", "resolver.arpa"],
-  "vlans": [],
   "records": [
     {"name": "dns.example.com", "type": "A", "default": "192.168.10.53", "ttl": 0, "vlan_overrides": []}
   ],
@@ -370,7 +374,6 @@ func TestDDRAnswerDedupesGlueAcrossProtocols(t *testing.T) {
 	zoneJSON := `{
   "default_ttl": 300,
   "zones": ["home.arpa", "dns.example.com", "resolver.arpa"],
-  "vlans": [],
   "records": [
     {"name": "dns.example.com", "type": "A", "default": "192.168.10.53", "ttl": 0, "vlan_overrides": []}
   ],

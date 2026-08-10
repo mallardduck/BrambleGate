@@ -562,10 +562,13 @@ func TestRenderZoneDataJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
+	// VLANs are deliberately NOT part of zone data: localrecords reads them
+	// from the shared vlanmatch.Current() singleton instead, the same source
+	// of truth mdnsbridge/querylog use (dev-docs/query-log.md) — one fewer
+	// place VLAN CIDRs need to stay in sync.
 	var zd struct {
 		DefaultTTL uint32         `json:"default_ttl"`
 		Zones      []string       `json:"zones"`
-		VLANs      []model.VLAN   `json:"vlans"`
 		Records    []model.Record `json:"records"`
 	}
 	if err := json.Unmarshal(out.ZoneData, &zd); err != nil {
@@ -573,9 +576,6 @@ func TestRenderZoneDataJSON(t *testing.T) {
 	}
 	if zd.DefaultTTL != DefaultTTL || len(zd.Zones) != 1 || zd.Zones[0] != OwnedZone {
 		t.Fatalf("unexpected zone header: %+v", zd)
-	}
-	if len(zd.VLANs) != 2 || zd.VLANs[0].CIDRs[0] != "192.168.10.0/24" {
-		t.Fatalf("vlans not carried into zone data: %+v", zd.VLANs)
 	}
 	if len(zd.Records) != 1 || zd.Records[0].TTL != 120 || !zd.Records[0].VLANOverrides[0].NXDomain {
 		t.Fatalf("record/override not carried into zone data: %+v", zd.Records)

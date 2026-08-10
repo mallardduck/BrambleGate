@@ -116,7 +116,7 @@ func (t *Table) rederive(e *Entry) {
 		e.Name = label + "." + strings.TrimSuffix(t.cfg.suffixFor(*e), ".") + "."
 	}
 	e.Promoted = t.promotedMatch(*e)
-	e.Published = e.manual || t.cfg.AutoPublish.MatchAny(*e, t.cfg.VLANs) || e.Promoted
+	e.Published = e.manual || t.cfg.AutoPublish.MatchAny(*e) || e.Promoted
 }
 
 // promotedMatch reports whether any promoted binding's selector matches e —
@@ -126,7 +126,7 @@ func (t *Table) rederive(e *Entry) {
 // answers promoted names this way; Published previously didn't agree).
 func (t *Table) promotedMatch(e Entry) bool {
 	for _, sel := range t.cfg.Promoted {
-		if sel.Match(e, t.cfg.VLANs) {
+		if sel.Match(e) {
 			return true
 		}
 	}
@@ -144,7 +144,7 @@ func (t *Table) Resolve(qname string) (ipv4, ipv6 []string, owned bool) {
 
 	// Promoted binding: authoritative even when no device currently matches.
 	if sel, ok := t.cfg.Promoted[name]; ok {
-		v4, v6 := t.collect(func(e *Entry) bool { return sel.Match(*e, t.cfg.VLANs) })
+		v4, v6 := t.collect(func(e *Entry) bool { return sel.Match(*e) })
 		return v4, v6, true
 	}
 

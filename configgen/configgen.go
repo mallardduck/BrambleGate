@@ -264,7 +264,6 @@ type Rendered struct {
 type zoneData struct {
 	DefaultTTL uint32         `json:"default_ttl"`
 	Zones      []string       `json:"zones"`
-	VLANs      []model.VLAN   `json:"vlans"`
 	Records    []model.Record `json:"records"`
 	DDR        []ddrRecord    `json:"ddr,omitempty"`
 }
@@ -295,7 +294,6 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 	zone, err := json.MarshalIndent(zoneData{
 		DefaultTTL: DefaultTTL,
 		Zones:      ownedZones(s),
-		VLANs:      s.VLANs,
 		Records:    static,
 		DDR:        ddrRecords(s),
 	}, "", "  ")

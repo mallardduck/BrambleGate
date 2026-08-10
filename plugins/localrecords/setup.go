@@ -3,7 +3,6 @@ package localrecords
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/mallardduck/BrambleGate/pluginreg"
+	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
 const defaultTTL = 300
@@ -58,7 +58,11 @@ func setup(c *caddy.Controller) error {
 }
 
 func parse(c *caddy.Controller) (*LocalRecords, error) {
-	lr := &LocalRecords{defaultTTL: defaultTTL, records: map[string][]*record{}}
+	// vlanmatch.Current() is the app's configured VLANs at this moment —
+	// captured once here, like the rest of the parsed data, since
+	// localrecords does no runtime refresh and is rebuilt fresh on every
+	// engine.Reload anyway (docs/query-log.md).
+	lr := &LocalRecords{defaultTTL: defaultTTL, records: map[string][]*record{}, vlans: vlanmatch.Current()}
 	seen := false
 
 	for c.Next() { // "localrecords"
@@ -119,18 +123,6 @@ func (lr *LocalRecords) loadZoneData(path string) error {
 
 	if z.DefaultTTL != 0 {
 		lr.defaultTTL = z.DefaultTTL
-	}
-
-	for _, v := range z.VLANs {
-		vm := vlanMatch{name: v.Name}
-		for _, c := range v.CIDRs {
-			_, ipnet, err := net.ParseCIDR(c)
-			if err != nil {
-				return fmt.Errorf("zone data vlan %q cidr %q: %w", v.Name, c, err)
-			}
-			vm.nets = append(vm.nets, ipnet)
-		}
-		lr.vlans = append(lr.vlans, vm)
 	}
 
 	for _, wr := range z.Records {

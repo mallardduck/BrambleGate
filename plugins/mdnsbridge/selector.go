@@ -3,6 +3,8 @@ package mdnsbridge
 import (
 	"net"
 	"strings"
+
+	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
 // Selector matches a discovered mDNS-SD entry. Every set field must match (AND);
@@ -24,9 +26,13 @@ func (s Selector) IsZero() bool {
 		len(s.TXT) == 0 && s.VLAN == "" && s.Family == ""
 }
 
-// Match reports whether e satisfies the selector. vlans maps VLAN name to its
-// CIDRs for the VLAN condition.
-func (s Selector) Match(e Entry, vlans map[string][]*net.IPNet) bool {
+// Match reports whether e satisfies the selector. The VLAN condition (if
+// set) is checked against vlanmatch.Current() — the app's configured VLANs
+// at the moment Match is called, not a copy carried by the caller — since
+// this is invoked both from the DNS query path and from Table's live
+// discovery-event handling (table.go), which must always see whatever's
+// current, independent of any engine.Reload (dev-docs/query-log.md).
+func (s Selector) Match(e Entry) bool {
 	if s.Service != "" && !globMatch(s.Service, e.Service) {
 		return false
 	}
@@ -53,25 +59,21 @@ func (s Selector) Match(e Entry, vlans map[string][]*net.IPNet) bool {
 			return false
 		}
 	}
-	if s.VLAN != "" && !entryInVLAN(e, vlans[s.VLAN]) {
+	if s.VLAN != "" && !entryInVLAN(e, s.VLAN) {
 		return false
 	}
 	return true
 }
 
-func entryInVLAN(e Entry, nets []*net.IPNet) bool {
-	if len(nets) == 0 {
-		return false
-	}
+func entryInVLAN(e Entry, vlan string) bool {
+	tbl := vlanmatch.Current()
 	for _, s := range append(append([]string{}, e.IPv4...), e.IPv6...) {
 		ip := net.ParseIP(s)
 		if ip == nil {
 			continue
 		}
-		for _, n := range nets {
-			if n.Contains(ip) {
-				return true
-			}
+		if name, ok := tbl.Lookup(ip); ok && name == vlan {
+			return true
 		}
 	}
 	return false
@@ -82,9 +84,9 @@ type SelectorSet []Selector
 
 // MatchAny reports whether any selector in the set matches e. An empty set
 // matches nothing.
-func (ss SelectorSet) MatchAny(e Entry, vlans map[string][]*net.IPNet) bool {
+func (ss SelectorSet) MatchAny(e Entry) bool {
 	for _, s := range ss {
-		if s.Match(e, vlans) {
+		if s.Match(e) {
 			return true
 		}
 	}

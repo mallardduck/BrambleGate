@@ -22,11 +22,13 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/acme"
 	"github.com/mallardduck/BrambleGate/internal/gui"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
+	"github.com/mallardduck/BrambleGate/internal/vlancfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleGate/selfip"
 	"github.com/mallardduck/BrambleGate/store"
+	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
 // Run executes the bramblegate command and returns a process exit code.
@@ -83,6 +85,11 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	if err != nil {
 		return err
 	}
+	// The process-wide configured-VLANs table localrecords/mdnsbridge read as
+	// their source of truth at request time — must be set before engine.New,
+	// and refreshed again in reloadFn below on every later settings change
+	// (dev-docs/query-log.md).
+	vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
 
 	// Cert paths are always populated, regardless of whether an encrypted
 	// listener happens to be on yet at boot — they're the same fixed
@@ -275,6 +282,7 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 		if err != nil {
 			return err
 		}
+		vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
 		rendered, err := configgen.Render(settings, records, opts)
 		if err != nil {
 			return err

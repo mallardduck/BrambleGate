@@ -7,17 +7,11 @@ package localrecords
 type wireZone struct {
 	DefaultTTL uint32       `json:"default_ttl"`
 	Zones      []string     `json:"zones"`
-	VLANs      []wireVLAN   `json:"vlans"`
 	Records    []wireRecord `json:"records"`
 	// DDR carries the Discovery of Designated Resolvers (RFC 9462) SVCB
 	// records for _dns.resolver.arpa, synthesized by configgen from
 	// acme.domain + the enabled encrypted listeners — never user-authored.
 	DDR []wireDDR `json:"ddr,omitempty"`
-}
-
-type wireVLAN struct {
-	Name  string   `json:"name"`
-	CIDRs []string `json:"cidrs"`
 }
 
 type wireRecord struct {

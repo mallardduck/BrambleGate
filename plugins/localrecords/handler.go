@@ -13,14 +13,9 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
-)
 
-// vlanMatch maps a VLAN name to the subnets that identify it. Evaluated in the
-// order VLANs are declared in settings.yaml (first containing subnet wins).
-type vlanMatch struct {
-	name string
-	nets []*net.IPNet
-}
+	"github.com/mallardduck/BrambleGate/vlanmatch"
+)
 
 // override is a per-VLAN adjustment of a record's answer.
 type override struct {
@@ -57,7 +52,7 @@ type LocalRecords struct {
 	// via the real, public-authoritative DNS for that domain (docs/certificates.md).
 	FallthroughZones []string
 	defaultTTL       uint32
-	vlans            []vlanMatch
+	vlans            vlanmatch.Table
 	records          map[string][]*record
 }
 
@@ -142,17 +137,8 @@ func (lr *LocalRecords) ddrGlue(answers []dns.RR, vlan string) []dns.RR {
 // matchVLAN returns the name of the first declared VLAN whose subnets contain ip,
 // or "" if none match (in which case records use their defaults).
 func (lr *LocalRecords) matchVLAN(ip net.IP) string {
-	if ip == nil {
-		return ""
-	}
-	for _, v := range lr.vlans {
-		for _, n := range v.nets {
-			if n.Contains(ip) {
-				return v.name
-			}
-		}
-	}
-	return ""
+	name, _ := lr.vlans.Lookup(ip)
+	return name
 }
 
 // effective resolves a record's answer for a VLAN: the value, TTL, and whether it

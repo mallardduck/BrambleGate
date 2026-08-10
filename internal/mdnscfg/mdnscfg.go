@@ -5,7 +5,6 @@
 package mdnscfg
 
 import (
-	"net"
 	"strings"
 
 	"github.com/mallardduck/BrambleGate/configgen"
@@ -13,8 +12,10 @@ import (
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 )
 
-// Build assembles the plugin Config: naming/auto-publish/vlans from settings, and
-// promoted bindings from the type:mdns records.
+// Build assembles the plugin Config: naming/auto-publish from settings, and
+// promoted bindings from the type:mdns records. VLAN membership is not part
+// of this — selectors read the shared vlanmatch.Current() singleton
+// directly (dev-docs/query-log.md), so there's nothing to translate here.
 func Build(s model.Settings, rs model.RecordSet) mdnsbridge.Config {
 	suffix := s.MDNS.Suffix
 	if suffix == "" {
@@ -25,7 +26,6 @@ func Build(s model.Settings, rs model.RecordSet) mdnsbridge.Config {
 		AutoPublish:   toSelectors(s.MDNS.AutoPublish),
 		Naming:        toNaming(s.MDNS.Naming),
 		Promoted:      map[string]mdnsbridge.Selector{},
-		VLANs:         toVLANs(s.VLANs),
 	}
 	for _, r := range rs.Records {
 		if r.IsMDNS() && r.Match != nil {
@@ -64,21 +64,6 @@ func toNaming(in []model.NamingRule) []mdnsbridge.NamingRule {
 	out := make([]mdnsbridge.NamingRule, len(in))
 	for i, r := range in {
 		out[i] = mdnsbridge.NamingRule{Match: toSelector(r.Match), Suffix: strings.TrimSuffix(r.Suffix, ".")}
-	}
-	return out
-}
-
-func toVLANs(vlans []model.VLAN) map[string][]*net.IPNet {
-	if len(vlans) == 0 {
-		return nil
-	}
-	out := make(map[string][]*net.IPNet, len(vlans))
-	for _, v := range vlans {
-		for _, c := range v.CIDRs {
-			if _, n, err := net.ParseCIDR(c); err == nil { // already validated by configgen
-				out[v.Name] = append(out[v.Name], n)
-			}
-		}
 	}
 	return out
 }

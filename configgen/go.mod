@@ -8,9 +8,12 @@ toolchain go1.26.5
 replace (
 	github.com/mallardduck/BrambleGate/model => ../model
 	github.com/mallardduck/BrambleGate/selfip => ../selfip
+	github.com/mallardduck/BrambleGate/vlanmatch => ../vlanmatch
 )
 
 require (
 	github.com/mallardduck/BrambleGate/model v0.0.0
 	github.com/mallardduck/BrambleGate/selfip v0.0.0
 )
+
+require github.com/mallardduck/BrambleGate/vlanmatch v0.0.0 // indirect
