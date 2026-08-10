@@ -71,12 +71,19 @@ jobs:
       # .goreleaser.yaml has `release: draft: true` — this only publishes
       # binaries/checksums/changelog to a draft release. `undraft` below flips
       # it live once this and the image build both succeed.
+      #
+      # GORELEASER_CURRENT_TAG pins which tag is being released. A stable tag
+      # and its final rc (e.g. v0.1.0 and v0.1.0-rc.31) can land on the same
+      # commit, and goreleaser's own `git describe` has no defined tie-break
+      # for multiple tags on one commit — it can silently pick the rc instead
+      # of the stable tag. Setting it explicitly removes the ambiguity.
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: latest
           args: release --clean --release-notes=release-notes.md
         env:
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
           GORELEASER_PREVIOUS_TAG: ${{ steps.find-prev-tag.outputs.prev_tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
