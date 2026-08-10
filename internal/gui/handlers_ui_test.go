@@ -322,6 +322,9 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 		"log_classes":                 {"denial, error"},
 		"errors_consolidate_disabled": {"on"},
 		"bufsize_disabled":            {"on"},
+		"observability_health":        {"on"},
+		"observability_ready":         {"on"},
+		"observability_prometheus":    {"on"},
 	})))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("save (cache/log/errors/bufsize tuning) status = %d, body = %s", rec.Code, rec.Body.String())
@@ -344,6 +347,9 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 	}
 	if !settings.BufsizeDisabled {
 		t.Fatalf("expected bufsize disabled, got: %+v", settings.BufsizeDisabled)
+	}
+	if !settings.Observability.Health || !settings.Observability.Ready || !settings.Observability.Prometheus {
+		t.Fatalf("expected all observability toggles enabled, got: %+v", settings.Observability)
 	}
 
 	// Blank/unchecked fields clear previously-set tuning back to zero-value
@@ -369,6 +375,9 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 	}
 	if settings.BufsizeDisabled {
 		t.Fatalf("expected bufsize re-enabled, got: %+v", settings.BufsizeDisabled)
+	}
+	if settings.Observability.Health || settings.Observability.Ready || settings.Observability.Prometheus {
+		t.Fatalf("expected all observability toggles cleared, got: %+v", settings.Observability)
 	}
 }
 

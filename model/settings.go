@@ -21,6 +21,29 @@ type Settings struct {
 	// needs a different one; this is a disable-only knob for the rare case it
 	// causes trouble with a particular client/upstream.
 	BufsizeDisabled bool `yaml:"bufsize_disabled,omitempty" json:"bufsize_disabled,omitempty"`
+	// Observability toggles CoreDNS's own health/readiness/metrics endpoints
+	// (dev-docs/roadmap.md). All off by default — opt-in instrumentation,
+	// not core behavior.
+	Observability Observability `yaml:"observability" json:"observability"`
+}
+
+// Observability controls CoreDNS's health/ready/prometheus plugins. Each is
+// a process-wide singleton — configgen emits at most one of each directive,
+// into the first enabled listener's server block, regardless of how many
+// listeners are on (CoreDNS errors on a duplicate bind of the same plugin
+// across server blocks). Ports are fixed, not user-tunable: there's no
+// BrambleGate use case for moving them, only for turning each on.
+type Observability struct {
+	// Health enables `health` on :9090 (not the stock :8080 — the GUI already
+	// owns that port).
+	Health bool `yaml:"health,omitempty" json:"health,omitempty"`
+	// Ready enables `ready` on :9191 (not the stock :8181 — kept in the same
+	// "90-series" pattern as Health/Prometheus rather than mixing conventions).
+	Ready bool `yaml:"ready,omitempty" json:"ready,omitempty"`
+	// Prometheus enables the `metrics` plugin's `prometheus` directive on the
+	// stock :9153 — a well-known convention in the Prometheus ecosystem, no
+	// reason to deviate.
+	Prometheus bool `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
 }
 
 // CacheTuning controls the cache plugin's resilience/efficiency knobs.

@@ -19,13 +19,15 @@ import (
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/errors"
 	_ "github.com/coredns/coredns/plugin/forward"
+	_ "github.com/coredns/coredns/plugin/health"
 	_ "github.com/coredns/coredns/plugin/https3"
 	_ "github.com/coredns/coredns/plugin/log"
+	_ "github.com/coredns/coredns/plugin/metrics"
 	_ "github.com/coredns/coredns/plugin/quic"
+	_ "github.com/coredns/coredns/plugin/ready"
 	_ "github.com/coredns/coredns/plugin/rewrite"
 	_ "github.com/coredns/coredns/plugin/timeouts"
 	_ "github.com/coredns/coredns/plugin/tls"
-	_ "github.com/coredns/coredns/plugin/whoami"
 
 	// BrambleGate custom plugins. Blank-importing registers them under their
 	// directive names (reserved in Directives below).

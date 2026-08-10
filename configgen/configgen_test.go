@@ -714,6 +714,44 @@ func TestRenderTimeoutsOnEncryptedListenersOnly(t *testing.T) {
 	}
 }
 
+func TestRenderObservabilityOffByDefault(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{"health", "ready", "prometheus"} {
+		if strings.Contains(cf, want) {
+			t.Errorf("expected no %q directive by default:\n%s", want, cf)
+		}
+	}
+}
+
+// health/ready/prometheus are process-wide singletons in CoreDNS — each must
+// appear at most once across the whole Corefile, in the first enabled
+// listener's block (Plain here), even with multiple listeners enabled.
+func TestRenderObservabilityEmittedOnceInFirstEnabledListener(t *testing.T) {
+	s := baseSettings()
+	s.Observability = model.Observability{Health: true, Ready: true, Prometheus: true}
+	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
+
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	for _, want := range []string{"health :9090", "ready :9191", "prometheus :9153"} {
+		if strings.Count(cf, want) != 1 {
+			t.Errorf("expected exactly one %q across the Corefile:\n%s", want, cf)
+		}
+	}
+
+	plainBlock := strings.SplitN(cf, "tls://", 2)[0]
+	if !strings.Contains(plainBlock, "health :9090") {
+		t.Errorf("expected health/ready/prometheus in the plain (first enabled) block, not a later one:\n%s", cf)
+	}
+}
+
 func TestRenderErrorsConsolidateDefaultAndDisabled(t *testing.T) {
 	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {

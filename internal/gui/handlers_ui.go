@@ -328,6 +328,9 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	s.Log.Classes = splitAndTrim(r.FormValue("log_classes"))
 	s.Errors.ConsolidateDisabled = r.FormValue("errors_consolidate_disabled") != ""
 	s.BufsizeDisabled = r.FormValue("bufsize_disabled") != ""
+	s.Observability.Health = r.FormValue("observability_health") != ""
+	s.Observability.Ready = r.FormValue("observability_ready") != ""
+	s.Observability.Prometheus = r.FormValue("observability_prometheus") != ""
 
 	parseListener(r, "plain", &s.Listeners.Plain)
 	parseListener(r, "dot", &s.Listeners.DoT)

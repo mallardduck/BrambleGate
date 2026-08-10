@@ -308,22 +308,32 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 
 func buildCorefile(s model.Settings, opts Options) []byte {
 	var out strings.Builder
+	// health/ready/prometheus are process-wide singletons: CoreDNS errors on
+	// the same directive appearing in more than one server block, so they're
+	// only emitted into whichever listener below is enabled first, in this
+	// fixed Plain/DoT/DoH/DoQ/DoH3 order.
+	observability := true
+	nextBlock := func(addr string, tls bool, quic *model.QUICListener, quicPluginName string) string {
+		blk := buildServerBlock(addr, tls, quic, quicPluginName, s, opts, observability)
+		observability = false
+		return blk
+	}
 	if s.Listeners.Plain.Enabled {
-		out.WriteString(buildServerBlock(fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, nil, "", s, opts))
+		out.WriteString(nextBlock(fmt.Sprintf(".:%d", s.Listeners.Plain.Port), false, nil, ""))
 	}
 	if s.Listeners.DoT.Enabled {
-		out.WriteString(buildServerBlock(fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, nil, "", s, opts))
+		out.WriteString(nextBlock(fmt.Sprintf("tls://.:%d", s.Listeners.DoT.Port), true, nil, ""))
 	}
 	if s.Listeners.DoH.Enabled {
-		out.WriteString(buildServerBlock(fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, nil, "", s, opts))
+		out.WriteString(nextBlock(fmt.Sprintf("https://.:%d", s.Listeners.DoH.Port), true, nil, ""))
 	}
 	if s.Listeners.DoQ.Enabled {
 		q := s.Listeners.DoQ
-		out.WriteString(buildServerBlock(fmt.Sprintf("quic://.:%d", q.Port), true, &q, "quic", s, opts))
+		out.WriteString(nextBlock(fmt.Sprintf("quic://.:%d", q.Port), true, &q, "quic"))
 	}
 	if s.Listeners.DoH3.Enabled {
 		q := s.Listeners.DoH3
-		out.WriteString(buildServerBlock(fmt.Sprintf("https3://.:%d", q.Port), true, &q, "https3", s, opts))
+		out.WriteString(nextBlock(fmt.Sprintf("https3://.:%d", q.Port), true, &q, "https3"))
 	}
 	return []byte(out.String())
 }
@@ -334,8 +344,10 @@ func buildCorefile(s model.Settings, opts Options) []byte {
 // takes worker_pool_size); its tuning sub-block is itself only rendered when
 // at least one of MaxStreams/WorkerPoolSize is set — 0 isn't a valid value
 // for either (both plugins reject <= 0), so 0 means "leave it to CoreDNS's
-// own default" rather than being written as a literal 0.
-func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPluginName string, s model.Settings, opts Options) string {
+// own default" rather than being written as a literal 0. observability is
+// true only for the one server block (buildCorefile's first enabled listener)
+// that should carry the health/ready/prometheus directives.
+func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPluginName string, s model.Settings, opts Options, observability bool) string {
 	blk := corefile.NewBlock(addr)
 	if tls {
 		blk.Directive("tls %s %s", opts.CertFile, opts.KeyFile)
@@ -356,6 +368,9 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPlugi
 		})
 	}
 	blk.DirectiveIf(!s.BufsizeDisabled, "bufsize 1232")
+	if observability {
+		writeObservability(blk, s)
+	}
 	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
 	// ahead of localrecords per the directive order. Only rendered when enabled.
 	blk.DirectiveIf(s.MDNS.Enabled, "mdnsbridge")
@@ -378,6 +393,17 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPlugi
 	writeErrors(blk, s)
 	writeLog(blk, s)
 	return blk.String()
+}
+
+// writeObservability renders health/ready/prometheus, each off by default
+// and each on a fixed, non-tunable address (model.Observability's doc
+// comment explains why). Called by buildServerBlock for at most one server
+// block per Corefile — see buildCorefile.
+func writeObservability(blk *corefile.Block, s model.Settings) {
+	o := s.Observability
+	blk.DirectiveIf(o.Health, "health :9090")
+	blk.DirectiveIf(o.Ready, "ready :9191")
+	blk.DirectiveIf(o.Prometheus, "prometheus :9153")
 }
 
 // writeCache renders the cache directive, or omits it entirely: cache has no
