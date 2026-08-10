@@ -193,36 +193,34 @@ templ Settings(data SettingsData) {
 
 		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 			<h2 class="text-sm font-semibold mb-3">ACME (DNS-01 certificates)</h2>
-			<div class="flex flex-wrap gap-3 items-end">
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ toggleHiddenByChecked("acme_fields") }/>
-					Enabled
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ toggleHiddenByChecked("acme_fields") }/>
+				Enabled
+			</label>
+			<div id="acme_fields" class="mt-3 pl-0.5 flex flex-wrap gap-3 items-end" hidden?={ !data.Settings.ACME.Enabled }>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Domain</span>
+					<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
 				</label>
-				<div id="acme_fields" class="contents" hidden?={ !data.Settings.ACME.Enabled }>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs">Domain</span>
-						<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-					</label>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs">Email</span>
-						<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-					</label>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs">DNS provider</span>
-						<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-					</label>
-					<label class="flex items-center gap-2 text-sm">
-						<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
-						Production CA
-					</label>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs flex items-center">
-							Renew before
-							@helpTooltip("Start renewing the certificate this many days before it expires.")
-						</span>
-						<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
-					</label>
-				</div>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Email</span>
+					<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">DNS provider</span>
+					<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
+					Production CA
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Renew before
+						@helpTooltip("Start renewing the certificate this many days before it expires.")
+					</span>
+					<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
+				</label>
 			</div>
 		</div>
 
@@ -231,43 +229,41 @@ templ Settings(data SettingsData) {
 				mDNS discovery
 				@helpTooltip("Auto-publish selectors and naming rules are YAML-only for now; discoveries can be approved/promoted individually from the mDNS page. Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.")
 			</h2>
-			<div class="flex flex-wrap gap-3 items-end">
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled } onchange={ toggleHiddenByChecked("mdns_fields") }/>
-					Enabled
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled } onchange={ toggleHiddenByChecked("mdns_fields") }/>
+				Enabled
+			</label>
+			<div id="mdns_fields" class="mt-3 pl-0.5 flex flex-wrap gap-3 items-end" hidden?={ !data.Settings.MDNS.Enabled }>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Interfaces
+						@helpTooltip("Network interfaces to listen for mDNS on, comma-separated. Leave blank or type \"all\" to listen on every interface.")
+					</span>
+					<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
 				</label>
-				<div id="mdns_fields" class="contents" hidden?={ !data.Settings.MDNS.Enabled }>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs flex items-center">
-							Interfaces
-							@helpTooltip("Network interfaces to listen for mDNS on, comma-separated. Leave blank or type \"all\" to listen on every interface.")
-						</span>
-						<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
-					</label>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs">Service types</span>
-						<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm" onchange={ toggleHiddenBySelectValue("mdns_custom_group", "custom") }>
-							@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
-							@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
-							@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
-							@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
-						</select>
-					</label>
-					<label id="mdns_custom_group" class="flex flex-col gap-1 text-sm" hidden?={ mdnsServiceTypesMode(data.Settings.MDNS.ServiceTypes) != "custom" }>
-						<span class="text-bramble-muted text-xs flex items-center">
-							Custom list
-							@helpTooltip("The exact mDNS service types to discover (e.g. _http._tcp, _ipp._tcp). Only read when Service types above is set to Custom list.")
-						</span>
-						<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
-					</label>
-					<label class="flex flex-col gap-1 text-sm">
-						<span class="text-bramble-muted text-xs flex items-center">
-							Suffix
-							@helpTooltip("Domain suffix appended to discovered mDNS names. Leave blank to use the default, home.arpa.")
-						</span>
-						<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-					</label>
-				</div>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Service types</span>
+					<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm" onchange={ toggleHiddenBySelectValue("mdns_custom_group", "custom") }>
+						@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
+						@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
+						@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
+						@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
+					</select>
+				</label>
+				<label id="mdns_custom_group" class="flex flex-col gap-1 text-sm" hidden?={ mdnsServiceTypesMode(data.Settings.MDNS.ServiceTypes) != "custom" }>
+					<span class="text-bramble-muted text-xs flex items-center">
+						Custom list
+						@helpTooltip("The exact mDNS service types to discover (e.g. _http._tcp, _ipp._tcp). Only read when Service types above is set to Custom list.")
+					</span>
+					<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Suffix
+						@helpTooltip("Domain suffix appended to discovered mDNS names. Leave blank to use the default, home.arpa.")
+					</span>
+					<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
 			</div>
 		</div>
 
@@ -561,12 +557,12 @@ templ vlanRow(v model.VLAN) {
 				hx-delete={ PathSettings + "/vlans/" + v.Name }
 				hx-target="#content"
 				hx-swap="innerHTML"
-				hx-confirm={ "Remove VLAN " + v.Name + "? Any records overriding it will keep their override entries but they'll no longer apply." }
+				hx-confirm={ "Delete VLAN " + v.Name + "? Any records overriding it will keep their override entries but they'll no longer apply." }
 				type="button"
 				class="inline-flex items-center gap-1 text-bramble-danger hover:underline text-xs"
 			>
 				@iconTrash("w-3 h-3")
-				Remove
+				Delete
 			</button>
 		</span>
 	</div>
