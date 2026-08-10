@@ -95,10 +95,14 @@ templ Settings(data SettingsData) {
 		</div>
 		<div class="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
 			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53)
-			@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853)
-			@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443)
-			@doqListenerFields(data.Settings.Listeners.DoQ)
-			@doh3ListenerFields(data.Settings.Listeners.DoH3)
+			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2" title="Share a default port number (443) — the OS keeps TCP/UDP bindings separate, see docs/deploying-docker.md">
+				@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443)
+				@doh3ListenerFields(data.Settings.Listeners.DoH3)
+			</div>
+			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2" title="Share a default port number (853) — the OS keeps TCP/UDP bindings separate, see docs/deploying-docker.md">
+				@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853)
+				@doqListenerFields(data.Settings.Listeners.DoQ)
+			</div>
 		</div>
 
 		<h2 class="text-sm font-semibold mt-6 mb-3">Cache, logging &amp; errors</h2>

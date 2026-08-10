@@ -64,10 +64,11 @@ templ Dashboard(data DashboardData) {
 				</tr>
 			</thead>
 			<tbody>
-				@listenerRow("Plain", data.Settings.Listeners.Plain)
-				@listenerRow("DoT", data.Settings.Listeners.DoT)
-				@listenerRow("DoH", data.Settings.Listeners.DoH)
-				@listenerRow("DoQ", data.Settings.Listeners.DoQ.Listener)
+				@listenerRow("Plain", data.Settings.Listeners.Plain, false)
+				@listenerRow("DoH", data.Settings.Listeners.DoH, true)
+				@listenerRow("DoH3", data.Settings.Listeners.DoH3.Listener, false)
+				@listenerRow("DoT", data.Settings.Listeners.DoT, true)
+				@listenerRow("DoQ", data.Settings.Listeners.DoQ.Listener, false)
 			</tbody>
 		</table>
 	</div>
@@ -94,6 +95,9 @@ templ privateDNSCard(settings model.Settings) {
 			<div class="flex flex-col gap-3">
 				if settings.Listeners.DoH.Enabled {
 					@privateDNSRow("DoH", dnsstamp.DoH(settings.ACME.Domain, settings.Listeners.DoH.Port), dnsstamp.DoHURL(settings.ACME.Domain, settings.Listeners.DoH.Port))
+				}
+				if settings.Listeners.DoH3.Enabled {
+					@privateDNSRow("DoH3", dnsstamp.DoH3(settings.ACME.Domain, settings.Listeners.DoH3.Port), dnsstamp.DoH3URL(settings.ACME.Domain, settings.Listeners.DoH3.Port))
 				}
 				if settings.Listeners.DoT.Enabled {
 					@privateDNSRow("DoT", dnsstamp.DoT(settings.ACME.Domain, settings.Listeners.DoT.Port), dnsstamp.DoTURL(settings.ACME.Domain, settings.Listeners.DoT.Port))
@@ -183,7 +187,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 		<h2 class="text-sm font-semibold mb-3">Certificate (ACME)</h2>
 		if !settings.ACME.Enabled && !cert.Present {
 			<p class="text-bramble-muted text-sm">
-				ACME is disabled and no certificate has been generated yet — encrypted listeners (DoT/DoH/DoQ) will
+				ACME is disabled and no certificate has been generated yet — encrypted listeners (DoT/DoH/DoQ/DoH3) will
 				get a self-signed one automatically when enabled.
 				<a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Configure ACME</a>.
 			</p>
@@ -208,7 +212,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 					</p>
 				</div>
 				<div>
-					<p class="text-bramble-muted text-xs uppercase tracking-wide" title="Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ from plain DNS">DDR</p>
+					<p class="text-bramble-muted text-xs uppercase tracking-wide" title="Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from plain DNS">DDR</p>
 					if settings.ACME.Enabled && settings.ACME.Domain != "" && settings.EncryptedListenerEnabled() {
 						@tag("Served", true)
 					} else {
@@ -298,8 +302,13 @@ templ statCard(label, value, href string) {
 	</a>
 }
 
-templ listenerRow(label string, l model.Listener) {
-	<tr class="border-b border-bramble-border last:border-0">
+// listenerRow renders one listener's status/port. groupStart marks the first
+// row of a new default-port group (e.g. DoT/DoQ share 853, DoH/DoH3 share
+// 443, per docs/deploying-docker.md's port-sharing note) with a heavier top
+// border, so the table visually clusters listeners a Docker port mapping
+// would combine.
+templ listenerRow(label string, l model.Listener, groupStart bool) {
+	<tr class={ "border-b border-bramble-border last:border-0", templ.KV("border-t-2", groupStart) }>
 		<td class="px-3 py-2">{ label }</td>
 		<td class="px-3 py-2">
 			if l.Enabled {

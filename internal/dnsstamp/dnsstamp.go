@@ -34,6 +34,24 @@ func DoH(domain string, port int) string {
 	return stamp.String()
 }
 
+// DoH3 returns an sdns:// stamp for a DoH3 (HTTP/3) listener at domain:port
+// ("" if domain is empty). The DNS Stamps spec has no separate proto type for
+// HTTP/3 — a DoH stamp only names the query endpoint, and h2 vs. h3 is
+// negotiated at the TLS/ALPN layer the same way any HTTPS client picks a
+// transport, so this reuses StampProtoTypeDoH. Same no-pinned-address
+// reasoning as DoH.
+func DoH3(domain string, port int) string {
+	if domain == "" {
+		return ""
+	}
+	stamp := dnsstamps.ServerStamp{
+		Proto:        dnsstamps.StampProtoTypeDoH,
+		ProviderName: hostWithPort(domain, port, 443),
+		Path:         "/dns-query",
+	}
+	return stamp.String()
+}
+
 // DoT returns an sdns:// stamp for a DoT listener at domain:port ("" if
 // domain is empty). Same no-pinned-address reasoning as DoH.
 func DoT(domain string, port int) string {
@@ -64,6 +82,17 @@ func DoTURL(domain string, port int) string {
 		return ""
 	}
 	return "tls://" + hostWithPort(domain, port, 853)
+}
+
+// DoH3URL returns the plain https:// query URL for a DoH3 listener at
+// domain:port ("" if domain is empty). Identical in form to DoHURL — the URL
+// itself doesn't encode HTTP/2 vs. HTTP/3, only the port (which usually
+// differs from DoH's, per docs/deploying-docker.md's port-sharing note).
+func DoH3URL(domain string, port int) string {
+	if domain == "" {
+		return ""
+	}
+	return "https://" + hostWithPort(domain, port, 443) + "/dns-query"
 }
 
 // DoQURL returns the plain quic:// query URL for a DoQ listener at
