@@ -125,12 +125,14 @@ func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 // SHOULD). Resolved per the same client VLAN as the SVCB answer itself, since
 // the target's address may also be split-horizon (e.g. the ACME domain).
 func (lr *LocalRecords) ddrGlue(answers []dns.RR, vlan string) []dns.RR {
+	seen := make(map[string]bool)
 	var extra []dns.RR
 	for _, rr := range answers {
 		svcb, ok := rr.(*dns.SVCB)
-		if !ok {
+		if !ok || seen[svcb.Target] {
 			continue
 		}
+		seen[svcb.Target] = true
 		extra = append(extra, lr.buildAnswers(svcb.Target, dns.TypeA, vlan)...)
 		extra = append(extra, lr.buildAnswers(svcb.Target, dns.TypeAAAA, vlan)...)
 	}

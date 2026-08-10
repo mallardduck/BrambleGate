@@ -360,6 +360,46 @@ func TestDDRAnswerCarriesAddressGlue(t *testing.T) {
 	}
 }
 
+// TestDDRAnswerDedupesGlueAcrossProtocols guards against re-emitting the same
+// A/AAAA glue record once per SVCB answer when multiple protocols (DoT, DoH,
+// ...) share the same TargetName: the Additional section should carry each
+// address once, not once per answer.
+func TestDDRAnswerDedupesGlueAcrossProtocols(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "records.json")
+	zoneJSON := `{
+  "default_ttl": 300,
+  "zones": ["home.arpa", "dns.example.com", "resolver.arpa"],
+  "vlans": [],
+  "records": [
+    {"name": "dns.example.com", "type": "A", "default": "192.168.10.53", "ttl": 0, "vlan_overrides": []}
+  ],
+  "ddr": [
+    {"priority": 1, "target": "dns.example.com", "params": [
+      {"key": "alpn", "value": "dot"}, {"key": "port", "value": "853"}
+    ]},
+    {"priority": 1, "target": "dns.example.com", "params": [
+      {"key": "alpn", "value": "h2"}, {"key": "port", "value": "443"}, {"key": "dohpath", "value": "/dns-query{?dns}"}
+    ]}
+  ]
+}`
+	if err := os.WriteFile(path, []byte(zoneJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corefile := "localrecords home.arpa dns.example.com resolver.arpa {\n\tzonedata " + filepath.ToSlash(path) + "\n}"
+	lr, err := parse(caddy.NewTestController("dns", corefile))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeSVCB)
+	if m.Rcode != dns.RcodeSuccess || len(m.Answer) != 2 {
+		t.Fatalf("want 2 SVCB answers, got rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+	if len(m.Extra) != 1 {
+		t.Fatalf("want 1 deduped glue record in Additional, got %+v", m.Extra)
+	}
+}
+
 func TestDDRWrongTypeIsNODATA(t *testing.T) {
 	lr := buildDDR(t)
 	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeA)
