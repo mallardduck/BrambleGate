@@ -7,7 +7,7 @@ package mdnscfg
 import (
 	"strings"
 
-	"github.com/mallardduck/BrambleGate/configgen"
+	"github.com/mallardduck/BrambleGate/internal/configgen"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 )

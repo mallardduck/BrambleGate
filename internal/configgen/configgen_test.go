@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mallardduck/BrambleGate/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
 )
 

@@ -17,17 +17,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mallardduck/BrambleGate/configgen"
-	"github.com/mallardduck/BrambleGate/configgen/selfip"
-	"github.com/mallardduck/BrambleGate/engine"
 	"github.com/mallardduck/BrambleGate/internal/acme"
+	"github.com/mallardduck/BrambleGate/internal/configgen"
+	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/engine"
 	"github.com/mallardduck/BrambleGate/internal/gui"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
+	"github.com/mallardduck/BrambleGate/internal/store"
 	"github.com/mallardduck/BrambleGate/internal/vlancfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleGate/store"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 

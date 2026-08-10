@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mallardduck/BrambleGate/configgen"
-	"github.com/mallardduck/BrambleGate/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/configgen"
+	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/store"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
-	"github.com/mallardduck/BrambleGate/store"
 )
 
 // stubSelfIPs replaces detectSelfIPs for the duration of a test, then restores

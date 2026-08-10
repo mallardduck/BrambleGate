@@ -4,13 +4,10 @@ toolchain go1.26.5
 
 use (
 	.
-	./configgen
-	./engine
 	./mdnssd
 	./model
 	./plugins/localrecords
 	./plugins/mdnsbridge
 	./pluginreg
-	./store
 	./vlanmatch
 )

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mallardduck/BrambleGate/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise/mdnsresponder"
 )

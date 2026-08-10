@@ -11,24 +11,24 @@ toolchain go1.26.5
 // module, so it does not affect anyone who imports the sub-modules on their own.
 
 replace (
-	github.com/mallardduck/BrambleGate/configgen => ./configgen
-	github.com/mallardduck/BrambleGate/engine => ./engine
 	github.com/mallardduck/BrambleGate/mdnssd => ./mdnssd
 	github.com/mallardduck/BrambleGate/model => ./model
+	github.com/mallardduck/BrambleGate/pluginreg => ./pluginreg
 	github.com/mallardduck/BrambleGate/plugins/localrecords => ./plugins/localrecords
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ./plugins/mdnsbridge
-	github.com/mallardduck/BrambleGate/pluginreg => ./pluginreg
-	github.com/mallardduck/BrambleGate/store => ./store
 	github.com/mallardduck/BrambleGate/vlanmatch => ./vlanmatch
 )
 
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/brutella/dnssd v1.2.14
+	github.com/coredns/caddy v1.1.4
+	github.com/coredns/coredns v1.14.6
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-chi/chi/v5 v5.3.1
-	github.com/mallardduck/BrambleGate/engine v0.0.0
+	github.com/jedisct1/go-dnsstamps v0.0.0-20260518121737-6579dc73e4a2
 	github.com/mallardduck/BrambleGate/vlanmatch v0.0.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -84,7 +84,6 @@ require (
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
-	github.com/jedisct1/go-dnsstamps v0.0.0-20260518121737-6579dc73e4a2 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/linode/linodego v1.68.0 // indirect
@@ -104,15 +103,12 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	google.golang.org/api v0.280.0 // indirect
 	gopkg.in/ini.v1 v1.67.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/coredns/caddy v1.1.4 // indirect
-	github.com/coredns/coredns v1.14.6 // indirect
 	github.com/coreos/go-systemd/v22 v22.7.0 // indirect
 	github.com/dnstap/golang-dnstap v0.4.0 // indirect
 	github.com/farsightsec/golang-framestream v0.3.0 // indirect
@@ -122,12 +118,10 @@ require (
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/mallardduck/BrambleGate/configgen v0.0.0
 	github.com/mallardduck/BrambleGate/model v0.0.0
-	github.com/mallardduck/BrambleGate/plugins/localrecords v0.0.0 // indirect
-	github.com/mallardduck/BrambleGate/plugins/mdnsbridge v0.0.0
 	github.com/mallardduck/BrambleGate/pluginreg v0.0.0
-	github.com/mallardduck/BrambleGate/store v0.0.0
+	github.com/mallardduck/BrambleGate/plugins/localrecords v0.0.0
+	github.com/mallardduck/BrambleGate/plugins/mdnsbridge v0.0.0
 	github.com/mdlayher/socket v0.6.1 // indirect
 	github.com/mdlayher/vsock v1.3.0 // indirect
 	github.com/miekg/dns v1.1.72 // indirect

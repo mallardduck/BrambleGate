@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mallardduck/BrambleGate/configgen/corefile"
-	"github.com/mallardduck/BrambleGate/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/configgen/corefile"
+	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
 	"github.com/mallardduck/BrambleGate/model"
 )
 
