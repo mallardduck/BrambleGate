@@ -95,13 +95,38 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	// later via the GUI rendered a `tls` directive with blank args and CoreDNS
 	// rejected it.
 	opts := configgen.Options{ConfigDir: configDir, ACMESelfIPs: selfip.DetectLive(settings.VLANs)}
-	opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
-	if err != nil {
-		return fmt.Errorf("prepare certificate: %w", err)
-	}
-	if settings.EncryptedListenerEnabled() {
-		log.Warn("using a self-signed certificate for encrypted listeners — strict clients (e.g. Android Private DNS) will reject it until ACME issues a real cert",
-			"cert", opts.CertFile, "cn", settings.ACME.Domain)
+	switch {
+	case settings.ACME.Enabled:
+		// A self-signed placeholder is still written here even though ACME is
+		// on: it's the bridge that keeps an encrypted listener bindable at
+		// boot while the Manager issues a real cert in the background (see
+		// the deferred-issuance comment below) — not the user-facing
+		// self-signed *fallback* setting, which only applies when ACME is
+		// off (see the case below).
+		opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
+		if err != nil {
+			return fmt.Errorf("prepare certificate: %w", err)
+		}
+	case settings.ACME.SelfSignedFallback:
+		opts.CertFile, opts.KeyFile, err = ensureSelfSignedCert(configDir, settings.ACME.Domain)
+		if err != nil {
+			return fmt.Errorf("prepare certificate: %w", err)
+		}
+		if settings.EncryptedListenerEnabled() {
+			log.Warn("using a self-signed certificate for encrypted listeners (acme.self_signed_fallback) — strict clients (e.g. Android Private DNS) will reject it until ACME is configured",
+				"cert", opts.CertFile, "cn", settings.ACME.Domain)
+		}
+	default:
+		// Neither ACME nor the self-signed fallback is on: no cert file
+		// exists (or will be created). The fixed path is still populated so
+		// a `tls` directive renders correctly the instant either gets turned
+		// on later via the GUI — reloadFn never changes these paths, only
+		// the file contents at them.
+		opts.CertFile, opts.KeyFile = certPaths(configDir)
+		if settings.EncryptedListenerEnabled() {
+			log.Warn("an encrypted listener is enabled but no certificate is configured — it will not start until acme.enabled or acme.self_signed_fallback is turned on in Settings",
+				"cert", opts.CertFile)
+		}
 	}
 
 	// The mDNS discovery table is owned by this process (it must outlive engine

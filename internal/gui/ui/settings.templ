@@ -200,9 +200,16 @@ templ Settings(data SettingsData) {
 		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 			<h2 class="text-sm font-semibold mb-3">ACME (DNS-01 certificates)</h2>
 			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ toggleHiddenByChecked("acme_fields") }/>
+				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ acmeEnabledToggle() }/>
 				Enabled
 			</label>
+			<div id="acme_self_signed_group" class="mt-3 pl-0.5" hidden?={ data.Settings.ACME.Enabled }>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="acme_self_signed_fallback" checked?={ data.Settings.ACME.SelfSignedFallback }/>
+					Use a self-signed certificate for encrypted listeners
+					@helpTooltip("Opt-in only — off by default. With ACME disabled, DoT/DoH/DoQ/DoH3 otherwise have no certificate at all and won't start. A self-signed cert lets them come up for local testing, but strict clients (e.g. Android Private DNS) will reject it as untrusted. Mutually exclusive with ACME — turning ACME on hides and clears this.")
+				</label>
+			</div>
 			<div id="acme_fields" class="mt-3 pl-0.5 flex flex-wrap gap-3 items-end" hidden?={ !data.Settings.ACME.Enabled }>
 				<label class="flex flex-col gap-1 text-sm">
 					<span class="text-bramble-muted text-xs">Domain</span>
@@ -438,6 +445,23 @@ script toggleHiddenBySelectValue(groupID string, matchValue string) {
 	const el = document.getElementById(groupID);
 	if (el) {
 		el.hidden = event.target.value !== matchValue;
+	}
+}
+
+// acmeEnabledToggle is the ACME "Enabled" checkbox's onchange: it shows the
+// ACME fields and hides the self-signed-fallback toggle when checked, and
+// vice versa when unchecked — the two are mutually exclusive (see
+// model.ACME.SelfSignedFallback), so exactly one of these groups is ever
+// visible.
+script acmeEnabledToggle() {
+	const checked = event.target.checked;
+	const fields = document.getElementById("acme_fields");
+	if (fields) {
+		fields.hidden = !checked;
+	}
+	const selfSigned = document.getElementById("acme_self_signed_group");
+	if (selfSigned) {
+		selfSigned.hidden = checked;
 	}
 }
 

@@ -410,6 +410,10 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	if days, err := strconv.Atoi(r.FormValue("acme_renew_before_days")); err == nil && days > 0 {
 		s.ACME.RenewBeforeDays = days
 	}
+	// SelfSignedFallback and ACME.Enabled are mutually exclusive (the GUI
+	// hides the field whenever ACME is on, but an already-hidden checkbox
+	// still submits its prior value, so it's force-cleared here too).
+	s.ACME.SelfSignedFallback = !s.ACME.Enabled && r.FormValue("acme_self_signed_fallback") != ""
 
 	s.MDNS.Enabled = r.FormValue("mdns_enabled") != ""
 	s.MDNS.Interfaces = splitAndTrim(r.FormValue("mdns_interfaces"))

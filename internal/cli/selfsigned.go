@@ -15,6 +15,17 @@ import (
 	"time"
 )
 
+// certPaths returns the fixed cert/key file locations under <configDir>/certs/
+// — the same paths ensureSelfSignedCert writes to and acme.Manager reads/writes
+// (internal/acme/manager.go's certFile/keyFile), regardless of whether a file
+// actually exists there yet. Callers that skip ensureSelfSignedCert (self-signed
+// fallback opted out, ACME off) still need these so configgen.Options.CertFile/
+// KeyFile are never blank — see cli.go's Run.
+func certPaths(configDir string) (certFile, keyFile string) {
+	certDir := filepath.Join(configDir, "certs")
+	return filepath.Join(certDir, "cert.pem"), filepath.Join(certDir, "key.pem")
+}
+
 // ensureSelfSignedCert makes sure a cert/key pair exists under
 // <configDir>/certs/ for the DoT listener, generating a throwaway self-signed
 // pair if absent. Returns the cert and key file paths.
@@ -25,9 +36,8 @@ import (
 // are written into certs/ so that Phase 4's real cert lands in the same place and
 // this generator simply stops running once a real cert is present.
 func ensureSelfSignedCert(configDir, hostname string) (certFile, keyFile string, err error) {
-	certDir := filepath.Join(configDir, "certs")
-	certFile = filepath.Join(certDir, "cert.pem")
-	keyFile = filepath.Join(certDir, "key.pem")
+	certFile, keyFile = certPaths(configDir)
+	certDir := filepath.Dir(certFile)
 
 	if fileExists(certFile) && fileExists(keyFile) {
 		return certFile, keyFile, nil

@@ -440,6 +440,7 @@ func TestSaveSettingsReconcilesAdvertiseWithoutRecreating(t *testing.T) {
 
 	settings.Listeners.DoT = model.Listener{Enabled: true, Port: 853}
 	settings.ACME.Domain = "dns.example.com"
+	settings.ACME.SelfSignedFallback = true
 	if err := svc.SaveSettings(settings); err != nil {
 		t.Fatalf("enable dot: %v", err)
 	}

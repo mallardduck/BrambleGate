@@ -404,8 +404,9 @@ func TestSettingsSave_DoH3Listener(t *testing.T) {
 		"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
 		"plain_enabled": {"on"}, "plain_port": {"53"},
 		"doh3_enabled": {"on"}, "doh3_port": {"8443"}, "doh3_max_streams": {"128"},
-		"acme_domain":            {"dns.example.com"},
-		"acme_renew_before_days": {"30"},
+		"acme_domain":               {"dns.example.com"},
+		"acme_renew_before_days":    {"30"},
+		"acme_self_signed_fallback": {"on"},
 	}))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("save (doh3 listener) status = %d, body = %s", rec.Code, rec.Body.String())

@@ -20,7 +20,7 @@ func baseSettings() model.Settings {
 			Plain: model.Listener{Enabled: true, Port: 53},
 			DoT:   model.Listener{Enabled: true, Port: 853},
 		},
-		ACME: model.ACME{Domain: "dns.example.com"},
+		ACME: model.ACME{Domain: "dns.example.com", SelfSignedFallback: true},
 	}
 }
 
@@ -887,6 +887,11 @@ func TestValidateRejects(t *testing.T) {
 					{VLAN: "trusted"},
 				}},
 			}}
+		},
+		"encrypted listener with no cert source": func() (model.Settings, model.RecordSet) {
+			s := baseSettings()
+			s.ACME.SelfSignedFallback = false // baseSettings sets this true; this case is what it guards against
+			return s, model.RecordSet{}
 		},
 	}
 	for name, mk := range cases {

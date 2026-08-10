@@ -23,8 +23,17 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 	if err := validateVLANs(s.VLANs); err != nil {
 		return err
 	}
-	if s.EncryptedListenerEnabled() && strings.TrimSpace(s.ACME.Domain) == "" {
-		return errors.New("acme.domain is required when an encrypted listener (DoT/DoH/DoQ) is enabled")
+	if s.EncryptedListenerEnabled() {
+		switch {
+		case s.ACME.Enabled:
+			// validateACME below covers domain/email/dns_provider.
+		case s.ACME.SelfSignedFallback:
+			if strings.TrimSpace(s.ACME.Domain) == "" {
+				return errors.New("acme.domain is required (used as the self-signed certificate's common name) when an encrypted listener is enabled")
+			}
+		default:
+			return errors.New("an encrypted listener (dot/doh/doq/doh3) is enabled but no certificate source is configured — enable acme.enabled (with a real cert) or acme.self_signed_fallback (throwaway, untrusted)")
+		}
 	}
 	if err := validateACME(s.ACME); err != nil {
 		return err

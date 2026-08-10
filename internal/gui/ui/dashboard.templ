@@ -192,10 +192,14 @@ templ acmeSelfIPCard(settings model.Settings, records []model.Record) {
 templ acmeStatusCard(settings model.Settings, cert acme.Status) {
 	<div class="mt-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 		<h2 class="text-sm font-semibold mb-3">Certificate (ACME)</h2>
-		if !settings.ACME.Enabled && !cert.Present {
+		if !settings.ACME.Enabled && (!cert.Present || cert.SelfSigned) {
 			<p class="text-bramble-muted text-sm">
-				ACME is disabled and no certificate has been generated yet — encrypted listeners (DoT/DoH/DoQ/DoH3) will
-				get a self-signed one automatically when enabled.
+				ACME is disabled.
+				if settings.ACME.SelfSignedFallback {
+					Encrypted listeners (DoT/DoH/DoQ/DoH3) are using a self-signed placeholder certificate until it's configured.
+				} else {
+					Encrypted listeners (DoT/DoH/DoQ/DoH3) have no certificate and won't start until ACME or the self-signed fallback is turned on.
+				}
 				<a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Configure ACME</a>.
 			</p>
 		} else {

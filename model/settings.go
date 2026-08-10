@@ -196,6 +196,17 @@ type ACME struct {
 	// server like Pebble). When set it takes precedence over Production.
 	CADirectoryURL  string `yaml:"ca_directory_url,omitempty" json:"ca_directory_url,omitempty"`
 	RenewBeforeDays int    `yaml:"renew_before_days" json:"renew_before_days"`
+	// SelfSignedFallback opts into a throwaway self-signed cert for encrypted
+	// listeners (DoT/DoH/DoQ/DoH3) when ACME is disabled — off by default, so
+	// nothing is generated unless asked for. Only meaningful when Enabled is
+	// false; mutually exclusive with it (the GUI hides this field whenever
+	// Enabled is true, and Validate/the settings handler force it back to
+	// false in that case too). Irrelevant to ACME's own internal bootstrap
+	// placeholder, which it still writes on its own regardless of this field
+	// so an encrypted listener enabled at the same moment as ACME doesn't
+	// fail to bind while the real cert is still being issued in the
+	// background — see internal/cli.Run.
+	SelfSignedFallback bool `yaml:"self_signed_fallback,omitempty" json:"self_signed_fallback,omitempty"`
 }
 
 // MDNS configures the mdnsbridge plugin (docs/plugins.md). Publishing is driven
