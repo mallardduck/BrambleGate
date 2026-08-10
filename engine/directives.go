@@ -28,6 +28,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/rewrite"
 	_ "github.com/coredns/coredns/plugin/timeouts"
 	_ "github.com/coredns/coredns/plugin/tls"
+	_ "github.com/coredns/coredns/plugin/whoami"
 
 	// BrambleGate custom plugins. Blank-importing registers them under their
 	// directive names (reserved in Directives below).
