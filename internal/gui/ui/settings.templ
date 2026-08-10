@@ -53,9 +53,10 @@ func forwardTuningOpen(u model.UpstreamTarget) bool {
 templ Settings(data SettingsData) {
 	<h1 class="text-lg font-semibold mb-4">Settings</h1>
 
-	<form hx-post={ PathSettings } hx-target="#content" hx-swap="innerHTML" autocomplete="off" class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
-		<h2 class="text-sm font-semibold mb-3">Upstream &amp; listeners</h2>
-		<div class="flex flex-wrap gap-3 items-end">
+	<form hx-post={ PathSettings } hx-target="#content" hx-swap="innerHTML" autocomplete="off">
+		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3">Upstream &amp; listeners</h2>
+			<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex flex-col gap-1 text-sm">
 				<span class="text-bramble-muted text-xs">Upstream DNS (host:port)</span>
 				<input name="upstream_address" value={ data.Settings.UpstreamDNS.Address } placeholder="192.168.10.5:53" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
@@ -113,165 +114,174 @@ templ Settings(data SettingsData) {
 				Prefer UDP to upstream
 			</label>
 		</details>
-		<h3 class="text-xs font-semibold text-bramble-muted mt-4 mb-2">Listeners</h3>
-		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-			@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53, "")
-			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
-				@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443, "DoH and DoH3 can share the same default port number (443) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
-				@doh3ListenerFields(data.Settings.Listeners.DoH3)
-			</div>
-			<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
-				@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853, "DoT and DoQ can share the same default port number (853) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
-				@doqListenerFields(data.Settings.Listeners.DoQ)
-			</div>
-		</div>
-
-		<h2 class="text-sm font-semibold mt-6 mb-3 flex items-center">
-			Cache, logging &amp; errors
-			@helpTooltip("By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; every query is logged to stdout; and outgoing EDNS0 UDP payload sizes are capped to 1232 bytes to avoid IP fragmentation. Each of these is on by default — the checkboxes below only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when \"Send client IP to upstream\" above is enabled, since a subnet-scoped answer must never be served to a different client. Encrypted listeners (DoT/DoH/DoQ) also get a fixed, non-configurable 3-minute idle-timeout bump to help mobile/NAT'd clients — not shown here since there's nothing to toggle. Observability endpoints are off by default (opt-in instrumentation, not core behavior) and, when enabled, run on fixed ports in the first enabled listener's block only — CoreDNS treats each as a process-wide singleton.")
-		</h2>
-		<div class="flex flex-wrap gap-6 items-start">
-			<div>
-				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Cache</h3>
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="cache_serve_stale_disabled" checked?={ data.Settings.Cache.ServeStaleDisabled }/>
-					Disable serve_stale
-				</label>
-				<label class="flex items-center gap-2 text-sm mt-1">
-					<input type="checkbox" name="cache_prefetch_disabled" checked?={ data.Settings.Cache.PrefetchDisabled }/>
-					Disable prefetch
-				</label>
-			</div>
-			<div>
-				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Log</h3>
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="log_disabled" checked?={ data.Settings.Log.Disabled }/>
-					Disable query log
-				</label>
-				<label class="flex flex-col gap-1 text-sm mt-2">
-					<span class="text-bramble-muted text-xs flex items-center">
-						Classes
-						@helpTooltip("Which query-log classes to record (e.g. success, denial, error), comma-separated. Leave blank to log every class.")
-					</span>
-					<input name="log_classes" value={ strings.Join(data.Settings.Log.Classes, ", ") } placeholder="success, denial, error" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
-				</label>
-			</div>
-			<div>
-				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Hardening</h3>
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="bufsize_disabled" checked?={ data.Settings.BufsizeDisabled }/>
-					Disable EDNS0 buffer-size capping (bufsize)
-				</label>
-			</div>
-			<div>
-				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Errors</h3>
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="errors_consolidate_disabled" checked?={ data.Settings.Errors.ConsolidateDisabled }/>
-					Disable consolidating repeated errors
-				</label>
-			</div>
-			<div>
-				<h3 class="text-xs font-semibold text-bramble-muted mb-2">Observability</h3>
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="observability_health" checked?={ data.Settings.Observability.Health }/>
-					Health endpoint (:9090)
-				</label>
-				<label class="flex items-center gap-2 text-sm mt-1">
-					<input type="checkbox" name="observability_ready" checked?={ data.Settings.Observability.Ready }/>
-					Readiness endpoint (:9191)
-				</label>
-				<label class="flex items-center gap-2 text-sm mt-1">
-					<input type="checkbox" name="observability_prometheus" checked?={ data.Settings.Observability.Prometheus }/>
-					Prometheus metrics (:9153)
-				</label>
+			<h3 class="text-xs font-semibold text-bramble-muted mt-4 mb-2">Listeners</h3>
+			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+				@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53, "")
+				<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
+					@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443, "DoH and DoH3 can share the same default port number (443) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
+					@doh3ListenerFields(data.Settings.Listeners.DoH3)
+				</div>
+				<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
+					@listenerFields("dot", "DoT", data.Settings.Listeners.DoT, 853, "DoT and DoQ can share the same default port number (853) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
+					@doqListenerFields(data.Settings.Listeners.DoQ)
+				</div>
 			</div>
 		</div>
 
-		<h2 class="text-sm font-semibold mt-6 mb-3">ACME (DNS-01 certificates)</h2>
-		<div class="flex flex-wrap gap-3 items-end">
-			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ toggleHiddenByChecked("acme_fields") }/>
-				Enabled
-			</label>
-			<div id="acme_fields" class="contents" hidden?={ !data.Settings.ACME.Enabled }>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">Domain</span>
-					<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-				</label>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">Email</span>
-					<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-				</label>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">DNS provider</span>
-					<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-				</label>
+		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3 flex items-center">
+				Cache, logging &amp; errors
+				@helpTooltip("By default the cache rides out brief upstream blips (serve_stale) and refreshes popular names before they expire (prefetch); repeated identical errors (e.g. upstream timeouts) are consolidated into a periodic summary instead of one line each; every query is logged to stdout; and outgoing EDNS0 UDP payload sizes are capped to 1232 bytes to avoid IP fragmentation. Each of these is on by default — the checkboxes below only turn one off if it ever causes surprising behavior for your setup. Cache is always skipped for a server block regardless of these settings when \"Send client IP to upstream\" above is enabled, since a subnet-scoped answer must never be served to a different client. Encrypted listeners (DoT/DoH/DoQ) also get a fixed, non-configurable 3-minute idle-timeout bump to help mobile/NAT'd clients — not shown here since there's nothing to toggle. Observability endpoints are off by default (opt-in instrumentation, not core behavior) and, when enabled, run on fixed ports in the first enabled listener's block only — CoreDNS treats each as a process-wide singleton.")
+			</h2>
+			<div class="flex flex-wrap gap-6 items-start">
+				<div>
+					<h3 class="text-xs font-semibold text-bramble-muted mb-2">Cache</h3>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="cache_serve_stale_disabled" checked?={ data.Settings.Cache.ServeStaleDisabled }/>
+						Disable serve_stale
+					</label>
+					<label class="flex items-center gap-2 text-sm mt-1">
+						<input type="checkbox" name="cache_prefetch_disabled" checked?={ data.Settings.Cache.PrefetchDisabled }/>
+						Disable prefetch
+					</label>
+				</div>
+				<div>
+					<h3 class="text-xs font-semibold text-bramble-muted mb-2">Log</h3>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="log_disabled" checked?={ data.Settings.Log.Disabled }/>
+						Disable query log
+					</label>
+					<label class="flex flex-col gap-1 text-sm mt-2">
+						<span class="text-bramble-muted text-xs flex items-center">
+							Classes
+							@helpTooltip("Which query-log classes to record (e.g. success, denial, error), comma-separated. Leave blank to log every class.")
+						</span>
+						<input name="log_classes" value={ strings.Join(data.Settings.Log.Classes, ", ") } placeholder="success, denial, error" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+					</label>
+				</div>
+				<div>
+					<h3 class="text-xs font-semibold text-bramble-muted mb-2">Hardening</h3>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="bufsize_disabled" checked?={ data.Settings.BufsizeDisabled }/>
+						Disable EDNS0 buffer-size capping (bufsize)
+					</label>
+				</div>
+				<div>
+					<h3 class="text-xs font-semibold text-bramble-muted mb-2">Errors</h3>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="errors_consolidate_disabled" checked?={ data.Settings.Errors.ConsolidateDisabled }/>
+						Disable consolidating repeated errors
+					</label>
+				</div>
+				<div>
+					<h3 class="text-xs font-semibold text-bramble-muted mb-2">Observability</h3>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="observability_health" checked?={ data.Settings.Observability.Health }/>
+						Health endpoint (:9090)
+					</label>
+					<label class="flex items-center gap-2 text-sm mt-1">
+						<input type="checkbox" name="observability_ready" checked?={ data.Settings.Observability.Ready }/>
+						Readiness endpoint (:9191)
+					</label>
+					<label class="flex items-center gap-2 text-sm mt-1">
+						<input type="checkbox" name="observability_prometheus" checked?={ data.Settings.Observability.Prometheus }/>
+						Prometheus metrics (:9153)
+					</label>
+				</div>
+			</div>
+		</div>
+
+		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3">ACME (DNS-01 certificates)</h2>
+			<div class="flex flex-wrap gap-3 items-end">
 				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
-					Production CA
+					<input type="checkbox" name="acme_enabled" checked?={ data.Settings.ACME.Enabled } onchange={ toggleHiddenByChecked("acme_fields") }/>
+					Enabled
 				</label>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs flex items-center">
-						Renew before
-						@helpTooltip("Start renewing the certificate this many days before it expires.")
-					</span>
-					<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
-				</label>
+				<div id="acme_fields" class="contents" hidden?={ !data.Settings.ACME.Enabled }>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs">Domain</span>
+						<input name="acme_domain" value={ data.Settings.ACME.Domain } placeholder="dns.example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+					</label>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs">Email</span>
+						<input name="acme_email" type="email" value={ data.Settings.ACME.Email } placeholder="admin@example.com" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+					</label>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs">DNS provider</span>
+						<input name="acme_dns_provider" value={ data.Settings.ACME.DNSProvider } placeholder="cloudflare" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+					</label>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="acme_production" checked?={ data.Settings.ACME.Production }/>
+						Production CA
+					</label>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs flex items-center">
+							Renew before
+							@helpTooltip("Start renewing the certificate this many days before it expires.")
+						</span>
+						<input name="acme_renew_before_days" type="number" min="1" value={ strconv.Itoa(data.Settings.ACME.RenewBeforeDays) } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm w-24"/>
+					</label>
+				</div>
 			</div>
 		</div>
 
-		<h2 class="text-sm font-semibold mt-6 mb-3 flex items-center">
-			mDNS discovery
-			@helpTooltip("Auto-publish selectors and naming rules are YAML-only for now; discoveries can be approved/promoted individually from the mDNS page. Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.")
-		</h2>
-		<div class="flex flex-wrap gap-3 items-end">
-			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled } onchange={ toggleHiddenByChecked("mdns_fields") }/>
-				Enabled
-			</label>
-			<div id="mdns_fields" class="contents" hidden?={ !data.Settings.MDNS.Enabled }>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs flex items-center">
-						Interfaces
-						@helpTooltip("Network interfaces to listen for mDNS on, comma-separated. Leave blank or type \"all\" to listen on every interface.")
-					</span>
-					<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3 flex items-center">
+				mDNS discovery
+				@helpTooltip("Auto-publish selectors and naming rules are YAML-only for now; discoveries can be approved/promoted individually from the mDNS page. Enabling/disabling and changing interfaces or service types take effect immediately — no restart needed.")
+			</h2>
+			<div class="flex flex-wrap gap-3 items-end">
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="mdns_enabled" checked?={ data.Settings.MDNS.Enabled } onchange={ toggleHiddenByChecked("mdns_fields") }/>
+					Enabled
 				</label>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">Service types</span>
-					<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm" onchange={ toggleHiddenBySelectValue("mdns_custom_group", "custom") }>
-						@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
-						@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
-						@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
-						@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
-					</select>
-				</label>
-				<label id="mdns_custom_group" class="flex flex-col gap-1 text-sm" hidden?={ mdnsServiceTypesMode(data.Settings.MDNS.ServiceTypes) != "custom" }>
-					<span class="text-bramble-muted text-xs flex items-center">
-						Custom list
-						@helpTooltip("The exact mDNS service types to discover (e.g. _http._tcp, _ipp._tcp). Only read when Service types above is set to Custom list.")
-					</span>
-					<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
-				</label>
-				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs flex items-center">
-						Suffix
-						@helpTooltip("Domain suffix appended to discovered mDNS names. Leave blank to use the default, home.arpa.")
-					</span>
-					<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
-				</label>
+				<div id="mdns_fields" class="contents" hidden?={ !data.Settings.MDNS.Enabled }>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs flex items-center">
+							Interfaces
+							@helpTooltip("Network interfaces to listen for mDNS on, comma-separated. Leave blank or type \"all\" to listen on every interface.")
+						</span>
+						<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+					</label>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs">Service types</span>
+						<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm" onchange={ toggleHiddenBySelectValue("mdns_custom_group", "custom") }>
+							@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
+							@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
+							@mdnsServiceTypesModeOption("all", "All (dynamic discovery)", data.Settings.MDNS.ServiceTypes)
+							@mdnsServiceTypesModeOption("custom", "Custom list…", data.Settings.MDNS.ServiceTypes)
+						</select>
+					</label>
+					<label id="mdns_custom_group" class="flex flex-col gap-1 text-sm" hidden?={ mdnsServiceTypesMode(data.Settings.MDNS.ServiceTypes) != "custom" }>
+						<span class="text-bramble-muted text-xs flex items-center">
+							Custom list
+							@helpTooltip("The exact mDNS service types to discover (e.g. _http._tcp, _ipp._tcp). Only read when Service types above is set to Custom list.")
+						</span>
+						<input name="mdns_service_types" value={ mdnsServiceTypesCustomValue(data.Settings.MDNS.ServiceTypes) } placeholder="_http._tcp, _ipp._tcp" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+					</label>
+					<label class="flex flex-col gap-1 text-sm">
+						<span class="text-bramble-muted text-xs flex items-center">
+							Suffix
+							@helpTooltip("Domain suffix appended to discovered mDNS names. Leave blank to use the default, home.arpa.")
+						</span>
+						<input name="mdns_suffix" value={ data.Settings.MDNS.Suffix } placeholder="home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+					</label>
+				</div>
 			</div>
 		</div>
 
-		<h2 class="text-sm font-semibold mt-6 mb-3 flex items-center">
-			mDNS self-advertisement
-			@helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: plain DNS as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.")
-		</h2>
-		<div class="flex flex-wrap gap-3 items-end">
-			<label class="flex items-center gap-2 text-sm">
-				<input type="checkbox" name="mdns_advertise_enabled" checked?={ data.Settings.MDNS.Advertise.Enabled }/>
-				Enabled
-			</label>
+		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3 flex items-center">
+				mDNS self-advertisement
+				@helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: plain DNS as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.")
+			</h2>
+			<div class="flex flex-wrap gap-3 items-end">
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="mdns_advertise_enabled" checked?={ data.Settings.MDNS.Advertise.Enabled }/>
+					Enabled
+				</label>
+			</div>
 		</div>
 
 		<div class="mt-4">
