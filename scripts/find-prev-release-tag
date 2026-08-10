@@ -9,20 +9,28 @@ set -euo pipefail
 # release page's changelog, since no release exists to have shown them.
 # Skipping past unpublished tags keeps the changelog contiguous.
 #
-# When CURRENT_TAG is itself a stable tag (no prerelease suffix), prefer the
-# nearest published *stable* tag over a prerelease one. This matters when a
-# stable tag lands on the same commit as its last prerelease (e.g.
+# When CURRENT_TAG is itself a stable tag (no prerelease suffix), only ever
+# match a published *stable* ancestor tag — never a prerelease. This matters
+# when a stable tag lands on the same commit as its last prerelease (e.g.
 # v1.2.0-rc.1 promoted straight to v1.2.0): diffing against v1.2.0-rc.1 would
 # yield an empty commit range and drop every change already accumulated
-# across v1.2.0's alpha/beta/rc tags from the stable release notes. If there
-# is no prior stable tag at all (this is the first stable release, but
-# prereleases came before it), fall back to the nearest published tag of any
-# kind so that history still isn't discarded — only true first-ever releases
-# get the caller's "Initial release" fallback (empty output here).
+# across v1.2.0's alpha/beta/rc tags from the stable release notes. And if
+# there's no prior stable tag at all (first stable release, but prereleases
+# came before it), matching the nearest prerelease instead (e.g. rc.30) would
+# silently drop everything before *that* prerelease (rc.1-rc.29) too — so
+# there is no safe non-stable fallback here. Output stays empty and the
+# caller's "Initial release" handling applies.
+#
+# CURRENT_TAG doesn't need to exist yet as an actual tag. REF (2nd arg,
+# defaults to CURRENT_TAG) is what's walked/diffed against — pass e.g. HEAD
+# to dry-run "what would `git tag v0.1.0` produce right now" before running
+# `git tag`. CURRENT_TAG itself is only ever used as a version string (for
+# is_prerelease and to exclude a same-named real tag from CANDIDATES).
 
 CURRENT_TAG="${1:-}"
+REF="${2:-$CURRENT_TAG}"
 if [[ -z "$CURRENT_TAG" ]]; then
-  echo "Usage: $0 <current_tag>" >&2
+  echo "Usage: $0 <current_tag> [ref]" >&2
   exit 1
 fi
 
@@ -35,10 +43,20 @@ is_prerelease() {
 PUBLISHED_TAGS=$(gh release list --limit 1000 --json tagName,isDraft,createdAt \
   --jq '[.[] | select(.isDraft == false)] | sort_by(.createdAt) | reverse | .[].tagName')
 
-CANDIDATES=$(git tag --sort=-creatordate --merged "$CURRENT_TAG")
+CANDIDATES=$(git tag --sort=-creatordate --merged "$REF")
 
-if ! is_prerelease "$CURRENT_TAG"; then
-  # Stable release: prefer the nearest published stable ancestor tag.
+if is_prerelease "$CURRENT_TAG"; then
+  # Prerelease target: nearest published tag of any kind.
+  for tag in $CANDIDATES; do
+    [[ "$tag" == "$CURRENT_TAG" ]] && continue
+    if grep -qxF "$tag" <<< "$PUBLISHED_TAGS"; then
+      echo "$tag"
+      exit 0
+    fi
+  done
+else
+  # Stable target: nearest published *stable* tag only. No match means no
+  # prior stable release exists; leave output empty rather than guessing.
   for tag in $CANDIDATES; do
     [[ "$tag" == "$CURRENT_TAG" ]] && continue
     is_prerelease "$tag" && continue
@@ -48,13 +66,3 @@ if ! is_prerelease "$CURRENT_TAG"; then
     fi
   done
 fi
-
-# Prerelease target, or a stable target with no prior stable release: fall
-# back to the nearest published tag of any kind.
-for tag in $CANDIDATES; do
-  [[ "$tag" == "$CURRENT_TAG" ]] && continue
-  if grep -qxF "$tag" <<< "$PUBLISHED_TAGS"; then
-    echo "$tag"
-    exit 0
-  fi
-done
