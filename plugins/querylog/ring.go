@@ -14,6 +14,10 @@ type Filter struct {
 	QName  string
 	Client string
 	VLAN   string
+	// QType is an exact match against Entry.QType; 0 means "no constraint" —
+	// same convention as the other zero-value fields, safe since a real
+	// query never has qtype 0.
+	QType uint16
 }
 
 func (f Filter) matches(e Entry) bool {
@@ -24,6 +28,9 @@ func (f Filter) matches(e Entry) bool {
 		return false
 	}
 	if f.VLAN != "" && e.Client.VLAN != f.VLAN {
+		return false
+	}
+	if f.QType != 0 && e.QType != f.QType {
 		return false
 	}
 	return true

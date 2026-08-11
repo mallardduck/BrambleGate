@@ -7,6 +7,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
+	"github.com/miekg/dns"
 
 	"github.com/mallardduck/BrambleGate/internal/gui/ui"
 	"github.com/mallardduck/BrambleGate/model"
@@ -592,40 +593,137 @@ func filterMDNSEntries(entries []mdnsbridge.Entry, q, status string) []mdnsbridg
 
 // --- Query Log -----------------------------------------------------------
 
+// queryLogPageSize bounds each grid page — the ring itself can hold
+// thousands of entries (settings-configurable capacity); paginating the
+// filtered result keeps the rendered table from growing unbounded while
+// scrolled/paused (see the auto-poll-pauses-off-page-1 note below).
+const queryLogPageSize = 50
+
 func (h *handlers) queryLogPage(w http.ResponseWriter, r *http.Request) {
-	h.renderQueryLog(w, r, querylog.Filter{})
+	h.renderQueryLog(w, r, queryLogParamsFromRequest(r))
 }
 
-// queryLogGridFragment serves the auto-refresh/filter poll: just the table
-// body's rows plus the out-of-band count (see ui.QueryLogGrid), mirroring
-// mdnsGridFragment's shape. Unlike mDNS's client-side filtering,
-// querylog.Ring.Snapshot already accepts a Filter directly, so there's no
-// separate filterQueryLogEntries helper needed.
+// queryLogGridFragment serves the auto-refresh/filter/pagination poll: the
+// table body (as a full outerHTML replacement, so its own hx-trigger can
+// change when Interval/Page change — see ui.QueryLogGrid) plus out-of-band
+// updates of the count and pagination controls. Unlike mDNS's client-side
+// filtering, querylog.Ring.Snapshot already accepts a Filter directly, so
+// there's no separate filterQueryLogEntries helper needed.
 func (h *handlers) queryLogGridFragment(w http.ResponseWriter, r *http.Request) {
-	entries := queryLogSnapshot(queryLogFilterFromRequest(r))
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = ui.QueryLogGrid(entries).Render(r.Context(), w)
-}
-
-func (h *handlers) renderQueryLog(w http.ResponseWriter, r *http.Request, f querylog.Filter) {
 	settings, err := h.svc.Settings()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.QueryLogData{Enabled: settings.QueryLog.Enabled, Filter: f}
+	data := h.queryLogGridData(queryLogParamsFromRequest(r), settings)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = ui.QueryLogGrid(data).Render(r.Context(), w)
+}
+
+func (h *handlers) renderQueryLog(w http.ResponseWriter, r *http.Request, p queryLogParams) {
+	settings, err := h.svc.Settings()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := ui.QueryLogData{Enabled: settings.QueryLog.Enabled}
 	if settings.QueryLog.Enabled {
-		data.Entries = queryLogSnapshot(f)
+		data.Grid = h.queryLogGridData(p, settings)
 	}
 	render(w, r, "Query Log", ui.PathQueryLog, ui.QueryLog(data))
 }
 
-func queryLogFilterFromRequest(r *http.Request) querylog.Filter {
-	return querylog.Filter{
-		QName:  strings.TrimSpace(r.URL.Query().Get("q")),
-		Client: strings.TrimSpace(r.URL.Query().Get("client")),
-		VLAN:   strings.TrimSpace(r.URL.Query().Get("vlan")),
+func (h *handlers) queryLogGridData(p queryLogParams, settings model.Settings) ui.QueryLogGridData {
+	all := queryLogSnapshot(p.Filter)
+	page, totalPages, pageEntries := paginateQueryLog(all, p.Page, queryLogPageSize)
+	return ui.QueryLogGridData{
+		Entries:    pageEntries,
+		Total:      len(all),
+		Page:       page,
+		TotalPages: totalPages,
+		Interval:   p.Interval,
+		Filter:     p.Filter,
+		Listeners:  settings.Listeners,
+		VLANs:      settings.VLANs,
 	}
+}
+
+// queryLogParams is the full set of live-view controls read from the
+// request: filter fields plus the pagination/refresh state that decides
+// what the returned grid's own auto-poll trigger looks like.
+type queryLogParams struct {
+	Filter   querylog.Filter
+	Page     int
+	Interval string // "2s", "5s", "10s", or "off"
+}
+
+func queryLogParamsFromRequest(r *http.Request) queryLogParams {
+	q := r.URL.Query()
+	page, err := strconv.Atoi(q.Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	interval := q.Get("interval")
+	if !isValidQueryLogInterval(interval) {
+		interval = "2s"
+	}
+	return queryLogParams{
+		Filter: querylog.Filter{
+			QName:  strings.TrimSpace(q.Get("q")),
+			Client: strings.TrimSpace(q.Get("client")),
+			VLAN:   strings.TrimSpace(q.Get("vlan")),
+			QType:  queryLogQTypeFromParam(q.Get("qtype")),
+		},
+		Page:     page,
+		Interval: interval,
+	}
+}
+
+func isValidQueryLogInterval(s string) bool {
+	switch s {
+	case "2s", "5s", "10s", "off":
+		return true
+	}
+	return false
+}
+
+func queryLogQTypeFromParam(s string) uint16 {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if s == "" {
+		return 0
+	}
+	t, ok := dns.StringToType[s]
+	if !ok {
+		return 0
+	}
+	return t
+}
+
+// paginateQueryLog slices all (already newest-first) into one page of at
+// most pageSize entries. page is clamped into [1, totalPages] rather than
+// erroring or returning empty — a stale bookmarked/typed page number should
+// still show something sensible.
+func paginateQueryLog[T any](all []T, page, pageSize int) (clampedPage, totalPages int, out []T) {
+	total := len(all)
+	totalPages = (total + pageSize - 1) / pageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return page, totalPages, all[start:end]
 }
 
 // queryLogSnapshot reads directly from the process-wide ring — never through

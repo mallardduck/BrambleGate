@@ -1,11 +1,14 @@
 package gui
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/miekg/dns"
 
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/querylog"
@@ -616,6 +619,155 @@ func TestQueryLogGridFragmentFiltersByQName(t *testing.T) {
 	}
 	if strings.Contains(body, "example.com.") {
 		t.Fatalf("did not expect example.com. in a q=home.arpa filtered grid, got: %s", body)
+	}
+}
+
+func TestQueryLogGridFragmentFiltersByQType(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(16)
+	ring.Push(querylog.Entry{QName: "a.home.arpa.", QType: dns.TypeA})
+	ring.Push(querylog.Entry{QName: "b.home.arpa.", QType: dns.TypeAAAA})
+	querylog.SetCurrent(ring)
+
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?qtype=AAAA", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "b.home.arpa.") {
+		t.Fatalf("expected b.home.arpa. (AAAA) in a qtype=AAAA filtered grid, got: %s", body)
+	}
+	if strings.Contains(body, "a.home.arpa.") {
+		t.Fatalf("did not expect a.home.arpa. (A) in a qtype=AAAA filtered grid, got: %s", body)
+	}
+}
+
+func TestQueryLogGridFragmentPagination(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(200)
+	for i := 0; i < 120; i++ {
+		ring.Push(querylog.Entry{QName: fmt.Sprintf("q%03d.home.arpa.", i)})
+	}
+	querylog.SetCurrent(ring)
+
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	// Newest-first: q119 pushed last, so page 1 should hold it, not q000.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?page=1", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, "q119.home.arpa.") {
+		t.Fatalf("expected q119 (newest) on page 1, got: %s", body)
+	}
+	if strings.Contains(body, "q000.home.arpa.") {
+		t.Fatalf("did not expect q000 (oldest) on page 1, got: %s", body)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?page=3", nil))
+	body = rec.Body.String()
+	if !strings.Contains(body, "q000.home.arpa.") {
+		t.Fatalf("expected q000 (oldest) on page 3 (120 entries, 50/page), got: %s", body)
+	}
+
+	// Past the last page clamps rather than erroring/empty.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?page=99", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "q000.home.arpa.") {
+		t.Fatalf("expected page=99 to clamp to the last page, status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestQueryLogGridFragmentInterval_ReflectedInPollTrigger(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(200)
+	for i := 0; i < 60; i++ { // > one page (50/page), so page=2 below is real
+		ring.Push(querylog.Entry{QName: fmt.Sprintf("q%02d.home.arpa.", i)})
+	}
+	querylog.SetCurrent(ring)
+
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?interval=5s", nil))
+	if !strings.Contains(rec.Body.String(), "every 5s") {
+		t.Fatalf("expected the poll trigger to reflect interval=5s, got: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?interval=off", nil))
+	if strings.Contains(rec.Body.String(), "every ") {
+		t.Fatalf("expected no auto-poll trigger when interval=off, got: %s", rec.Body.String())
+	}
+
+	// Auto-poll must also stop once paginated away from the live page (page 1).
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?interval=5s&page=2", nil))
+	if strings.Contains(rec.Body.String(), "every ") {
+		t.Fatalf("expected no auto-poll trigger while paginated away from page 1, got: %s", rec.Body.String())
+	}
+}
+
+func TestQueryLogPage_ListenerLabelAndNewColumns(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(16)
+	ring.Push(querylog.Entry{
+		QName: "git.home.arpa.", QType: dns.TypeA,
+		Listener: "0.0.0.0:53", Proto: "udp",
+		AuthenticatedData: true, AnswerType: "CNAME",
+	})
+	querylog.SetCurrent(ring)
+
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	settings.Listeners.Plain = model.Listener{Enabled: true, Port: 53}
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, "Plain") {
+		t.Errorf("expected the listener column to show a friendly 'Plain' label for port 53, got: %s", body)
+	}
+	if !strings.Contains(body, "CNAME") {
+		t.Errorf("expected the reply-type column to show CNAME, got: %s", body)
 	}
 }
 

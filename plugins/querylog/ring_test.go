@@ -79,6 +79,24 @@ func TestRing_Snapshot_FilterVLAN_ExactMatch(t *testing.T) {
 	assertQNames(t, got, []string{"a"})
 }
 
+func TestRing_Snapshot_FilterQType(t *testing.T) {
+	r := NewRing(10)
+	r.Push(Entry{QName: "a", QType: 1})  // A
+	r.Push(Entry{QName: "b", QType: 28}) // AAAA
+
+	got := r.Snapshot(Filter{QType: 1})
+	assertQNames(t, got, []string{"a"})
+}
+
+func TestRing_Snapshot_FilterQType_ZeroMeansNoConstraint(t *testing.T) {
+	r := NewRing(10)
+	r.Push(Entry{QName: "a", QType: 1})
+	r.Push(Entry{QName: "b", QType: 28})
+
+	got := r.Snapshot(Filter{})
+	assertQNames(t, got, []string{"b", "a"})
+}
+
 func TestRing_Snapshot_FiltersCombine(t *testing.T) {
 	r := NewRing(10)
 	r.Push(Entry{QName: "nas.home.arpa.", Client: ClientInfo{IP: "192.0.2.10", VLAN: "trusted"}})
