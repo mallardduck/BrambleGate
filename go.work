@@ -8,6 +8,7 @@ use (
 	./model
 	./plugins/localrecords
 	./plugins/mdnsbridge
+	./plugins/querylog
 	./pluginreg
 	./vlanmatch
 )
