@@ -12,6 +12,7 @@ import (
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
 // render writes page as the full document (wrapped in ui.Base) for a normal
@@ -393,6 +394,13 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	s.Observability.Ready = r.FormValue("observability_ready") != ""
 	s.Observability.Prometheus = r.FormValue("observability_prometheus") != ""
 
+	s.QueryLog.Enabled = r.FormValue("querylog_enabled") != ""
+	if v, err := strconv.Atoi(r.FormValue("querylog_capacity")); err == nil && v > 0 {
+		s.QueryLog.Capacity = v
+	} else {
+		s.QueryLog.Capacity = 0
+	}
+
 	parseListener(r, "plain", &s.Listeners.Plain)
 	parseListener(r, "dot", &s.Listeners.DoT)
 	parseListener(r, "doh", &s.Listeners.DoH)
@@ -580,6 +588,57 @@ func filterMDNSEntries(entries []mdnsbridge.Entry, q, status string) []mdnsbridg
 		out = append(out, e)
 	}
 	return out
+}
+
+// --- Query Log -----------------------------------------------------------
+
+func (h *handlers) queryLogPage(w http.ResponseWriter, r *http.Request) {
+	h.renderQueryLog(w, r, querylog.Filter{})
+}
+
+// queryLogGridFragment serves the auto-refresh/filter poll: just the table
+// body's rows plus the out-of-band count (see ui.QueryLogGrid), mirroring
+// mdnsGridFragment's shape. Unlike mDNS's client-side filtering,
+// querylog.Ring.Snapshot already accepts a Filter directly, so there's no
+// separate filterQueryLogEntries helper needed.
+func (h *handlers) queryLogGridFragment(w http.ResponseWriter, r *http.Request) {
+	entries := queryLogSnapshot(queryLogFilterFromRequest(r))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = ui.QueryLogGrid(entries).Render(r.Context(), w)
+}
+
+func (h *handlers) renderQueryLog(w http.ResponseWriter, r *http.Request, f querylog.Filter) {
+	settings, err := h.svc.Settings()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := ui.QueryLogData{Enabled: settings.QueryLog.Enabled, Filter: f}
+	if settings.QueryLog.Enabled {
+		data.Entries = queryLogSnapshot(f)
+	}
+	render(w, r, "Query Log", ui.PathQueryLog, ui.QueryLog(data))
+}
+
+func queryLogFilterFromRequest(r *http.Request) querylog.Filter {
+	return querylog.Filter{
+		QName:  strings.TrimSpace(r.URL.Query().Get("q")),
+		Client: strings.TrimSpace(r.URL.Query().Get("client")),
+		VLAN:   strings.TrimSpace(r.URL.Query().Get("vlan")),
+	}
+}
+
+// queryLogSnapshot reads directly from the process-wide ring — never through
+// h.svc or the durable store — so the live page stays fast regardless of
+// history size (dev-docs/query-log.md). nil when querylog hasn't loaded yet
+// (not present in the rendered Corefile, or no reload since startup): treated
+// as "no entries yet", not an error.
+func queryLogSnapshot(f querylog.Filter) []querylog.Entry {
+	ring := querylog.Current()
+	if ring == nil {
+		return nil
+	}
+	return ring.Snapshot(f)
 }
 
 func (h *handlers) renderMDNS(w http.ResponseWriter, r *http.Request) {

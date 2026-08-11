@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
 func newTestServer(t *testing.T) http.Handler {
@@ -395,6 +396,53 @@ func TestSettingsSave_CacheLogErrorsTuning(t *testing.T) {
 	}
 }
 
+func TestSettingsSave_QueryLog(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	base := func(extra url.Values) url.Values {
+		form := url.Values{
+			"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+			"plain_enabled": {"on"}, "plain_port": {"53"},
+			"acme_renew_before_days": {"30"},
+		}
+		for k, v := range extra {
+			form[k] = v
+		}
+		return form
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(url.Values{
+		"querylog_enabled":  {"on"},
+		"querylog_capacity": {"2048"},
+	})))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (querylog enabled) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.QueryLog.Enabled || settings.QueryLog.Capacity != 2048 {
+		t.Fatalf("expected querylog enabled with capacity 2048, got: %+v", settings.QueryLog)
+	}
+
+	// Unchecking clears it back to disabled.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(nil)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (querylog cleared) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err = st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.QueryLog.Enabled {
+		t.Fatalf("expected querylog disabled after unchecking, got: %+v", settings.QueryLog)
+	}
+}
+
 func TestSettingsSave_DoH3Listener(t *testing.T) {
 	svc, st, _ := newService(t)
 	h := NewServer(svc, ":0").Handler
@@ -500,6 +548,74 @@ func TestMDNSPageDisabledByDefault(t *testing.T) {
 	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/mdns", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "disabled") {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestQueryLogPageDisabledByDefault(t *testing.T) {
+	h := newTestServer(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "disabled") {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestQueryLogPageEnabledShowsEmptyState(t *testing.T) {
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "is disabled") {
+		t.Fatalf("did not expect the disabled message once QueryLog.Enabled is true, got: %s", rec.Body.String())
+	}
+	// No engine running in this test, so querylog.Current() is nil — the page
+	// must still render (empty table), not error.
+	if !strings.Contains(rec.Body.String(), "No queries") {
+		t.Fatalf("expected the empty-state row when the ring is nil, got: %s", rec.Body.String())
+	}
+}
+
+func TestQueryLogGridFragmentFiltersByQName(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(16)
+	ring.Push(querylog.Entry{QName: "nas.home.arpa."})
+	ring.Push(querylog.Entry{QName: "example.com."})
+	querylog.SetCurrent(ring)
+
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?q=home.arpa", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "nas.home.arpa.") {
+		t.Fatalf("expected nas.home.arpa. in filtered grid, got: %s", body)
+	}
+	if strings.Contains(body, "example.com.") {
+		t.Fatalf("did not expect example.com. in a q=home.arpa filtered grid, got: %s", body)
 	}
 }
 

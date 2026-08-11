@@ -12,6 +12,7 @@ const (
 	PathRecords   = "/records"
 	PathSettings  = "/settings"
 	PathMDNS      = "/mdns"
+	PathQueryLog  = "/querylog"
 )
 
 // AppVersion is the running server version, set from internal/version by

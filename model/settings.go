@@ -25,6 +25,18 @@ type Settings struct {
 	// (dev-docs/roadmap.md). All off by default — opt-in instrumentation,
 	// not core behavior.
 	Observability Observability `yaml:"observability" json:"observability"`
+	// QueryLog toggles the querylog plugin (dev-docs/query-log.md): an in-app,
+	// per-query log/stats surface. Off by default like MDNS/Observability.
+	QueryLog QueryLog `yaml:"querylog" json:"querylog"`
+}
+
+// QueryLog configures the querylog plugin (dev-docs/query-log.md).
+type QueryLog struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// Capacity is the in-memory ring buffer's entry count. 0 = the plugin's
+	// own default (plugins/querylog's defaultCapacity) — not user-tunable
+	// unless explicitly set here.
+	Capacity int `yaml:"capacity,omitempty" json:"capacity,omitempty"`
 }
 
 // Observability controls CoreDNS's health/ready/prometheus plugins. Each is

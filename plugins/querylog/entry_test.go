@@ -16,6 +16,9 @@ func TestEntry_ZeroValueIsUsable(t *testing.T) {
 	if e.QName != "" || e.QType != 0 || e.Verdict != "" || e.Source != "" || e.Rcode != 0 || e.Latency != 0 {
 		t.Errorf("zero Entry has unexpected non-zero field: %+v", e)
 	}
+	if e.Listener != "" || e.Proto != "" || e.AuthenticatedData || e.AnswerType != "" {
+		t.Errorf("zero Entry has unexpected non-zero field: %+v", e)
+	}
 }
 
 func TestEntry_FieldsRoundTrip(t *testing.T) {
@@ -29,6 +32,11 @@ func TestEntry_FieldsRoundTrip(t *testing.T) {
 		Source:    "localrecords",
 		Rcode:     0,
 		Latency:   5 * time.Millisecond,
+
+		Listener:          "0.0.0.0:53",
+		Proto:             "udp",
+		AuthenticatedData: true,
+		AnswerType:        "A",
 	}
 
 	if e.Timestamp != now {
@@ -45,5 +53,11 @@ func TestEntry_FieldsRoundTrip(t *testing.T) {
 	}
 	if e.Latency != 5*time.Millisecond {
 		t.Errorf("Latency = %v, want 5ms", e.Latency)
+	}
+	if e.Listener != "0.0.0.0:53" || e.Proto != "udp" {
+		t.Errorf("Listener/Proto = %q/%q, want 0.0.0.0:53/udp", e.Listener, e.Proto)
+	}
+	if !e.AuthenticatedData || e.AnswerType != "A" {
+		t.Errorf("AuthenticatedData/AnswerType = %v/%q, want true/A", e.AuthenticatedData, e.AnswerType)
 	}
 }

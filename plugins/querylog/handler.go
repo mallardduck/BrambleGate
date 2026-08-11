@@ -54,6 +54,8 @@ func (q *QueryLog) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 		Client:    ClientInfo{IP: state.IP(), VLAN: vlan},
 		QName:     state.Name(),
 		QType:     state.QType(),
+		Listener:  state.LocalAddr(),
+		Proto:     state.Proto(),
 	}
 	ctx = NewContext(ctx, entry)
 
@@ -67,6 +69,12 @@ func (q *QueryLog) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	entry.Rcode = rec.Rcode
 	if entry.Source == "" {
 		entry.Verdict, entry.Source = classifyFallback(rec.Rcode, entry.Latency, q.cacheLatencyThreshold())
+	}
+	if rec.Msg != nil {
+		entry.AuthenticatedData = rec.Msg.AuthenticatedData
+		if len(rec.Msg.Answer) > 0 {
+			entry.AnswerType = dns.TypeToString[rec.Msg.Answer[0].Header().Rrtype]
+		}
 	}
 	q.Ring.Push(*entry)
 

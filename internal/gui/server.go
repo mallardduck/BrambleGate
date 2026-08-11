@@ -57,6 +57,8 @@ func NewServer(svc *Service, addr string) *http.Server {
 	r.Post("/mdns/{name}/publish", h.mdnsPublish)
 	r.Post("/mdns/{name}/unpublish", h.mdnsUnpublish)
 	r.Post("/mdns/{name}/promote", h.mdnsPromote)
+	r.Get("/querylog", h.queryLogPage)
+	r.Get("/querylog/grid", h.queryLogGridFragment)
 
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {

@@ -1,0 +1,119 @@
+package ui
+
+import (
+	"fmt"
+
+	"github.com/miekg/dns"
+
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
+)
+
+// QueryLogData is everything the live Query Log page needs to render.
+type QueryLogData struct {
+	Enabled bool
+	Entries []querylog.Entry
+	Filter  querylog.Filter
+}
+
+templ QueryLog(data QueryLogData) {
+	<div>
+		<h1 class="text-xl font-semibold mb-4 flex items-center">
+			Query Log
+			@helpTooltip("Live view of DNS queries as they're answered, polled every 2 seconds from an in-memory ring buffer (not the durable history). Filter by name substring, client IP, or VLAN.")
+		</h1>
+		if !data.Enabled {
+			<p class="text-bramble-muted text-sm">
+				The query log is disabled. Enable it in
+				<a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Settings</a>.
+			</p>
+		} else {
+			<form id="querylog-filters" onsubmit="return false" class="flex flex-wrap gap-4 items-end mb-4">
+				<label class="flex flex-col gap-1 text-sm flex-1 max-w-xs">
+					<span class="text-bramble-muted text-xs">Search</span>
+					<span class="relative">
+						@iconSearch("w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-bramble-muted")
+						<input id="querylog-search" name="q" placeholder="Filter by name…" class="w-full pl-7 pr-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+					</span>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">Client</span>
+					<input id="querylog-client" name="client" placeholder="IP…" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs">VLAN</span>
+					<input id="querylog-vlan" name="vlan" placeholder="VLAN…" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				</label>
+				<span id="querylog-count" class="text-xs text-bramble-muted whitespace-nowrap pb-1.5">{ fmt.Sprintf("%d shown", len(data.Entries)) }</span>
+			</form>
+			<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto">
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase">
+							<th class="px-3 py-2">Time</th>
+							<th class="px-3 py-2">Client</th>
+							<th class="px-3 py-2">Query</th>
+							<th class="px-3 py-2">Verdict</th>
+							<th class="px-3 py-2">Source</th>
+							<th class="px-3 py-2">Rcode</th>
+							<th class="px-3 py-2">Latency</th>
+						</tr>
+					</thead>
+					<tbody
+						id="querylog-grid"
+						hx-get={ PathQueryLog + "/grid" }
+						hx-trigger="every 2s, keyup changed delay:300ms from:#querylog-search, keyup changed delay:300ms from:#querylog-client, keyup changed delay:300ms from:#querylog-vlan"
+						hx-include="#querylog-filters"
+						hx-target="#querylog-grid"
+						hx-swap="innerHTML"
+					>
+						@queryLogRows(data.Entries)
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+// queryLogRows renders just the table body's rows (no count span) — used both
+// for the initial page render and, as the base of QueryLogGrid below, for the
+// auto-refresh/filter fragment.
+templ queryLogRows(entries []querylog.Entry) {
+	for _, e := range entries {
+		@queryLogRow(e)
+	}
+	if len(entries) == 0 {
+		<tr>
+			<td colspan="7" class="px-3 py-4 text-center text-bramble-muted">No queries match.</td>
+		</tr>
+	}
+}
+
+// QueryLogGrid is the response for the auto-refresh/filter poll (see
+// PathQueryLog+"/grid" in internal/gui): rows plus an out-of-band update of
+// the "N shown" count in the filter form above (see querylog-count in
+// QueryLog). Must only be used for that fragment response, never the initial
+// page render.
+templ QueryLogGrid(entries []querylog.Entry) {
+	@queryLogRows(entries)
+	<span id="querylog-count" hx-swap-oob="true" class="text-xs text-bramble-muted whitespace-nowrap pb-1.5">{ fmt.Sprintf("%d shown", len(entries)) }</span>
+}
+
+templ queryLogRow(e querylog.Entry) {
+	<tr class="border-b border-bramble-border last:border-0">
+		<td class="px-3 py-2 font-mono text-xs whitespace-nowrap">{ e.Timestamp.Format("15:04:05.000") }</td>
+		<td class="px-3 py-2">
+			<p class="font-mono text-xs">{ e.Client.IP }</p>
+			if e.Client.VLAN != "" {
+				<p class="text-xs text-bramble-muted">{ e.Client.VLAN }</p>
+			}
+		</td>
+		<td class="px-3 py-2">
+			<p class="font-mono text-sm break-all">{ e.QName }</p>
+			<p class="text-xs text-bramble-muted">{ dns.TypeToString[e.QType] }</p>
+		</td>
+		<td class="px-3 py-2">@tag(e.Verdict, e.Verdict == "local")</td>
+		<td class="px-3 py-2 text-xs">{ e.Source }</td>
+		<td class="px-3 py-2 text-xs">{ dns.RcodeToString[e.Rcode] }</td>
+		<td class="px-3 py-2 text-xs whitespace-nowrap">{ e.Latency.String() }</td>
+	</tr>
+}

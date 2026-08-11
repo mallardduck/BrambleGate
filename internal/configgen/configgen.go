@@ -369,6 +369,10 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPlugi
 	if observability {
 		writeObservability(blk, s)
 	}
+	// querylog runs ahead of mdnsbridge/localrecords per the directive order
+	// (dev-docs/query-log.md) — it must observe the full round trip, including
+	// answers those two plugins produce. Only rendered when enabled.
+	writeQueryLog(blk, s)
 	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
 	// ahead of localrecords per the directive order. Only rendered when enabled.
 	blk.DirectiveIf(s.MDNS.Enabled, "mdnsbridge")
@@ -402,6 +406,22 @@ func writeObservability(blk *corefile.Block, s model.Settings) {
 	blk.DirectiveIf(o.Health, "health :9090")
 	blk.DirectiveIf(o.Ready, "ready :9191")
 	blk.DirectiveIf(o.Prometheus, "prometheus :9153")
+}
+
+// writeQueryLog renders the querylog directive, or omits it entirely when
+// disabled. Bare "querylog" when Capacity is unset (the plugin's own default
+// applies); otherwise a "capacity N" sub-block (dev-docs/query-log.md).
+func writeQueryLog(blk *corefile.Block, s model.Settings) {
+	if !s.QueryLog.Enabled {
+		return
+	}
+	if s.QueryLog.Capacity <= 0 {
+		blk.Directive("querylog")
+		return
+	}
+	blk.SubBlock("querylog", func(inner *corefile.Block) {
+		inner.Directive("capacity %d", s.QueryLog.Capacity)
+	})
 }
 
 // writeCache renders the cache directive, or omits it entirely: cache has no

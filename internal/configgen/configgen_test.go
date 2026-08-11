@@ -553,6 +553,55 @@ func TestRenderMDNSStanzaOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestRenderQueryLogOffByDefault(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out.Corefile), "querylog") {
+		t.Fatalf("querylog should not be rendered when disabled:\n%s", out.Corefile)
+	}
+}
+
+func TestRenderQueryLogBareWhenEnabledNoCapacity(t *testing.T) {
+	s := baseSettings()
+	s.QueryLog.Enabled = true
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf := string(out.Corefile)
+	// One per server block (plain + dot), bare (no capacity sub-block).
+	if strings.Count(cf, "querylog") != 2 {
+		t.Fatalf("querylog should appear in both server blocks when enabled:\n%s", cf)
+	}
+	if strings.Contains(cf, "capacity") {
+		t.Fatalf("querylog should be bare (no capacity sub-block) when Capacity is unset:\n%s", cf)
+	}
+	// Must be rendered ahead of mdnsbridge/localrecords, matching the
+	// dnsserver.Directives chain order (dev-docs/query-log.md).
+	if strings.Index(cf, "querylog") > strings.Index(cf, "localrecords") {
+		t.Fatalf("querylog should be written before localrecords:\n%s", cf)
+	}
+}
+
+func TestRenderQueryLogCapacitySubBlock(t *testing.T) {
+	s := baseSettings()
+	s.QueryLog.Enabled = true
+	s.QueryLog.Capacity = 2048
+	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf := string(out.Corefile)
+	if !strings.Contains(cf, "querylog {") {
+		t.Fatalf("expected a querylog sub-block when Capacity is set:\n%s", cf)
+	}
+	if strings.Count(cf, "capacity 2048") != 2 { // one per server block
+		t.Fatalf("expected 'capacity 2048' in both server blocks:\n%s", cf)
+	}
+}
+
 func TestRenderZoneDataJSON(t *testing.T) {
 	deny := model.VLANOverride{VLAN: "untrusted-wifi", NXDomain: true}
 	rs := model.RecordSet{Records: []model.Record{

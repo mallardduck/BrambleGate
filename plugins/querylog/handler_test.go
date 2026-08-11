@@ -70,6 +70,17 @@ func noopHandler() plugin.Handler {
 	})
 }
 
+func cnameAnswerHandler() plugin.Handler {
+	return plugin.HandlerFunc(func(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.AuthenticatedData = true
+		m.Answer = []dns.RR{coretest.CNAME("git.home.arpa. 300 IN CNAME nas.home.arpa.")}
+		_ = w.WriteMsg(m)
+		return dns.RcodeSuccess, nil
+	})
+}
+
 func TestServeDNS_SelfAttributedAnswer_KeepsDownstreamSourceVerdict(t *testing.T) {
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	q := newTestQueryLog(localAnswerHandler(), fakeClock(start, start.Add(time.Millisecond)))
@@ -101,6 +112,69 @@ func TestServeDNS_SelfAttributedAnswer_KeepsDownstreamSourceVerdict(t *testing.T
 	}
 	if e.Latency != time.Millisecond {
 		t.Errorf("Latency = %v, want 1ms", e.Latency)
+	}
+}
+
+func TestServeDNS_CapturesListenerAndProto(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	q := newTestQueryLog(noopHandler(), fakeClock(start, start))
+
+	if _, err := q.ServeDNS(context.Background(), &coretest.ResponseWriter{}, mustQuestion("a.example.com.")); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+
+	got := q.Ring.Snapshot(Filter{})[0]
+	if got.Listener != "127.0.0.1:53" || got.Proto != "udp" {
+		t.Errorf("Listener/Proto = %q/%q, want 127.0.0.1:53/udp", got.Listener, got.Proto)
+	}
+}
+
+func TestServeDNS_CapturesListenerAndProto_TCP(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	q := newTestQueryLog(noopHandler(), fakeClock(start, start))
+
+	w := &coretest.ResponseWriter{TCP: true}
+	if _, err := q.ServeDNS(context.Background(), w, mustQuestion("a.example.com.")); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+
+	got := q.Ring.Snapshot(Filter{})[0]
+	if got.Proto != "tcp" {
+		t.Errorf("Proto = %q, want tcp", got.Proto)
+	}
+}
+
+func TestServeDNS_CapturesAuthenticatedDataAndAnswerType(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	q := newTestQueryLog(cnameAnswerHandler(), fakeClock(start, start))
+
+	if _, err := q.ServeDNS(context.Background(), &coretest.ResponseWriter{}, mustQuestion("git.home.arpa.")); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+
+	got := q.Ring.Snapshot(Filter{})[0]
+	if !got.AuthenticatedData {
+		t.Error("AuthenticatedData = false, want true (handler set AD on the reply)")
+	}
+	if got.AnswerType != "CNAME" {
+		t.Errorf("AnswerType = %q, want CNAME", got.AnswerType)
+	}
+}
+
+func TestServeDNS_NXDOMAIN_AnswerTypeEmpty(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	q := newTestQueryLog(nxdomainHandler(), fakeClock(start, start))
+
+	if _, err := q.ServeDNS(context.Background(), &coretest.ResponseWriter{}, mustQuestion("nope.example.com.")); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+
+	got := q.Ring.Snapshot(Filter{})[0]
+	if got.AnswerType != "" {
+		t.Errorf("AnswerType = %q, want empty (no answer records)", got.AnswerType)
+	}
+	if got.AuthenticatedData {
+		t.Error("AuthenticatedData = true, want false (handler did not set AD)")
 	}
 }
 
