@@ -41,6 +41,7 @@ func NewServer(svc *Service, addr string) *http.Server {
 	// Server-rendered dashboard (internal/gui/ui): full pages on a plain GET,
 	// just the inner fragment on an htmx request (see render() in handlers_ui.go).
 	r.Get("/", h.dashboardPage)
+	r.Get("/dashboard/activity", h.dashboardActivityFragment)
 	r.Get("/records", h.recordsPage)
 	r.Post("/records", h.recordsCreate)
 	r.Get("/records/{name}/{type}/edit", h.recordsEdit)

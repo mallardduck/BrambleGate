@@ -15,6 +15,12 @@ require (
 )
 
 require (
+	github.com/ebitengine/purego v0.10.0 // indirect
+	github.com/tursodatabase/turso-go-platform-libs v0.7.2 // indirect
+	turso.tech/database/tursogo v0.7.2 // indirect
+)
+
+require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -33,7 +39,6 @@ require (
 	github.com/quic-go/quic-go v0.61.0 // indirect
 	github.com/vishvananda/netlink v1.3.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
-	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect

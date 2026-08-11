@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -20,14 +21,22 @@ import (
 // render writes page as the full document (wrapped in ui.Base) for a normal
 // navigation, or as a bare fragment for an htmx request — htmx swaps the
 // fragment into #content, so it must not repeat the surrounding chrome.
-func render(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component) {
+//
+// extraHead is page-specific <head> content (e.g. the Dashboard's Chart.js
+// tags) — variadic purely so every existing render(...) call site compiles
+// unchanged; at most the first value is used.
+func render(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, extraHead ...templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.Header.Get("HX-Request") == "true" {
 		_ = page.Render(r.Context(), w)
 		return
 	}
+	var head templ.Component
+	if len(extraHead) > 0 {
+		head = extraHead[0]
+	}
 	ctx := templ.WithChildren(r.Context(), page)
-	_ = ui.Base(title, active).Render(ctx, w)
+	_ = ui.Base(title, active, head).Render(ctx, w)
 }
 
 // renderError is render plus an out-of-band error toast (see ui.Toast):
@@ -42,6 +51,15 @@ func renderError(w http.ResponseWriter, r *http.Request, title, active string, p
 }
 
 // --- Dashboard ---------------------------------------------------------
+
+// dashboardStatsWindow/dashboardTopN are the Activity section's fixed
+// top-N lookback and size (dev-docs/roadmap.md's Phase 7c defaults) — not
+// yet user-configurable; see query-log.md's Phase 7c design notes on
+// revisiting this once a GUI control is worth adding.
+const (
+	dashboardStatsWindow = 24 * time.Hour
+	dashboardTopN        = 10
+)
 
 func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.Settings()
@@ -70,7 +88,52 @@ func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
 		Cert:            h.svc.ACMEStatus(),
 		ACMESelfRecords: selfRecords,
 	}
-	render(w, r, "Dashboard", ui.PathDashboard, ui.Dashboard(data))
+	var extraHead templ.Component
+	if settings.QueryLog.Enabled {
+		data.Activity = dashboardActivityData(r)
+		extraHead = ui.DashboardExtraHead()
+	}
+	render(w, r, "Dashboard", ui.PathDashboard, ui.Dashboard(data), extraHead)
+}
+
+// dashboardActivityFragment serves the Activity section's 60s poll (see
+// ui.DashboardActivity's hx-trigger) — a plain fragment response, same
+// shape as queryLogGridFragment.
+func (h *handlers) dashboardActivityFragment(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.svc.Settings()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if !settings.QueryLog.Enabled {
+		_ = ui.Dashboard(ui.DashboardData{Settings: settings}).Render(r.Context(), w)
+		return
+	}
+	_ = ui.DashboardActivity(dashboardActivityData(r)).Render(r.Context(), w)
+}
+
+// dashboardActivityData reads querylog.CurrentLog() for the Dashboard's
+// Activity section. TopDomains/TopClients share one underlying
+// "is Store configured" check (Log.TopDomains/TopClients, plugins/querylog/
+// log.go) — a failed TopDomains lookup means TopClients would fail the same
+// way, so StoreConfigured is set from the first and TopClients is only
+// attempted when it succeeded, rather than treating the two as independent
+// failures.
+func dashboardActivityData(r *http.Request) ui.DashboardActivityData {
+	log := querylog.CurrentLog()
+	data := ui.DashboardActivityData{
+		Totals: log.Totals(),
+		Series: log.RecentSeries(),
+	}
+	top, err := log.TopDomains(r.Context(), dashboardStatsWindow, dashboardTopN)
+	if err != nil {
+		return data
+	}
+	data.StoreConfigured = true
+	data.TopDomains = top
+	data.TopClients, _ = log.TopClients(r.Context(), dashboardStatsWindow, dashboardTopN)
+	return data
 }
 
 // --- Records -------------------------------------------------------------

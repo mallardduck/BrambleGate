@@ -1,0 +1,301 @@
+package ui
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+
+	"github.com/miekg/dns"
+
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
+)
+
+// DashboardActivityData is the Dashboard's Activity section (dev-docs/
+// query-log.md's Phase 7d) — everything sourced from querylog.CurrentLog().
+// Zero-value when Query Log is disabled; Dashboard only reads it when
+// data.Settings.QueryLog.Enabled is true.
+type DashboardActivityData struct {
+	Totals querylog.Totals
+	Series []querylog.Bucket
+	// TopDomains/TopClients/StoreConfigured: TopDomains/TopClients are only
+	// populated when Query Log's durable Store is on (Phase 7b) — the cheap
+	// rollups above work regardless. StoreConfigured gates whether the
+	// top-N cards show data or a "turn persistence on" note; it's one flag
+	// rather than two since both queries share the same underlying
+	// Store-configured check (Log.TopDomains/TopClients, log.go).
+	TopDomains      []querylog.DomainCount
+	TopClients      []querylog.ClientCount
+	StoreConfigured bool
+}
+
+// DashboardExtraHead is the Dashboard page's extra <head> content (see
+// ui.Base's extraHead parameter) — Chart.js plus this project's own
+// lifecycle glue (static/js/charts.js), loaded only here rather than
+// globally, since no other page uses charts.
+templ DashboardExtraHead() {
+	<script src="/static/js/chart.umd.min.js"></script>
+	<script src="/static/js/charts.js"></script>
+}
+
+// DashboardActivity is both the Dashboard page's initial Activity section
+// and the response for its own 60s poll (dev-docs/query-log.md: "slower
+// poll than the live log, seconds-to-minutes, summary data not a live
+// feed") — a full outerHTML self-replace, same shape as Query Log's grid
+// fragment (querylog.templ), so re-fetched chart data always ships with a
+// fresh set of canvases for charts.js's htmx:afterSwap hook to pick up.
+templ DashboardActivity(data DashboardActivityData) {
+	<div id="dashboard-activity" class="mb-8" hx-get={ PathDashboardActivity } hx-trigger="every 60s" hx-swap="outerHTML">
+		<h2 class="text-lg font-heading font-semibold mb-4 flex items-center">
+			Activity
+			@helpTooltip("Traffic stats since this process started (not since install) — refreshed every 60s. Distinct from the Query Log page, which shows individual queries in near-real-time.")
+		</h2>
+		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+			@activityTile("Total queries", fmt.Sprintf("%d", data.Totals.Queries))
+			@activityTile("Cache hit rate", pctLabel(data.Totals.BySource["cache"], data.Totals.Queries))
+			@activityTile("Answered locally", pctLabel(data.Totals.BySource["localrecords"]+data.Totals.BySource["mdnsbridge"], data.Totals.Queries))
+			@activityTile("Forwarded upstream", pctLabel(data.Totals.BySource["forward"], data.Totals.Queries))
+		</div>
+		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
+			<h3 class="text-sm font-semibold mb-3">Queries — last 24h</h3>
+			<div class="h-48">
+				<canvas id="chart-series" data-chart="timeseries" data-payload={ seriesPayload(data.Series) }></canvas>
+			</div>
+		</div>
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+			<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+				<h3 class="text-sm font-semibold mb-3">Sources</h3>
+				<div class="h-48">
+					<canvas id="chart-sources" data-chart="doughnut" data-payload={ countsPayload(foldOther(sortedCounts(data.Totals.BySource), 6), sourceLabel) }></canvas>
+				</div>
+			</div>
+			<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+				<h3 class="text-sm font-semibold mb-3">Query types</h3>
+				<div class="h-48">
+					<canvas id="chart-qtypes" data-chart="doughnut" data-payload={ qtypeCountsPayload(data.Totals.ByQType) }></canvas>
+				</div>
+			</div>
+		</div>
+		@vlanBreakdown(data.Totals.ByVLAN, data.Totals.Queries)
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			@topDomainsCard(data)
+			@topClientsCard(data)
+		</div>
+	</div>
+}
+
+// dashboardActivityDisabled is a slim CTA shown in place of the Activity
+// section when Query Log is off — mirrors Query Log page's own disabled
+// message (querylog.templ) rather than rendering an empty/broken section.
+templ dashboardActivityDisabled() {
+	<div class="mb-8 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+		<h2 class="text-sm font-semibold mb-1">Activity</h2>
+		<p class="text-bramble-muted text-sm">
+			Enable Query Log in <a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Settings</a> to see traffic stats here.
+		</p>
+	</div>
+}
+
+templ activityTile(label, value string) {
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+		<p class="text-xs text-bramble-primary uppercase tracking-wide">{ label }</p>
+		<p class="text-2xl font-heading font-semibold mt-1 tabular-nums">{ value }</p>
+	</div>
+}
+
+templ vlanBreakdown(byVLAN map[string]int64, total int64) {
+	if len(byVLAN) > 0 {
+		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
+			<h3 class="text-sm font-semibold mb-3">Queries by VLAN</h3>
+			<div class="flex flex-col gap-2">
+				for _, lc := range sortedCounts(byVLAN) {
+					@vlanBar(lc, total)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ vlanBar(lc labelCount, total int64) {
+	<div class="flex items-center gap-3 text-sm">
+		<span class="w-24 truncate shrink-0">{ vlanBarLabel(lc.Label) }</span>
+		<div class="flex-1 h-2 rounded bg-bramble-bg-input overflow-hidden">
+			<div class="h-full bg-bramble-primary" style={ fmt.Sprintf("width:%.1f%%", barPct(lc.Count, total)) }></div>
+		</div>
+		<span class="w-10 text-right text-xs text-bramble-muted tabular-nums shrink-0">{ fmt.Sprintf("%d", lc.Count) }</span>
+	</div>
+}
+
+templ topDomainsCard(data DashboardActivityData) {
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+		<h3 class="text-sm font-semibold mb-3">Top domains (24h)</h3>
+		if !data.StoreConfigured {
+			@statsStoreDisabledNote()
+		} else if len(data.TopDomains) == 0 {
+			<p class="text-bramble-muted text-sm">No queries yet.</p>
+		} else {
+			<table class="w-full text-sm">
+				<tbody>
+					for _, d := range data.TopDomains {
+						<tr class="border-b border-bramble-border last:border-0">
+							<td class="px-2 py-1.5 font-mono text-xs break-all">{ d.QName }</td>
+							<td class="px-2 py-1.5 text-right text-xs tabular-nums text-bramble-muted">{ fmt.Sprintf("%d", d.Count) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ topClientsCard(data DashboardActivityData) {
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+		<h3 class="text-sm font-semibold mb-3">Top clients (24h)</h3>
+		if !data.StoreConfigured {
+			@statsStoreDisabledNote()
+		} else if len(data.TopClients) == 0 {
+			<p class="text-bramble-muted text-sm">No queries yet.</p>
+		} else {
+			<table class="w-full text-sm">
+				<tbody>
+					for _, c := range data.TopClients {
+						<tr class="border-b border-bramble-border last:border-0">
+							<td class="px-2 py-1.5">
+								<p class="font-mono text-xs">{ c.ClientIP }</p>
+								if c.VLAN != "" {
+									<p class="text-xs text-bramble-muted">{ c.VLAN }</p>
+								}
+							</td>
+							<td class="px-2 py-1.5 text-right text-xs tabular-nums text-bramble-muted">{ fmt.Sprintf("%d", c.Count) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ statsStoreDisabledNote() {
+	<p class="text-bramble-muted text-sm">
+		Enable Query Log persistence in <a href={ templ.SafeURL(PathSettings) } class="text-bramble-primary hover:underline">Settings</a> to see this.
+	</p>
+}
+
+// --- data shaping (plain Go, no chart config/color — that's charts.js's job) ---
+
+// labelCount is a generic (label, count) pair, sorted descending by count
+// for chart/list display — used for BySource/ByVLAN/ByQType alike.
+type labelCount struct {
+	Label string
+	Count int64
+}
+
+func sortedCounts(m map[string]int64) []labelCount {
+	out := make([]labelCount, 0, len(m))
+	for k, v := range m {
+		out = append(out, labelCount{Label: k, Count: v})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Label < out[j].Label
+	})
+	return out
+}
+
+// foldOther caps a sorted-descending []labelCount at max entries, summing
+// the remainder into a trailing "Other" — keeps doughnut charts within the
+// categorical palette's well-validated slot count (dataviz skill: the
+// default 8-hue order validates every *adjacent* pair, which includes the
+// wraparound pair on a ring chart; capping at 6 stays comfortably inside
+// that, and Pi-hole's own dashboard folds long tails the same way).
+func foldOther(counts []labelCount, max int) []labelCount {
+	if len(counts) <= max {
+		return counts
+	}
+	out := append([]labelCount{}, counts[:max-1]...)
+	var other int64
+	for _, c := range counts[max-1:] {
+		other += c.Count
+	}
+	return append(out, labelCount{Label: "Other", Count: other})
+}
+
+// vlanBarLabel: an empty VLAN means "the client's address matched no
+// configured VLAN" (querylog.ClientInfo's own doc comment) — shown as
+// "(none)" rather than a blank bar label.
+func vlanBarLabel(vlan string) string {
+	if vlan == "" {
+		return "(none)"
+	}
+	return vlan
+}
+
+func pctLabel(part, total int64) string {
+	if total == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%.0f%%", 100*float64(part)/float64(total))
+}
+
+func barPct(count, total int64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return 100 * float64(count) / float64(total)
+}
+
+// chartPayload is the JSON shape charts.js expects in a canvas's
+// data-payload attribute — plain data only, no color/config (see
+// static/js/charts.js's module doc comment for why that split exists).
+type chartPayload struct {
+	Labels []string `json:"labels"`
+	Values []int64  `json:"values"`
+}
+
+func seriesPayload(buckets []querylog.Bucket) string {
+	p := chartPayload{Labels: make([]string, len(buckets)), Values: make([]int64, len(buckets))}
+	for i, b := range buckets {
+		p.Labels[i] = b.Start.Format("15:04")
+		p.Values[i] = b.Count
+	}
+	return mustJSON(p)
+}
+
+// countsPayload renders counts as a chartPayload, optionally relabeling
+// each key (e.g. querylog's raw Source values -> sourceLabel's friendlier
+// text) — labelFn nil means "use the label as-is" (QType is already
+// relabeled to its RR type name before this is called, see
+// qtypeCountsPayload).
+func countsPayload(counts []labelCount, labelFn func(string) string) string {
+	p := chartPayload{}
+	for _, c := range counts {
+		lbl := c.Label
+		if labelFn != nil {
+			lbl = labelFn(lbl)
+		}
+		p.Labels = append(p.Labels, lbl)
+		p.Values = append(p.Values, c.Count)
+	}
+	return mustJSON(p)
+}
+
+func qtypeCountsPayload(byQType map[uint16]int64) string {
+	m := make(map[string]int64, len(byQType))
+	for k, v := range byQType {
+		name := dns.TypeToString[k]
+		if name == "" {
+			name = fmt.Sprintf("TYPE%d", k)
+		}
+		m[name] += v
+	}
+	return countsPayload(foldOther(sortedCounts(m), 6), nil)
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}

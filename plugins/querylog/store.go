@@ -3,6 +3,7 @@ package querylog
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -94,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_queries_ts_unix_ms ON queries(ts_unix_ms);
 // goroutines. Call Close when done.
 func OpenStore(cfg StoreConfig) (*Store, error) {
 	if cfg.Path == "" {
-		return nil, fmt.Errorf("querylog: store path is required")
+		return nil, errors.New("querylog: store path is required")
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.Path), 0o755); err != nil {
 		return nil, fmt.Errorf("querylog: create store dir: %w", err)
@@ -104,15 +105,16 @@ func OpenStore(cfg StoreConfig) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querylog: open store: %w", err)
 	}
-	// A single native connection: this phase only writes, from one
 	// A small connection pool: one writer goroutine plus a few concurrent
 	// readers (Phase 7c's TopDomains/TopClients/Series, queried from GUI
 	// request goroutines). WAL mode (set just below) is what makes this
 	// safe — SQLite-compatible readers don't block behind the writer.
 	db.SetMaxOpenConns(4)
 
+	// No request-scoped context exists yet at open time.
+	setupCtx := context.Background()
 	for _, stmt := range []string{schemaSQL, `PRAGMA journal_mode=WAL`, `PRAGMA synchronous=NORMAL`} {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(setupCtx, stmt); err != nil {
 			_ = db.Close()
 			return nil, fmt.Errorf("querylog: prepare store: %w", err)
 		}
@@ -191,7 +193,7 @@ func (s *Store) run(ctx context.Context) {
 
 	// Bound the store immediately after opening, e.g. a shrunk retention
 	// setting taking effect right away rather than waiting a full interval.
-	s.prune()
+	s.prune(ctx)
 
 	flushTicker := time.NewTicker(s.currentFlushInterval())
 	defer flushTicker.Stop()
@@ -199,11 +201,11 @@ func (s *Store) run(ctx context.Context) {
 	defer pruneTicker.Stop()
 
 	batch := make([]Entry, 0, storeFlushBatchSize)
-	flush := func() {
+	flush := func(fctx context.Context) {
 		if len(batch) == 0 {
 			return
 		}
-		if err := s.insertBatch(batch); err != nil {
+		if err := s.insertBatch(fctx, batch); err != nil {
 			slog.Warn("querylog: store write failed", "err", err, "entries", len(batch))
 		}
 		batch = batch[:0]
@@ -214,18 +216,22 @@ func (s *Store) run(ctx context.Context) {
 		case e := <-s.write:
 			batch = append(batch, e)
 			if len(batch) >= storeFlushBatchSize {
-				flush()
+				flush(ctx)
 			}
 		case <-flushTicker.C:
-			flush()
+			flush(ctx)
 			// FlushInterval is tunable at runtime (SetTuning) — resync the
 			// ticker in case it changed since it was last read.
 			flushTicker.Reset(s.currentFlushInterval())
 		case <-pruneTicker.C:
-			s.prune()
+			s.prune(ctx)
 		case <-ctx.Done():
 			s.drain(&batch)
-			flush()
+			// ctx is already canceled here — using it for the final flush
+			// would make every write fail right when Close's "flush what's
+			// buffered" guarantee matters most. A fresh context decouples
+			// this last write from the cancellation signal that triggered it.
+			flush(context.Background())
 			return
 		}
 	}
@@ -254,18 +260,18 @@ const insertSQL = `INSERT INTO queries (
 	latency_us, listener, proto, authenticated_data, answer_type
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-func (s *Store) insertBatch(batch []Entry) error {
-	tx, err := s.db.Begin()
+func (s *Store) insertBatch(ctx context.Context, batch []Entry) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(insertSQL)
+	stmt, err := tx.PrepareContext(ctx, insertSQL)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	for _, e := range batch {
-		if _, err := stmt.Exec(
+		if _, err := stmt.ExecContext(ctx,
 			e.Timestamp.UnixMilli(), e.Client.IP, e.Client.VLAN, e.QName, e.QType,
 			e.Verdict, e.Source, e.Rcode, e.Latency.Microseconds(),
 			e.Listener, e.Proto, boolToInt(e.AuthenticatedData), e.AnswerType,
@@ -293,9 +299,9 @@ func boolToInt(b bool) int {
 // still exceeds the configured row cap, the oldest excess rows — mirrors
 // Pi-hole/FTL's MAXDBDAYS (dev-docs/query-log.md), a backstop against
 // sustained QPS outrunning the age-based prune before it next runs.
-func (s *Store) prune() {
+func (s *Store) prune(ctx context.Context) {
 	cutoff := time.Now().AddDate(0, 0, -int(s.retentionDays.Load())).UnixMilli()
-	if _, err := s.db.Exec(`DELETE FROM queries WHERE ts_unix_ms < ?`, cutoff); err != nil {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM queries WHERE ts_unix_ms < ?`, cutoff); err != nil {
 		slog.Warn("querylog: prune by age failed", "err", err)
 		return
 	}
@@ -304,7 +310,7 @@ func (s *Store) prune() {
 	// If there are maxRows or fewer rows, the subquery returns no row and
 	// "id <= NULL" is never true, so this is a no-op — no separate count
 	// check needed.
-	if _, err := s.db.Exec(
+	if _, err := s.db.ExecContext(ctx,
 		`DELETE FROM queries WHERE id <= (SELECT id FROM queries ORDER BY id DESC LIMIT 1 OFFSET ?)`,
 		s.maxRows.Load(),
 	); err != nil {

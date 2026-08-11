@@ -22,6 +22,10 @@ type DashboardData struct {
 	// off/unconfigured, or when nothing was detected (e.g. bridge-mode
 	// deployments). See Service.ACMESelfRecords.
 	ACMESelfRecords []model.Record
+	// Activity is the query-log stats section (dashboard_stats.templ,
+	// Phase 7d) — zero-value and unused when Settings.QueryLog.Enabled is
+	// false; handlers_ui.go only populates it when true.
+	Activity DashboardActivityData
 }
 
 // IsDefaultUpstream reports whether the upstream forwarder is still the
@@ -44,6 +48,12 @@ templ Dashboard(data DashboardData) {
 			</a>
 		</div>
 	}
+	if data.Settings.QueryLog.Enabled {
+		@DashboardActivity(data.Activity)
+	} else {
+		@dashboardActivityDisabled()
+	}
+	<h2 class="text-lg font-heading font-semibold mb-4">System</h2>
 	<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 		@statCard("Records", fmt.Sprintf("%d", data.RecordCount), PathRecords)
 		@statCard("VLANs", fmt.Sprintf("%d", len(data.Settings.VLANs)), PathSettings)

@@ -117,7 +117,7 @@ func TestCloseStore_FlushesAndClearsSingleton(t *testing.T) {
 
 	db := reopenForVerification(t, dbPath)
 	var got int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
 		t.Fatalf("count rows: %v", err)
 	}
 	if got != 1 {

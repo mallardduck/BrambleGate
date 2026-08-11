@@ -157,11 +157,11 @@ func (l *Log) Series(ctx context.Context, from, to time.Time, bucket time.Durati
 		return nil, ErrStoreNotConfigured
 	}
 	if !to.After(from) {
-		return nil, fmt.Errorf("querylog: series: to must be after from")
+		return nil, errors.New("querylog: series: to must be after from")
 	}
 	bucketMs := bucket.Milliseconds()
 	if bucketMs <= 0 {
-		return nil, fmt.Errorf("querylog: series: bucket must be positive")
+		return nil, errors.New("querylog: series: bucket must be positive")
 	}
 
 	fromMs, toMs := from.UnixMilli(), to.UnixMilli()
@@ -190,7 +190,7 @@ func (l *Log) Series(ctx context.Context, from, to time.Time, bucket time.Durati
 	lastBucket := (toMs - 1) / bucketMs
 	n := int(lastBucket - fromBucket + 1)
 	out := make([]Bucket, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		b := fromBucket + int64(i)
 		out[i] = Bucket{
 			Start: time.UnixMilli(b * bucketMs).UTC(),

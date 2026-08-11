@@ -3,7 +3,12 @@ package ui
 // Base is the root document: nav + content slot + footer. Used for full-page
 // (non-htmx) requests; htmx fragment requests render just the inner
 // templ.Component and skip this wrapper (see internal/gui/handlers_ui.go).
-templ Base(title string, active string) {
+//
+// extraHead is page-specific <head> content (currently just the Dashboard's
+// Chart.js + charts.js tags — see DashboardExtraHead in dashboard_stats.templ)
+// — nil for every page that doesn't need it, so e.g. Chart.js's ~200KB isn't
+// loaded on Records/Settings/mDNS for a feature only Dashboard uses.
+templ Base(title string, active string, extraHead templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en" class="h-full">
 		<head>
@@ -16,6 +21,9 @@ templ Base(title string, active string) {
 			<script src="/static/js/htmx.min.js"></script>
 			<script src="/static/js/theme.js"></script>
 			<script src="/static/js/toast.js"></script>
+			if extraHead != nil {
+				@extraHead
+			}
 		</head>
 		<body class="h-full bg-bramble-bg text-bramble-text flex flex-col">
 			@Topbar(active)

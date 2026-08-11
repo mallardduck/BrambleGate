@@ -127,7 +127,7 @@ func (s *statsRollup) recentSeries(now time.Time) []Bucket {
 	nowEpoch := bucketEpoch(now, s.bucketWidth)
 
 	out := make([]Bucket, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		epoch := nowEpoch - int64(n-1-i)*widthSec
 		idx := bucketIndex(epoch, s.bucketWidth, n)
 		b := s.buckets[idx]

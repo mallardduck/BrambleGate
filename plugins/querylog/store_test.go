@@ -29,7 +29,7 @@ func waitForRowCount(t *testing.T, s *Store, want int) {
 	deadline := time.Now().Add(2 * time.Second)
 	var got int
 	for time.Now().Before(deadline) {
-		if err := s.db.QueryRow(`SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
+		if err := s.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
 			t.Fatalf("count rows: %v", err)
 		}
 		if got == want {
@@ -58,7 +58,7 @@ func TestOpenStore_CreatesFileAndSchema(t *testing.T) {
 	s := openTestStore(t, StoreConfig{Path: dbPath})
 
 	var name string
-	if err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='queries'`).Scan(&name); err != nil {
+	if err := s.db.QueryRowContext(t.Context(), `SELECT name FROM sqlite_master WHERE type='table' AND name='queries'`).Scan(&name); err != nil {
 		t.Fatalf("expected queries table to exist: %v", err)
 	}
 }
@@ -94,7 +94,7 @@ func TestStore_Close_FlushesBufferedEntries(t *testing.T) {
 
 	db := reopenForVerification(t, dbPath)
 	var got int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
 		t.Fatalf("count rows: %v", err)
 	}
 	if got != 2 {
@@ -132,7 +132,7 @@ func TestStore_Record_RoundTripsFields(t *testing.T) {
 		clientIP, vlan, qname, verdict    string
 		source, listener, proto, atype    string
 	)
-	row := db.QueryRow(`SELECT ts_unix_ms, client_ip, vlan, qname, qtype, verdict, source,
+	row := db.QueryRowContext(t.Context(), `SELECT ts_unix_ms, client_ip, vlan, qname, qtype, verdict, source,
 		rcode, latency_us, listener, proto, authenticated_data, answer_type FROM queries`)
 	if err := row.Scan(&tsMs, &clientIP, &vlan, &qname, &qtype, &verdict, &source,
 		&rcode, &latencyUS, &listener, &proto, &ad, &atype); err != nil {
@@ -167,10 +167,10 @@ func TestStore_PruneByAge(t *testing.T) {
 	waitForRowCount(t, s, 2)
 
 	s.SetTuning(1, 0, 0) // retention: 1 day
-	s.prune()
+	s.prune(t.Context())
 
 	var qname string
-	if err := s.db.QueryRow(`SELECT qname FROM queries`).Scan(&qname); err != nil {
+	if err := s.db.QueryRowContext(t.Context(), `SELECT qname FROM queries`).Scan(&qname); err != nil {
 		t.Fatalf("expected exactly one surviving row: %v", err)
 	}
 	if qname != "new.home.arpa." {
@@ -182,13 +182,13 @@ func TestStore_PruneByMaxRows(t *testing.T) {
 	s := openTestStore(t, StoreConfig{FlushInterval: 10 * time.Millisecond})
 
 	now := time.Now()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		s.Record(Entry{QName: "q", Timestamp: now.Add(time.Duration(i) * time.Second)})
 	}
 	waitForRowCount(t, s, 5)
 
 	s.SetTuning(0, 3, 0) // max_rows: 3
-	s.prune()
+	s.prune(t.Context())
 
 	waitForRowCount(t, s, 3)
 }
@@ -229,7 +229,7 @@ func TestStore_HistorySurvivesReopen(t *testing.T) {
 
 	s2 := openTestStore(t, StoreConfig{Path: dbPath, FlushInterval: time.Hour})
 	var got int
-	if err := s2.db.QueryRow(`SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
+	if err := s2.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM queries`).Scan(&got); err != nil {
 		t.Fatalf("count rows after reopen: %v", err)
 	}
 	if got != 1 {

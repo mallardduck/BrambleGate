@@ -13,6 +13,10 @@ const (
 	PathSettings  = "/settings"
 	PathMDNS      = "/mdns"
 	PathQueryLog  = "/querylog"
+	// PathDashboardActivity is the Dashboard's Activity section's poll
+	// fragment (dev-docs/query-log.md's Phase 7d) — not nested under
+	// PathDashboard ("/") since that's the root path itself.
+	PathDashboardActivity = "/dashboard/activity"
 )
 
 // AppVersion is the running server version, set from internal/version by

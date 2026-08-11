@@ -115,13 +115,13 @@ func TestStatsRollup_ConcurrentObserve(t *testing.T) {
 	s := newStatsRollup(time.Minute, 10)
 	done := make(chan struct{})
 	const n = 100
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			s.observe(Entry{Verdict: "local", Timestamp: time.Now()})
 			done <- struct{}{}
 		}()
 	}
-	for i := 0; i < n; i++ {
+	for range n {
 		<-done
 	}
 	if got := s.totals().Queries; got != n {
