@@ -20,6 +20,26 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /src
+
+# Copy only the go.mod/go.sum of the root module and every module pulled in via
+# its `replace` directives, and prime the module cache, before copying any
+# other source. Docker/BuildKit caches this layer by the content of just these
+# files, so editing application code elsewhere in the repo doesn't bust it —
+# `go mod download` only fetches external deps (the local `replace` targets
+# aren't downloaded, just resolved from the go.mod files copied here).
+COPY go.mod go.sum ./
+COPY mdnssd/go.mod mdnssd/go.sum mdnssd/
+COPY model/go.mod model/
+COPY pluginreg/go.mod pluginreg/
+COPY plugins/localrecords/go.mod plugins/localrecords/go.sum plugins/localrecords/
+COPY plugins/mdnsbridge/go.mod plugins/mdnsbridge/go.sum plugins/mdnsbridge/
+COPY plugins/querylog/go.mod plugins/querylog/go.sum plugins/querylog/
+COPY plugins/vlancache/go.mod plugins/vlancache/go.sum plugins/vlancache/
+COPY vlanmatch/go.mod vlanmatch/
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
 COPY . .
 
 # Version metadata for internal/version, passed in by CI (see
@@ -32,7 +52,16 @@ ARG BUILD_DATE=unknown
 # The root is the entrypoint module; its go.mod `replace` directives pull in
 # engine/, plugins/*, model/, store/, configgen/ from disk. go.work is excluded
 # from the build context (.dockerignore) so this is a plain-module build.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+#
+# Both cache mounts persist across builds independent of layer invalidation
+# (unlike a COPY-based cache, which is invalidated whenever COPY . . above
+# picks up any source change): /go/pkg/mod holds downloaded module sources,
+# and /root/.cache/go-build holds compiled package objects, so unchanged
+# vendor/dependency packages don't get recompiled just because application
+# code changed.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w \
       -X github.com/mallardduck/BrambleGate/internal/version.Version=${VERSION} \
       -X github.com/mallardduck/BrambleGate/internal/version.GitCommit=${GIT_COMMIT} \
