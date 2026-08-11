@@ -92,3 +92,57 @@ h2, h3, h4, h5, h6 {
   background-color: var(--color-bramble-bg-card2);
   color: var(--color-bramble-primary);
 }
+
+/* Help-tooltip popover typography (see internal/gui/ui/help_tooltip.templ).
+   The popover is a DOM descendant of wherever its trigger gets called from
+   — an <h1> (its own font-heading + font-weight:600), an uppercase table
+   header, a nowrap-styled span, etc. — so without an explicit reset here
+   it inherits whatever typographic properties that ancestor happens to
+   set, making the same tooltip render differently depending on where it's
+   used. Pin the properties Tailwind's utility classes on the popover don't
+   already cover (font-size/line-height/color are set via text-xs,
+   leading-relaxed, text-bramble-text) so every tooltip reads the same
+   regardless of callsite. */
+.help-tooltip-popover {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-style: normal;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  text-decoration-line: none;
+}
+
+/* Help-tooltip popover placement (see internal/gui/ui/help_tooltip.templ).
+   Each trigger span carries a unique `anchor-name` (set inline per
+   instance); this rule anchors the popover to it via `position-anchor`, so
+   placement doesn't depend on a shared ancestor's `position: relative` and
+   isn't clipped by a scrolling ancestor (e.g. a table's overflow-x-auto
+   wrapper) the way a plain `position: absolute` popover would be.
+
+   Primary placement centers the popover above the icon; the
+   position-try-fallbacks list lets the browser flip to whichever of
+   below / left-aligned / right-aligned actually fits when the default
+   would overflow the viewport — no JS, no per-callsite tuning. */
+@supports (anchor-name: --a) and (position-try-fallbacks: flip-block) {
+  .help-tooltip-popover {
+    position: fixed;
+    position-area: top;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    margin: 0 0 0.375rem 0;
+  }
+}
+
+/* Fallback for browsers without CSS anchor positioning (e.g. Safari, as of
+   this writing): the pre-anchor-positioning behavior — centered directly
+   under the icon, no viewport-edge avoidance, but never broken/blank. */
+@supports not ((anchor-name: --a) and (position-try-fallbacks: flip-block)) {
+  .help-tooltip-popover {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    translate: -50% 0;
+    margin-bottom: 0.375rem;
+  }
+}

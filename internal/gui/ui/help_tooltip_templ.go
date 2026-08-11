@@ -8,6 +8,24 @@ package ui
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import (
+	"fmt"
+	"sync/atomic"
+)
+
+// helpTooltipSeq hands out a process-wide-unique id per helpTooltip
+// instance rendered, reused both as the popover's `id` (for
+// aria-describedby, see below) and as the CSS anchor-name it exposes for
+// positioning (see .help-tooltip-popover in static-src/input.css) — each
+// trigger/popover pair needs a distinct anchor-name, since reusing one
+// across multiple tooltips on the same page would make every popover
+// anchor to whichever instance the browser picks, not its own trigger.
+// Collisions only matter within a single rendered page, so a plain
+// ever-incrementing counter is fine: it never needs to reset, and staying
+// unique across concurrent requests too is a harmless side effect, not a
+// requirement we rely on.
+var helpTooltipSeq atomic.Uint64
+
 // helpTooltip is the early-2000s-style "?" contextual help affordance: a
 // small circular button that reveals a verbose explanation on hover, focus,
 // or click/tap. CSS-only (Tailwind's group-hover/group-focus-within
@@ -23,7 +41,34 @@ import templruntime "github.com/a-h/templ/runtime"
 // popover ends up reparented outside it, losing its containing block and
 // rendering at the page's top-left instead of by the "?" icon. A <span>
 // is valid phrasing content, side-steps that entirely, and position:
-// absolute still blockifies it visually, so nothing else changes.
+// absolute/fixed still blockifies it visually, so nothing else changes.
+//
+// Placement is CSS anchor positioning (.help-tooltip-popover in
+// static-src/input.css): the popover anchors to the trigger span via a
+// per-instance `anchor-name`/`position-anchor` pair, defaults to centered
+// above the icon, and flips to whichever side actually fits when that
+// would overflow the viewport — no JS, and no per-callsite layout
+// decisions. Anchor positioning also makes the popover escape any
+// `overflow-x-auto` ancestor (e.g. the records/mDNS/query-log tables),
+// since an anchor-positioned `position: fixed` box is laid out relative to
+// the viewport, not clipped by a scrolling ancestor. Browsers without
+// anchor positioning (Safari, as of this writing) fall back to the old
+// centered-under-the-icon placement via the `@supports not` branch in that
+// same rule — no overflow-avoidance there, but never broken or blank.
+//
+// helpTooltip gets called from inside headings, form labels, and similar
+// name-bearing elements (e.g. mdns.templ's <h1>, or the <label><span> that
+// wraps a field's visible text). Left alone, the popover's verbose
+// explanatory text is a DOM descendant of that element, so it leaks into
+// the accessible name computed for it — a screen reader would read a
+// heading's name as its title plus the entire tooltip body, or worse, read
+// a form field's label (and thus the field itself) the same way.
+// `aria-hidden` on the popover excludes it from that computation
+// regardless of which ancestor it ends up under; `aria-describedby` on the
+// trigger is the standards-sanctioned exception that still resolves
+// through hidden content, so a screen reader user focusing the "?" button
+// gets the full text as a description, just not folded into the parent's
+// name.
 func helpTooltip(text string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -45,7 +90,35 @@ func helpTooltip(text string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<span class=\"relative inline-flex items-center group/help ml-1\"><button type=\"button\" aria-label=\"Help\" class=\"inline-flex items-center justify-center text-bramble-primary cursor-help\">")
+		id := fmt.Sprintf("ht%d", helpTooltipSeq.Add(1))
+		anchorName := "--" + id
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<span class=\"relative inline-flex items-center group/help ml-1\" style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var2 string
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("anchor-name: " + anchorName)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `help_tooltip.templ`, Line: 69, Col: 101}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><button type=\"button\" aria-label=\"Help\" aria-describedby=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `help_tooltip.templ`, Line: 70, Col: 63}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"inline-flex items-center justify-center text-bramble-primary cursor-help\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -53,20 +126,46 @@ func helpTooltip(text string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</button> <span role=\"tooltip\" class=\"invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-64 max-w-[min(16rem,90vw)] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</button> <span id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(text)
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `help_tooltip.templ`, Line: 25, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `help_tooltip.templ`, Line: 73, Col: 15}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span></span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" role=\"tooltip\" aria-hidden=\"true\" class=\"help-tooltip-popover invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 w-64 max-w-[min(16rem,90vw)] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20\" style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("position-anchor: " + anchorName)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `help_tooltip.templ`, Line: 73, Col: 431}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(text)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `help_tooltip.templ`, Line: 74, Col: 9}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</span></span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
