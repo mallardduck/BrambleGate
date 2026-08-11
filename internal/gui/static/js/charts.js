@@ -165,7 +165,14 @@
       } catch (e) {
         return;
       }
-      instances.set(canvas.id, new Chart(canvas, build(payload, theme())));
+      try {
+        instances.set(canvas.id, new Chart(canvas, build(payload, theme())));
+      } catch (e) {
+        // Isolate one bad chart/payload so it can't abort the rest of this
+        // batch (forEach doesn't catch — an uncaught throw here would skip
+        // every canvas still queued after this one).
+        console.error("charts.js: failed to init chart", canvas.id, e);
+      }
     });
   }
 
@@ -177,7 +184,14 @@
       });
     });
   });
-  document.addEventListener("htmx:afterSwap", function (evt) {
-    initCharts(evt.detail.target);
+  // Always re-scan the whole document rather than evt.detail.target: for a
+  // self-triggered outerHTML swap (#dashboard-activity swaps itself),
+  // htmx's reported target can still reference the just-removed node
+  // instead of the freshly inserted one, so scoping the canvas search to it
+  // silently finds nothing and every chart goes blank. destroy-before-
+  // create above is keyed by canvas id, not DOM node identity, so
+  // rescanning the full document on every swap is just as correct.
+  document.addEventListener("htmx:afterSwap", function () {
+    initCharts(document);
   });
 })();
