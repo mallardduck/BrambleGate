@@ -6,9 +6,9 @@ use (
 	.
 	./mdnssd
 	./model
+	./pluginreg
 	./plugins/localrecords
 	./plugins/mdnsbridge
 	./plugins/querylog
-	./pluginreg
 	./vlanmatch
 )
