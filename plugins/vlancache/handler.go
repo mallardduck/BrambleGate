@@ -2,7 +2,9 @@ package vlancache
 
 import (
 	"context"
+	"errors"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
@@ -10,9 +12,15 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/response"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
+
+// errNoUpstreamResponse guards against a Next handler that returns without
+// ever calling WriteMsg — shouldn't happen with well-behaved plugins, but
+// singleflight's shared result must be an error, not a nil *dns.Msg.
+var errNoUpstreamResponse = errors.New("vlancache: upstream produced no response")
 
 // globalBucket is the direct-tier VLAN key used when the requester matched
 // no declared VLAN (or none are declared at all) — every such requester
@@ -41,6 +49,13 @@ type VlanCache struct {
 	vlans   vlanmatch.Table
 	store   *store
 	failTTL time.Duration
+
+	// sf coalesces concurrent misses sharing a key into one upstream call —
+	// see fetch. Without this, a burst of clients asking an identical
+	// question while the first answer is still in flight would all miss the
+	// (still-empty) cache and each fire their own upstream call,
+	// reproducing the very SERVFAIL storm this plugin exists to fix.
+	sf singleflight.Group
 
 	// now is overridable in tests.
 	now func() time.Time
@@ -75,17 +90,119 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		return c.reply(w, r, e, now, do, ad)
 	}
 
-	cw := &responseWriter{
-		ResponseWriter: w,
-		cache:          c,
-		ip:             ip,
-		directKey:      directKey,
-		scopedKey:      scopedKey,
-		do:             do,
-		ad:             ad,
-		now:            now,
+	bucketKey := strconv.FormatUint(directKey, 36)
+	fr, err := c.fetch(ctx, w, bucketKey, directKey, scopedKey, ip, r, now)
+	if err != nil {
+		return dns.RcodeServerFailure, err
 	}
-	return plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, r)
+	if !fr.appliesTo(ip) {
+		// The bucket-wide leader's answer turned out to be scoped narrower
+		// than this requester's address (a per-host upstream policy) —
+		// reusing it would leak a different host's answer. Re-fetch,
+		// coalesced only with other requesters excluded the same way (same
+		// exact IP), instead of forwarding the mismatched answer.
+		ipKey := bucketKey + "|" + ip.String()
+		fr, err = c.fetch(ctx, w, ipKey, directKey, scopedKey, ip, r, now)
+		if err != nil {
+			return dns.RcodeServerFailure, err
+		}
+	}
+	if err := w.WriteMsg(toClientReply(fr.msg, r, do, ad)); err != nil {
+		return dns.RcodeServerFailure, err
+	}
+	return dns.RcodeSuccess, nil
+}
+
+// fetchResult is a singleflight-shared upstream response, annotated with
+// which requesters it's actually valid for — see fetch and appliesTo.
+type fetchResult struct {
+	msg *dns.Msg
+
+	// prefix is nil when msg is safe to hand to every requester in the
+	// bucket verbatim: either the upstream echoed no RFC 7871 scope (the
+	// direct tier's bucket-wide default applies), or the response is a
+	// failure (SERVFAIL and friends are IP-independent — see
+	// project memory on ECS/cache design). When non-nil, msg is only valid
+	// for requesters whose address falls inside prefix.
+	prefix *net.IPNet
+}
+
+// appliesTo reports whether msg is valid for ip: always true for a
+// bucket-wide result, otherwise only when ip falls inside the upstream's
+// echoed scope. A nil ip (shouldn't happen for a real client, but guards
+// against a panic) is treated as covered rather than forced through a
+// second, unkeyable fetch.
+func (fr *fetchResult) appliesTo(ip net.IP) bool {
+	return fr.prefix == nil || ip == nil || fr.prefix.Contains(ip)
+}
+
+// fetch resolves a cache miss, coalescing concurrent callers sharing key
+// into a single upstream call via singleflight — see the sf field doc. Only
+// the first caller to arrive (the "leader") actually invokes Next; everyone
+// else blocks and receives the leader's result share. Sharing across an
+// entire VLAN bucket (key == bucketKey, the common case) matches the direct
+// tier's own validity assumption (doc.go): one answer is valid for the whole
+// bucket by default. But that assumption doesn't hold once the upstream
+// actually echoes a host-specific RFC 7871 scope — ServeDNS checks
+// fr.appliesTo after this returns and re-fetches under a narrower key for
+// any caller the shared result doesn't cover.
+//
+// captureWriter is used instead of the caller's real w for the upstream
+// call: only the leader's goroutine drives Next, but every caller (leader
+// included) must still write its own reply, so the leader's write to the
+// network happens once at the ServeDNS call site above, not inside fetch.
+func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string, directKey, scopedKey uint64, ip net.IP, r *dns.Msg, now time.Time) (*fetchResult, error) {
+	v, err, _ := c.sf.Do(key, func() (any, error) {
+		cw := &captureWriter{ResponseWriter: w}
+		if _, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, r); err != nil {
+			return nil, err
+		}
+		if cw.msg == nil {
+			return nil, errNoUpstreamResponse
+		}
+
+		res := cw.msg
+		mt, _ := response.Typify(res, now)
+		fr := &fetchResult{msg: res}
+		if cacheable(res, mt) {
+			if duration := c.ttlFor(res, mt); duration > 0 {
+				e := newEntry(res, now, duration)
+				// Failures aren't subnet-dependent, so even an upstream that
+				// happens to echo a scope on a SERVFAIL is stored/shared
+				// bucket-wide rather than narrowed.
+				if prefix := scopePrefix(res, ip); prefix != nil && mt != response.ServerError {
+					c.store.setScoped(scopedKey, prefix, e)
+					fr.prefix = prefix
+				} else {
+					c.store.setDirect(directKey, e)
+				}
+			}
+		}
+		return fr, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*fetchResult), nil
+}
+
+// toClientReply tailors res (the shared upstream response) into a reply for
+// req: fresh Id/Question so it matches this specific caller's request, and
+// do/ad mirrored the same way the stock cache plugin and entry.toMsg do
+// (RFC 6840 5.7-5.8). RR TTLs are passed through as received — unlike a
+// cache-hit reply (entry.toMsg), this response was just fetched, so there is
+// no elapsed lifetime to subtract.
+func toClientReply(res, req *dns.Msg, do, ad bool) *dns.Msg {
+	m := res.Copy()
+	m.Id = req.Id
+	if len(req.Question) > 0 {
+		m.Question = req.Question
+	}
+	m.Response = true
+	if !do && !ad {
+		m.AuthenticatedData = false
+	}
+	return m
 }
 
 func (c *VlanCache) reply(w dns.ResponseWriter, r *dns.Msg, e *entry, now time.Time, do, ad bool) (int, error) {
@@ -127,40 +244,21 @@ func clampDuration(d, lo, hi time.Duration) time.Duration {
 	return d
 }
 
-// responseWriter intercepts the upstream reply, decides whether/how to
-// cache it, and writes it through to the original client unchanged.
-type responseWriter struct {
+// captureWriter records the upstream reply instead of writing it to the
+// network. It embeds the leader's real ResponseWriter so downstream plugins
+// (e.g. rewrite edns0 subnet) still see the correct RemoteAddr, but the
+// actual client write happens once at the ServeDNS call site — inside
+// fetch's singleflight closure it would otherwise double-write for the
+// leader and never write at all for the coalesced followers.
+type captureWriter struct {
 	dns.ResponseWriter
-	cache *VlanCache
-
-	ip        net.IP
-	directKey uint64
-	scopedKey uint64
-	do        bool
-	ad        bool
-	now       time.Time
+	msg *dns.Msg
 }
 
 // WriteMsg implements dns.ResponseWriter.
-func (w *responseWriter) WriteMsg(res *dns.Msg) error {
-	res = res.Copy()
-	mt, _ := response.Typify(res, w.now)
-
-	if cacheable(res, mt) {
-		if duration := w.cache.ttlFor(res, mt); duration > 0 {
-			e := newEntry(res, w.now, duration)
-			if prefix := scopePrefix(res, w.ip); prefix != nil {
-				w.cache.store.setScoped(w.scopedKey, prefix, e)
-			} else {
-				w.cache.store.setDirect(w.directKey, e)
-			}
-		}
-	}
-
-	if !w.do && !w.ad {
-		res.AuthenticatedData = false
-	}
-	return w.ResponseWriter.WriteMsg(res)
+func (w *captureWriter) WriteMsg(res *dns.Msg) error {
+	w.msg = res
+	return nil
 }
 
 // cacheable mirrors the stock cache plugin's key() gate: never cache

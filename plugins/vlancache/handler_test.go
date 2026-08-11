@@ -3,6 +3,7 @@ package vlancache
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -153,7 +154,7 @@ func TestConcurrentHerdCoalescesUpstreamCalls(t *testing.T) {
 	start := make(chan struct{})
 	wg.Add(herd)
 	ready.Add(herd)
-	for i := 0; i < herd; i++ {
+	for range herd {
 		go func() {
 			defer wg.Done()
 			ready.Done()
@@ -170,6 +171,210 @@ func TestConcurrentHerdCoalescesUpstreamCalls(t *testing.T) {
 	next.mu.Unlock()
 	if calls != 1 {
 		t.Fatalf("want 1 upstream call for a concurrent herd of identical queries, got %d", calls)
+	}
+}
+
+// bucketNext answers with a payload that encodes which VLAN subnet the
+// upstream believes it's serving, derived from the leader's RemoteAddr (the
+// only client info a coalesced call sees). This lets a test tell whether a
+// coalesced answer that should have stayed VLAN-scoped leaked across buckets.
+type bucketNext struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (b *bucketNext) Name() string { return "bucket" }
+
+func (b *bucketNext) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	b.mu.Lock()
+	b.calls++
+	b.mu.Unlock()
+
+	time.Sleep(50 * time.Millisecond)
+
+	answerIP := "192.0.2.10" // trusted
+	if strings.HasPrefix(w.RemoteAddr().String(), "192.168.40.") {
+		answerIP = "192.0.2.40" // guests
+	}
+	rr, err := dns.NewRR("nas.home.arpa. 300 IN A " + answerIP)
+	if err != nil {
+		panic(err)
+	}
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Answer = []dns.RR{rr}
+	_ = w.WriteMsg(m)
+	return m.Rcode, nil
+}
+
+// TestConcurrentHerdRespectsVLANSplitHorizon guards against request
+// coalescing (added for TestConcurrentHerdCoalescesUpstreamCalls) widening
+// its sharing beyond the direct tier's own bucket boundary: a herd spanning
+// two VLANs must still produce one upstream call per VLAN, and each client
+// must get only its own VLAN's answer, never the other bucket's.
+func TestConcurrentHerdRespectsVLANSplitHorizon(t *testing.T) {
+	next := &bucketNext{}
+	vc := build(t, next)
+
+	const perVLAN = 10
+	var wg, ready sync.WaitGroup
+	start := make(chan struct{})
+	wg.Add(perVLAN * 2)
+	ready.Add(perVLAN * 2)
+
+	trusted := make([]*dns.Msg, perVLAN)
+	guests := make([]*dns.Msg, perVLAN)
+	for i := range perVLAN {
+		go func() {
+			defer wg.Done()
+			ready.Done()
+			<-start
+			trusted[i] = queryFrom(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA)
+		}()
+		go func() {
+			defer wg.Done()
+			ready.Done()
+			<-start
+			guests[i] = queryFrom(vc, "192.168.40.5", "nas.home.arpa", dns.TypeA)
+		}()
+	}
+	ready.Wait() // all goroutines dispatched before any of them queries
+	close(start) // release them at once so both VLANs' herds race together
+	wg.Wait()
+
+	next.mu.Lock()
+	calls := next.calls
+	next.mu.Unlock()
+	if calls != 2 {
+		t.Fatalf("want 2 upstream calls (one per VLAN bucket — coalescing must not cross buckets), got %d", calls)
+	}
+
+	for i, m := range trusted {
+		got := m.Answer[0].(*dns.A).A.String()
+		if got != "192.0.2.10" {
+			t.Fatalf("trusted client %d got %s, want the trusted VLAN's own answer (192.0.2.10), not another bucket's", i, got)
+		}
+	}
+	for i, m := range guests {
+		got := m.Answer[0].(*dns.A).A.String()
+		if got != "192.0.2.40" {
+			t.Fatalf("guest client %d got %s, want the guests VLAN's own answer (192.0.2.40), not another bucket's", i, got)
+		}
+	}
+}
+
+// edns0SubnetOpt builds an OPT RR carrying an RFC 7871 EDNS0_SUBNET option
+// with the given SourceScope, simulating an upstream that echoes a
+// host-specific policy scope back to the resolver.
+func edns0SubnetOpt(ip net.IP, scope uint8) dns.RR {
+	o := new(dns.OPT)
+	o.Hdr.Name = "."
+	o.Hdr.Rrtype = dns.TypeOPT
+	o.Option = append(o.Option, &dns.EDNS0_SUBNET{
+		Code:          dns.EDNS0SUBNET,
+		Family:        1,
+		SourceNetmask: 32,
+		SourceScope:   scope,
+		Address:       ip,
+	})
+	return o
+}
+
+// perHostNext answers with a payload that differs per exact requester
+// address (not just per VLAN bucket), and echoes an RFC 7871 SourceScope=32
+// tied to that same address — simulating an upstream doing real per-host
+// policy (e.g. Pi-hole group assignment), the case the direct tier's
+// bucket-wide default explicitly defers to when a narrower scope is echoed.
+type perHostNext struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (p *perHostNext) Name() string { return "perhost" }
+
+func (p *perHostNext) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	p.mu.Lock()
+	p.calls++
+	p.mu.Unlock()
+
+	time.Sleep(50 * time.Millisecond)
+
+	ip := w.RemoteAddr().(*net.UDPAddr).IP
+	answerIP := "192.0.2.100"
+	if ip.Equal(net.ParseIP("192.168.10.6")) {
+		answerIP = "192.0.2.200"
+	}
+	rr, err := dns.NewRR("host.trusted.arpa. 300 IN A " + answerIP)
+	if err != nil {
+		panic(err)
+	}
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Answer = []dns.RR{rr}
+	m.Extra = []dns.RR{edns0SubnetOpt(ip, 32)}
+	_ = w.WriteMsg(m)
+	return m.Rcode, nil
+}
+
+// TestConcurrentHerdNarrowScopeDoesNotLeakAcrossHosts guards the gap in the
+// first version of request coalescing: bucket-level singleflight alone would
+// hand every requester in a VLAN the *leader's* answer, even when the
+// upstream's echoed scope says that answer is only valid for the leader's
+// own address. Two hosts in the same trusted VLAN, each in their own
+// concurrent herd, must still get their own scoped answer — and same-host
+// duplicates must still coalesce to one upstream call each, not one per
+// query.
+func TestConcurrentHerdNarrowScopeDoesNotLeakAcrossHosts(t *testing.T) {
+	next := &perHostNext{}
+	vc := build(t, next)
+
+	const burstPerHost = 5
+	var wg, ready sync.WaitGroup
+	start := make(chan struct{})
+	wg.Add(burstPerHost * 2)
+	ready.Add(burstPerHost * 2)
+
+	hostA := make([]*dns.Msg, burstPerHost) // 192.168.10.5
+	hostB := make([]*dns.Msg, burstPerHost) // 192.168.10.6 — same VLAN bucket, different host
+	for i := range burstPerHost {
+		go func() {
+			defer wg.Done()
+			ready.Done()
+			<-start
+			hostA[i] = queryFrom(vc, "192.168.10.5", "host.trusted.arpa", dns.TypeA)
+		}()
+		go func() {
+			defer wg.Done()
+			ready.Done()
+			<-start
+			hostB[i] = queryFrom(vc, "192.168.10.6", "host.trusted.arpa", dns.TypeA)
+		}()
+	}
+	ready.Wait() // all goroutines dispatched before any of them queries
+	close(start) // release them at once so both hosts' bursts race together
+	wg.Wait()
+
+	next.mu.Lock()
+	calls := next.calls
+	next.mu.Unlock()
+	// One call per distinct host, not one per bucket and not one per query:
+	// a /32-scoped answer must not be shared across hosts, but same-host
+	// duplicates within the burst still coalesce.
+	if calls != 2 {
+		t.Fatalf("want 2 upstream calls (one per distinct host address), got %d", calls)
+	}
+
+	for i, m := range hostA {
+		got := m.Answer[0].(*dns.A).A.String()
+		if got != "192.0.2.100" {
+			t.Fatalf("host A query %d got %s, want its own scoped answer (192.0.2.100), not host B's", i, got)
+		}
+	}
+	for i, m := range hostB {
+		got := m.Answer[0].(*dns.A).A.String()
+		if got != "192.0.2.200" {
+			t.Fatalf("host B query %d got %s, want its own scoped answer (192.0.2.200), not host A's", i, got)
+		}
 	}
 }
 
