@@ -144,7 +144,7 @@
       });
     });
   });
-  document.body.addEventListener("htmx:afterSwap", function (evt) {
+  document.addEventListener("htmx:afterSwap", function (evt) {
     initCharts(evt.detail.target);
   });
 })();
