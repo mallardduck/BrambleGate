@@ -1,29 +1,35 @@
 name: Dev image
 
-# Rolling "head" image: rebuilds and pushes `dev` on every push to main, once
-# CI (ci.yml, reused below) has fully passed. This gives a moving preview tag
-# to track HEAD without cutting a real release — no goreleaser, no GitHub
+# Rolling "head" image: rebuilds and pushes `dev` once CI (ci.yml) has fully
+# passed on main. Triggered by CI's completion (workflow_run) rather than
+# reusing ci.yml as a job, so CI runs exactly once per push to main instead
+# of once standalone and once again here. This gives a moving preview tag to
+# track HEAD without cutting a real release — no goreleaser, no GitHub
 # release, no draft/undraft. See release.yml for the tagged-release path.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
 
 env:
   # GHCR path is lowercase-only; the module is github.com/mallardduck/BrambleGate.
   IMAGE: ghcr.io/mallardduck/bramblegate
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
   image:
-    needs: [ci]
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write   # push to GitHub Container Registry
     steps:
+      # Pin to the exact commit CI validated: workflow_run's default ref/sha
+      # is the branch tip at trigger time, which can have moved past the
+      # commit that actually finished CI if another push landed in between.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       # QEMU lets a single amd64 runner emit arm64 layers; buildx drives the
       # multi-platform build into one manifest (same as release.yml's image job).
@@ -41,6 +47,15 @@ jobs:
         id: build_date
         run: echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
+      # Short sha computed explicitly from workflow_run.head_sha rather than
+      # metadata-action's default `type=sha` (which reads github.sha) since
+      # that context value isn't guaranteed to match head_sha for this event.
+      - name: Set short sha
+        id: short_sha
+        run: echo "SHA=${GITHUB_EVENT_HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_EVENT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+
       # `dev` is the rolling tag every push to main overwrites; `sha-<short>`
       # stays pinned to this exact build so a specific commit's image is
       # still pullable after the next merge moves `dev` on.
@@ -51,7 +66,7 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=raw,value=dev
-            type=sha,prefix=sha-,format=short
+            type=raw,value=sha-${{ steps.short_sha.outputs.SHA }}
 
       - name: Build and push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -66,8 +81,8 @@ jobs:
           # never the stable/minimal release artifact.
           build-args: |
             VARIANT=debug
-            VERSION=dev-${{ github.sha }}
-            GIT_COMMIT=${{ github.sha }}
+            VERSION=dev-${{ github.event.workflow_run.head_sha }}
+            GIT_COMMIT=${{ github.event.workflow_run.head_sha }}
             BUILD_DATE=${{ steps.build_date.outputs.DATE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
