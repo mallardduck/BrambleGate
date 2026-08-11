@@ -14,6 +14,7 @@ import (
 	"github.com/miekg/dns"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -78,6 +79,7 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 
 	scopedKey := hashScoped(qname, qtype, do, cd)
 	if e, ok := c.store.getScoped(scopedKey, ip, now); ok {
+		attribute(ctx, "cache")
 		return c.reply(w, r, e, now, do, ad)
 	}
 
@@ -87,11 +89,12 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	}
 	directKey := hashDirect(bucket, qname, qtype, do, cd)
 	if e, ok := c.store.getDirect(directKey, now); ok {
+		attribute(ctx, "cache")
 		return c.reply(w, r, e, now, do, ad)
 	}
 
 	bucketKey := strconv.FormatUint(directKey, 36)
-	fr, err := c.fetch(ctx, w, bucketKey, directKey, scopedKey, ip, r, now)
+	fr, leader, err := c.fetch(ctx, w, bucketKey, directKey, scopedKey, ip, r, now)
 	if err != nil {
 		return dns.RcodeServerFailure, err
 	}
@@ -102,15 +105,39 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		// coalesced only with other requesters excluded the same way (same
 		// exact IP), instead of forwarding the mismatched answer.
 		ipKey := bucketKey + "|" + ip.String()
-		fr, err = c.fetch(ctx, w, ipKey, directKey, scopedKey, ip, r, now)
+		fr, leader, err = c.fetch(ctx, w, ipKey, directKey, scopedKey, ip, r, now)
 		if err != nil {
 			return dns.RcodeServerFailure, err
 		}
+	}
+	// leader is the one caller whose goroutine actually drove Next and hit
+	// upstream; every other caller sharing the same fetch got the leader's
+	// result without a network call of its own. Distinguishing them here
+	// matters: both can take equally long from the client's perspective (a
+	// follower waits for the same slow/timing-out upstream call), so
+	// querylog's latency-based fallback classification can't tell them
+	// apart and would mislabel every coalesced follower as its own
+	// "forwarded" — exactly what made a real SERVFAIL storm look unfixed in
+	// the query log.
+	if leader {
+		attribute(ctx, "forward")
+	} else {
+		attribute(ctx, "coalesced")
 	}
 	if err := w.WriteMsg(toClientReply(fr.msg, r, do, ad)); err != nil {
 		return dns.RcodeServerFailure, err
 	}
 	return dns.RcodeSuccess, nil
+}
+
+// attribute self-reports this answer to querylog's in-flight Entry (if any —
+// nil-safe when querylog isn't in the chain, e.g. these plugin's own unit
+// tests), mirroring plugins/localrecords' own attribute helper.
+func attribute(ctx context.Context, verdict string) {
+	if e := querylog.FromContext(ctx); e != nil {
+		e.Source = "vlancache"
+		e.Verdict = verdict
+	}
 }
 
 // fetchResult is a singleflight-shared upstream response, annotated with
@@ -151,8 +178,14 @@ func (fr *fetchResult) appliesTo(ip net.IP) bool {
 // call: only the leader's goroutine drives Next, but every caller (leader
 // included) must still write its own reply, so the leader's write to the
 // network happens once at the ServeDNS call site above, not inside fetch.
-func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string, directKey, scopedKey uint64, ip net.IP, r *dns.Msg, now time.Time) (*fetchResult, error) {
+//
+// The returned leader bool reports whether this specific call was the one
+// whose closure ran (i.e. actually invoked Next) — singleflight's own
+// "shared" return value can't answer that per-caller, since it's the same
+// for the leader and every follower whenever there was at least one of each.
+func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string, directKey, scopedKey uint64, ip net.IP, r *dns.Msg, now time.Time) (fr *fetchResult, leader bool, err error) {
 	v, err, _ := c.sf.Do(key, func() (any, error) {
+		leader = true
 		cw := &captureWriter{ResponseWriter: w}
 		if _, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, r); err != nil {
 			return nil, err
@@ -181,9 +214,9 @@ func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string,
 		return fr, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, leader, err
 	}
-	return v.(*fetchResult), nil
+	return v.(*fetchResult), leader, nil
 }
 
 // toClientReply tailors res (the shared upstream response) into a reply for

@@ -13,6 +13,7 @@ import (
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -73,6 +74,94 @@ func queryFrom(vc *VlanCache, clientIP, name string, qtype uint16) *dns.Msg {
 	rec := dnstest.NewRecorder(&clientWriter{ResponseWriter: &test.ResponseWriter{}, ip: clientIP})
 	vc.ServeDNS(context.Background(), rec, r)
 	return rec.Msg
+}
+
+// queryFromWithEntry mirrors queryFrom but wraps ctx with a querylog.Entry
+// first, the way the real querylog plugin does ahead of vlancache in the
+// chain — so tests can assert what vlancache self-attributes. Without this,
+// querylog falls back to a latency heuristic (classifyFallback) that can't
+// tell a coalesced singleflight follower (no new upstream call, but still
+// slow — it waited on the leader) from a real forward, which is exactly what
+// made a real-world SERVFAIL herd look unfixed in the query log.
+func queryFromWithEntry(vc *VlanCache, clientIP, name string, qtype uint16) (*dns.Msg, *querylog.Entry) {
+	r := new(dns.Msg)
+	r.SetQuestion(dns.Fqdn(name), qtype)
+	rec := dnstest.NewRecorder(&clientWriter{ResponseWriter: &test.ResponseWriter{}, ip: clientIP})
+	e := &querylog.Entry{}
+	ctx := querylog.NewContext(context.Background(), e)
+	vc.ServeDNS(ctx, rec, r)
+	return rec.Msg, e
+}
+
+func TestAttributesDirectCacheHit(t *testing.T) {
+	next := &stubNext{fn: func(r *dns.Msg) *dns.Msg {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Answer = []dns.RR{aRecord("nas.home.arpa.", "300")}
+		return m
+	}}
+	vc := build(t, next)
+
+	queryFrom(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA) // populate the cache
+	_, e := queryFromWithEntry(vc, "192.168.10.6", "nas.home.arpa", dns.TypeA)
+	if e.Source != "vlancache" || e.Verdict != "cache" {
+		t.Fatalf("Source/Verdict = %q/%q, want vlancache/cache", e.Source, e.Verdict)
+	}
+}
+
+func TestAttributesLeaderFetchAsForward(t *testing.T) {
+	next := &stubNext{fn: func(r *dns.Msg) *dns.Msg {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Answer = []dns.RR{aRecord("nas.home.arpa.", "300")}
+		return m
+	}}
+	vc := build(t, next)
+
+	_, e := queryFromWithEntry(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA)
+	if e.Source != "vlancache" || e.Verdict != "forward" {
+		t.Fatalf("Source/Verdict = %q/%q, want vlancache/forward", e.Source, e.Verdict)
+	}
+}
+
+func TestAttributesCoalescedFollowerDistinctFromForward(t *testing.T) {
+	next := &blockingNext{}
+	vc := build(t, next)
+
+	var wg, ready sync.WaitGroup
+	start := make(chan struct{})
+	entries := make([]*querylog.Entry, 2)
+	wg.Add(2)
+	ready.Add(2)
+	for i := range 2 {
+		go func() {
+			defer wg.Done()
+			ready.Done()
+			<-start
+			_, entries[i] = queryFromWithEntry(vc, "192.168.10.5", "pihole.lan", dns.TypeAAAA)
+		}()
+	}
+	ready.Wait()
+	close(start)
+	wg.Wait()
+
+	var forwards, coalesced int
+	for _, e := range entries {
+		if e.Source != "vlancache" {
+			t.Fatalf("Source = %q, want vlancache", e.Source)
+		}
+		switch e.Verdict {
+		case "forward":
+			forwards++
+		case "coalesced":
+			coalesced++
+		default:
+			t.Fatalf("Verdict = %q, want forward or coalesced", e.Verdict)
+		}
+	}
+	if forwards != 1 || coalesced != 1 {
+		t.Fatalf("want exactly 1 forward + 1 coalesced (the real upstream call vs. the deduped one), got %d forward + %d coalesced", forwards, coalesced)
+	}
 }
 
 func TestCacheHitAvoidsSecondUpstreamCall(t *testing.T) {
