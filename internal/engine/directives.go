@@ -34,6 +34,7 @@ import (
 	// directive names (reserved in Directives below).
 	_ "github.com/mallardduck/BrambleGate/plugins/localrecords"
 	_ "github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	_ "github.com/mallardduck/BrambleGate/plugins/querylog"
 
 	"github.com/coredns/coredns/core/dnsserver"
 )
@@ -47,7 +48,12 @@ import (
 // ad-block resolver (see docs/plugins.md).
 //
 // The list is CoreDNS's canonical order (core/dnsserver/zdirectives.go) with
-// "localrecords" and "mdnsbridge" inserted immediately before "forward".
+// "localrecords" and "mdnsbridge" inserted immediately before "forward", and
+// "querylog" inserted right after "dnstap" (the stock out-of-process query
+// logger it's a BrambleGate-native replacement for — dev-docs/query-log.md) —
+// early enough to observe every query, including ones mdnsbridge/localrecords
+// answer, since it must wrap the full round trip to attribute Source/Verdict
+// for the plugins that don't self-attribute (cache, forward).
 func init() {
 	dnsserver.Directives = []string{
 		"root",
@@ -75,6 +81,7 @@ func init() {
 		"errors",
 		"log",
 		"dnstap",
+		"querylog",
 		"local",
 		"dns64",
 		"any",
