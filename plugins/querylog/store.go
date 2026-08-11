@@ -101,7 +101,15 @@ func OpenStore(cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("querylog: create store dir: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", cfg.Path)
+	// busy_timeout is set via the DSN, not a one-time PRAGMA ExecContext
+	// below, because database/sql's pool opens new connections lazily as
+	// needed — a PRAGMA run once against *sql.DB only lands on whichever
+	// connection happens to service that call, not every connection the
+	// pool later opens. Without it, prune's startup DELETE (s.run below)
+	// racing a concurrent insertBatch write returns SQLITE_BUSY immediately
+	// instead of waiting, since WAL allows concurrent access but not
+	// simultaneous writers.
+	db, err := sql.Open("sqlite", cfg.Path+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("querylog: open store: %w", err)
 	}
