@@ -105,10 +105,11 @@ func OpenStore(cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("querylog: open store: %w", err)
 	}
 	// A single native connection: this phase only writes, from one
-	// goroutine — pairs with the driver's own single-writer SQLite
-	// semantics. Revisit if a later phase adds concurrent reads
-	// (dev-docs/query-log.md's Phase 7c).
-	db.SetMaxOpenConns(1)
+	// A small connection pool: one writer goroutine plus a few concurrent
+	// readers (Phase 7c's TopDomains/TopClients/Series, queried from GUI
+	// request goroutines). WAL mode (set just below) is what makes this
+	// safe — SQLite-compatible readers don't block behind the writer.
+	db.SetMaxOpenConns(4)
 
 	for _, stmt := range []string{schemaSQL, `PRAGMA journal_mode=WAL`, `PRAGMA synchronous=NORMAL`} {
 		if _, err := db.Exec(stmt); err != nil {
