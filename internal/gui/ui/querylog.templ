@@ -28,8 +28,15 @@ type QueryLogGridData struct {
 	TotalPages int
 	Interval   string // "2s", "5s", "10s", or "off"
 	Filter     querylog.Filter
-	Listeners  model.Listeners // for mapping Entry.Listener's port to a friendly transport label
-	VLANs      []model.VLAN    // for the VLAN filter dropdown's options
+	// ListenerFilter narrows Entries to one friendly transport label (see
+	// ListenerLabel) — "" means no constraint. Kept out of querylog.Filter
+	// itself: querylog stays independent of model (dev-docs/repo-layout.md),
+	// so it can't know "Plain"/"DoT"/etc. label-to-port mapping, only the raw
+	// listener address each Entry recorded. The GUI applies this filter
+	// server-side after Ring.Snapshot (see handlers_ui.go).
+	ListenerFilter string
+	Listeners      model.Listeners // for mapping Entry.Listener's port to a friendly transport label
+	VLANs          []model.VLAN    // for the VLAN filter dropdown's options
 }
 
 // queryLogQTypeOptions is a curated subset of query types worth filtering
@@ -74,6 +81,15 @@ templ queryLogFilters(data QueryLogGridData) {
 				<option value="" selected?={ data.Filter.VLAN == "" }>All</option>
 				for _, v := range data.VLANs {
 					<option value={ v.Name } selected?={ data.Filter.VLAN == v.Name }>{ v.Name }</option>
+				}
+			</select>
+		</label>
+		<label class="flex flex-col gap-1 text-sm">
+			<span class="text-bramble-muted text-xs">Listener</span>
+			<select id="querylog-listener" name="listener" onchange={ resetQueryLogPage() } class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
+				<option value="" selected?={ data.ListenerFilter == "" }>All</option>
+				for _, l := range enabledListenerLabels(data.Listeners) {
+					<option value={ l } selected?={ data.ListenerFilter == l }>{ l }</option>
 				}
 			</select>
 		</label>
@@ -158,6 +174,7 @@ func queryLogPollTrigger(interval string, page int) string {
 		"keyup changed delay:300ms from:#querylog-search",
 		"keyup changed delay:300ms from:#querylog-client",
 		"change from:#querylog-vlan",
+		"change from:#querylog-listener",
 		"change from:#querylog-qtype",
 		"change from:#querylog-interval",
 	}
@@ -241,7 +258,7 @@ templ queryLogRow(e querylog.Entry, listeners model.Listeners) {
 				<p class="text-xs text-bramble-muted">{ e.Client.VLAN }</p>
 			}
 		</td>
-		<td class="px-3 py-2 text-xs whitespace-nowrap" title={ e.Listener + " (" + e.Proto + ")" }>{ listenerLabel(e.Listener, listeners) }</td>
+		<td class="px-3 py-2 text-xs whitespace-nowrap" title={ e.Listener + " (" + e.Proto + ")" }>{ ListenerLabel(e.Listener, listeners) }</td>
 		<td class="px-3 py-2">
 			<p class="font-mono text-sm break-all">{ e.QName }</p>
 			<p class="text-xs text-bramble-muted">{ dns.TypeToString[e.QType] }</p>
@@ -268,12 +285,38 @@ templ queryLogRow(e querylog.Entry, listeners model.Listeners) {
 	</tr>
 }
 
-// listenerLabel maps Entry.Listener's port back to a friendly transport name
+// enabledListenerLabels returns the friendly labels (see ListenerLabel) of
+// every currently-enabled listener, in the same fixed Plain/DoT/DoH/DoQ/DoH3
+// order configgen renders server blocks in — used to populate the Query Log
+// page's listener filter dropdown (handlers_ui.go applies the actual filter
+// server-side, since querylog.Filter can't carry a model-aware label).
+func enabledListenerLabels(l model.Listeners) []string {
+	var out []string
+	if l.Plain.Enabled {
+		out = append(out, "Plain")
+	}
+	if l.DoT.Enabled {
+		out = append(out, "DoT")
+	}
+	if l.DoH.Enabled {
+		out = append(out, "DoH")
+	}
+	if l.DoQ.Enabled {
+		out = append(out, "DoQ")
+	}
+	if l.DoH3.Enabled {
+		out = append(out, "DoH3")
+	}
+	return out
+}
+
+// ListenerLabel maps Entry.Listener's port back to a friendly transport name
 // using the settings the GUI already has (Entry itself can't carry this —
 // querylog stays independent of model, dev-docs/repo-layout.md). Falls back
 // to the raw ":port" when it doesn't match any currently-enabled listener
-// (e.g. settings changed since the query was logged).
-func listenerLabel(listener string, l model.Listeners) string {
+// (e.g. settings changed since the query was logged). Exported so
+// handlers_ui.go can apply the same mapping when filtering by listener.
+func ListenerLabel(listener string, l model.Listeners) string {
 	_, portStr, err := net.SplitHostPort(listener)
 	if err != nil {
 		return listener

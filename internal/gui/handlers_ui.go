@@ -635,26 +635,50 @@ func (h *handlers) renderQueryLog(w http.ResponseWriter, r *http.Request, p quer
 
 func (h *handlers) queryLogGridData(p queryLogParams, settings model.Settings) ui.QueryLogGridData {
 	all := queryLogSnapshot(p.Filter)
+	all = filterQueryLogByListener(all, p.ListenerFilter, settings.Listeners)
 	page, totalPages, pageEntries := paginateQueryLog(all, p.Page, queryLogPageSize)
 	return ui.QueryLogGridData{
-		Entries:    pageEntries,
-		Total:      len(all),
-		Page:       page,
-		TotalPages: totalPages,
-		Interval:   p.Interval,
-		Filter:     p.Filter,
-		Listeners:  settings.Listeners,
-		VLANs:      settings.VLANs,
+		Entries:        pageEntries,
+		Total:          len(all),
+		Page:           page,
+		TotalPages:     totalPages,
+		Interval:       p.Interval,
+		Filter:         p.Filter,
+		ListenerFilter: p.ListenerFilter,
+		Listeners:      settings.Listeners,
+		VLANs:          settings.VLANs,
 	}
+}
+
+// filterQueryLogByListener narrows entries to those whose listener maps to
+// the given friendly label (see ui.ListenerLabel) — "" means no constraint.
+// Applied here rather than inside querylog.Filter itself: querylog stays
+// independent of model (dev-docs/repo-layout.md), so it has no way to map
+// Entry.Listener's raw ":port" to "Plain"/"DoT"/etc. — only the GUI, which
+// already holds Settings.Listeners, can.
+func filterQueryLogByListener(entries []querylog.Entry, label string, l model.Listeners) []querylog.Entry {
+	if label == "" {
+		return entries
+	}
+	out := entries[:0:0]
+	for _, e := range entries {
+		if ui.ListenerLabel(e.Listener, l) == label {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // queryLogParams is the full set of live-view controls read from the
 // request: filter fields plus the pagination/refresh state that decides
 // what the returned grid's own auto-poll trigger looks like.
 type queryLogParams struct {
-	Filter   querylog.Filter
-	Page     int
-	Interval string // "2s", "5s", "10s", or "off"
+	Filter querylog.Filter
+	// ListenerFilter is kept separate from Filter — see
+	// ui.QueryLogGridData.ListenerFilter's doc comment for why.
+	ListenerFilter string
+	Page           int
+	Interval       string // "2s", "5s", "10s", or "off"
 }
 
 func queryLogParamsFromRequest(r *http.Request) queryLogParams {
@@ -674,8 +698,9 @@ func queryLogParamsFromRequest(r *http.Request) queryLogParams {
 			VLAN:   strings.TrimSpace(q.Get("vlan")),
 			QType:  queryLogQTypeFromParam(q.Get("qtype")),
 		},
-		Page:     page,
-		Interval: interval,
+		ListenerFilter: strings.TrimSpace(q.Get("listener")),
+		Page:           page,
+		Interval:       interval,
 	}
 }
 
