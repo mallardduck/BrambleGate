@@ -3,6 +3,7 @@ package vlancache
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func aRecord(name, ttl string) dns.RR {
 	return rr
 }
 
-func build(t *testing.T, next *stubNext) *VlanCache {
+func build(t *testing.T, next plugin.Handler) *VlanCache {
 	t.Helper()
 	t.Cleanup(func() { vlanmatch.SetCurrent(vlanmatch.Table{}) })
 	vlanmatch.SetCurrent(vlanmatch.NewTable([]vlanmatch.VLAN{
@@ -109,6 +110,66 @@ func TestDifferentVLANsGetIndependentCacheEntries(t *testing.T) {
 	queryFrom(vc, "192.168.40.7", "nas.home.arpa", dns.TypeA)
 	if next.calls != 2 {
 		t.Fatalf("want still 2 upstream calls, got %d", next.calls)
+	}
+}
+
+// blockingNext holds every upstream call open for a fixed window, long
+// enough for a concurrent herd of identical queries to overlap with it —
+// reproducing the real-world scenario where Pi-hole is slow/timing out on a
+// query and a burst of clients all ask for it before any answer is cached.
+type blockingNext struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (b *blockingNext) Name() string { return "blocking" }
+
+func (b *blockingNext) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	b.mu.Lock()
+	b.calls++
+	b.mu.Unlock()
+
+	time.Sleep(50 * time.Millisecond)
+
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Rcode = dns.RcodeServerFailure
+	_ = w.WriteMsg(m)
+	return m.Rcode, nil
+}
+
+// TestConcurrentHerdCoalescesUpstreamCalls guards against the cache-stampede
+// gap: without request coalescing, a burst of clients asking the same
+// question while the first answer is still in flight all miss the (still
+// empty) cache and each fire their own upstream call — the exact "SERVFAIL
+// herd" observed in the lab despite vlancache's SERVFAIL caching.
+func TestConcurrentHerdCoalescesUpstreamCalls(t *testing.T) {
+	next := &blockingNext{}
+	vc := build(t, next)
+
+	const herd = 20
+	var wg sync.WaitGroup
+	var ready sync.WaitGroup
+	start := make(chan struct{})
+	wg.Add(herd)
+	ready.Add(herd)
+	for i := 0; i < herd; i++ {
+		go func() {
+			defer wg.Done()
+			ready.Done()
+			<-start
+			queryFrom(vc, "192.168.10.5", "pihole.lan", dns.TypeAAAA)
+		}()
+	}
+	ready.Wait() // all goroutines are dispatched before any of them queries
+	close(start) // release them at once so they race into ServeDNS together
+	wg.Wait()
+
+	next.mu.Lock()
+	calls := next.calls
+	next.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("want 1 upstream call for a concurrent herd of identical queries, got %d", calls)
 	}
 }
 
