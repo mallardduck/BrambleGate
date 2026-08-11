@@ -37,6 +37,21 @@ type QueryLog struct {
 	// own default (plugins/querylog's defaultCapacity) — not user-tunable
 	// unless explicitly set here.
 	Capacity int `yaml:"capacity,omitempty" json:"capacity,omitempty"`
+	// RetentionDays bounds the durable store (Phase 7b) by age — rows older
+	// than this are pruned. 0 = the plugin's own default. Mirrors Pi-hole/
+	// FTL's MAXDBDAYS: disposable history, not an audit log, must never grow
+	// unbounded (dev-docs/query-log.md).
+	RetentionDays int `yaml:"retention_days,omitempty" json:"retention_days,omitempty"`
+	// MaxRows bounds the durable store by row count — a backstop pruned
+	// alongside RetentionDays in case sustained QPS outpaces the age-based
+	// prune. 0 = the plugin's own default.
+	MaxRows int `yaml:"max_rows,omitempty" json:"max_rows,omitempty"`
+	// FlushIntervalSeconds is how often buffered entries are batched to the
+	// durable store. 0 = the plugin's own default (2s). Larger values trade
+	// a bigger loss window on an ungraceful crash for fewer writes to disk —
+	// the knob for low-write-endurance media (e.g. a Raspberry Pi's SD
+	// card), not a correctness setting.
+	FlushIntervalSeconds int `yaml:"flush_interval_seconds,omitempty" json:"flush_interval_seconds,omitempty"`
 }
 
 // Observability controls CoreDNS's health/ready/prometheus plugins. Each is

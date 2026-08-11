@@ -25,8 +25,14 @@ const defaultCacheLatencyThreshold = 2 * time.Millisecond
 // of which plugin answers it, and records a completed Entry to Ring. See
 // dev-docs/query-log.md.
 type QueryLog struct {
-	Next  plugin.Handler
-	Ring  *Ring
+	Next plugin.Handler
+	Ring *Ring
+	// Store is the durable persistence layer (Phase 7b) — nil when
+	// persistence isn't configured (e.g. a bare "querylog" stanza with no
+	// "db" sub-directive, as in older/unit-test Corefiles). Record is a
+	// nil-safe no-op, so this field never needs a nil check at the call
+	// site.
+	Store *Store
 	VLANs vlanmatch.Table
 
 	// Now, if set, replaces time.Now for measuring Latency — overridable so
@@ -77,6 +83,7 @@ func (q *QueryLog) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 		}
 	}
 	q.Ring.Push(*entry)
+	q.Store.Record(*entry)
 
 	return rcode, err
 }

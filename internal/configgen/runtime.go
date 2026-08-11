@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/mallardduck/BrambleGate/model"
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
 // RuntimeCorefilePath is where the rendered Corefile is written for operator
@@ -18,6 +22,36 @@ func RuntimeCorefilePath(configDir string) string {
 // the plugin at setup, so it must be written before engine New/Reload.
 func ZoneDataPath(configDir string) string {
 	return filepath.Join(configDir, ".runtime", "zones", "records.json")
+}
+
+// QueryLogDBPath is where the querylog plugin's disposable libSQL-backed
+// history lives (dev-docs/query-log.md's Phase 7b) — same ".runtime/"
+// tree as the other regenerated, not-backed-up files above; safe to delete
+// at any time, the plugin regenerates it from empty. Unlike ZoneDataPath,
+// nothing here is written by configgen itself — the querylog plugin opens
+// and migrates the file directly, so there's no WriteX counterpart.
+func QueryLogDBPath(configDir string) string {
+	return filepath.Join(configDir, ".runtime", "querylog.db")
+}
+
+// QueryLogStoreConfig translates settings into the querylog Store's config
+// — a zero StoreConfig (Path "") when Query Log is off. Shared by
+// internal/cli (startup, and the ACME-triggered reloadFn) and
+// internal/gui/service.go (SaveSettings), the same way mdnscfg.Build is
+// shared between them for the mDNS discovery table: the Store's lifecycle
+// is owned by the process, not by the querylog plugin's own setup(), so
+// every place that can change model.Settings needs to reach it
+// (dev-docs/query-log.md's Phase 7b).
+func QueryLogStoreConfig(ql model.QueryLog, configDir string) querylog.StoreConfig {
+	if !ql.Enabled {
+		return querylog.StoreConfig{}
+	}
+	return querylog.StoreConfig{
+		Path:          QueryLogDBPath(configDir),
+		RetentionDays: ql.RetentionDays,
+		MaxRows:       ql.MaxRows,
+		FlushInterval: time.Duration(ql.FlushIntervalSeconds) * time.Second,
+	}
 }
 
 // WriteRuntimeCorefile writes a copy of the rendered Corefile under

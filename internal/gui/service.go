@@ -24,6 +24,7 @@ import (
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -186,6 +187,21 @@ func (s *Service) reconcileAdvertise(settings model.Settings) {
 	}
 }
 
+// reconcileQueryLogStore opens/tunes/closes the durable Query Log store to
+// match the just-saved settings. Called at the end of every SaveSettings,
+// independent of whatever else changed — same shape as reconcileAdvertise,
+// and for the same reason: Store owns a real external resource whose
+// lifecycle must track the full settings on every save, not just whether
+// the "querylog" Corefile stanza happens to be present (only setup() sees
+// that, and setup() never runs at all once Query Log is disabled — see
+// dev-docs/query-log.md's Phase 7b and querylog.ReconcileStore's doc
+// comment).
+func (s *Service) reconcileQueryLogStore(settings model.Settings) {
+	if err := querylog.ReconcileStore(configgen.QueryLogStoreConfig(settings.QueryLog, s.configDir)); err != nil {
+		s.log.Error("querylog store reconcile failed", "err", err)
+	}
+}
+
 // ErrMDNSDisabled is returned by the mDNS endpoints when discovery is off.
 var ErrMDNSDisabled = ValidationError{errors.New("mDNS is disabled (set mdns.enabled: true)")}
 
@@ -333,6 +349,7 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	reloadErr := s.reload(rendered)
 	s.mdnsPostReload(settings, rs)
 	s.reconcileAdvertise(settings)
+	s.reconcileQueryLogStore(settings)
 	return reloadErr
 }
 

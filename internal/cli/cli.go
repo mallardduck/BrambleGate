@@ -28,6 +28,7 @@ import (
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -145,6 +146,19 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 		mdnsbridge.SetTable(mdnsTable)
 	}
 
+	// The querylog Store owns a real external resource (an open file, a WAL
+	// file, background goroutines), so its lifecycle is driven here — by the
+	// process, on every settings change — rather than by the querylog
+	// plugin's own setup(), which only ever runs while a "querylog" stanza
+	// is present and so could never react to Query Log being turned off
+	// (dev-docs/query-log.md's Phase 7b). Must run before engine.New, same
+	// as vlanmatch/mdnsbridge above: setup() reads CurrentStore() while
+	// parsing the Corefile. Refreshed again in reloadFn below on every later
+	// settings change.
+	if err := querylog.ReconcileStore(configgen.QueryLogStoreConfig(settings.QueryLog, configDir)); err != nil {
+		return fmt.Errorf("configure query log store: %w", err)
+	}
+
 	rendered, err := configgen.Render(settings, records, opts)
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
@@ -249,6 +263,13 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	if err := eng.Stop(); err != nil {
 		return fmt.Errorf("stop engine: %w", err)
 	}
+	// Graceful exit: flush any buffered-but-unwritten query log entries
+	// rather than relying solely on the async writer's flush interval
+	// (dev-docs/query-log.md's Phase 7b) — only an ungraceful crash should
+	// ever lose up to one flush interval's worth of history.
+	if err := querylog.CloseStore(); err != nil {
+		log.Warn("querylog store did not close cleanly", "err", err)
+	}
 	log.Info("stopped cleanly")
 	return nil
 }
@@ -283,6 +304,9 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 			return err
 		}
 		vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
+		if err := querylog.ReconcileStore(configgen.QueryLogStoreConfig(settings.QueryLog, opts.ConfigDir)); err != nil {
+			return err
+		}
 		rendered, err := configgen.Render(settings, records, opts)
 		if err != nil {
 			return err

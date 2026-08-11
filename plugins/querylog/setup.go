@@ -39,6 +39,18 @@ func init() {
 //
 // Both the stanza and the capacity sub-directive are optional; a bare
 // "querylog" uses defaultCapacity.
+//
+// The durable Store (Phase 7b) is deliberately NOT configured here: unlike
+// Ring, Store owns a real external resource (an open file handle, a WAL
+// file, background goroutines) that must be opened/closed exactly at
+// process start/stop, not at the mercy of whether a "querylog" stanza
+// happens to be present in a given Corefile render — disabling Query Log
+// removes the stanza, meaning setup() is never even called, so it can't be
+// the thing responsible for closing Store (see CurrentStore's doc comment
+// and dev-docs/query-log.md). internal/cli owns that lifecycle instead,
+// the same way it already owns vlanmatch's table and mdnsbridge's
+// discovery table; setup() here only reads whatever CurrentStore() already
+// holds.
 func setup(c *caddy.Controller) error {
 	capacity := defaultCapacity
 
@@ -92,7 +104,7 @@ func setup(c *caddy.Controller) error {
 	ring := Current()
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return &QueryLog{Next: next, Ring: ring, VLANs: vlanmatch.Current()}
+		return &QueryLog{Next: next, Ring: ring, Store: CurrentStore(), VLANs: vlanmatch.Current()}
 	})
 	pluginreg.SetLoaded("querylog", true, "")
 	return nil

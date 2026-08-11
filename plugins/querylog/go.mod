@@ -16,12 +16,14 @@ require (
 	github.com/mallardduck/BrambleGate/pluginreg v0.0.0
 	github.com/mallardduck/BrambleGate/vlanmatch v0.0.0
 	github.com/miekg/dns v1.1.72
+	turso.tech/database/tursogo v0.7.2
 )
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568 // indirect
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
@@ -34,6 +36,7 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.61.0 // indirect
+	github.com/tursodatabase/turso-go-platform-libs v0.7.2 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
