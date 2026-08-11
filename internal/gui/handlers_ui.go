@@ -59,6 +59,15 @@ func renderError(w http.ResponseWriter, r *http.Request, title, active string, p
 const (
 	dashboardStatsWindow = 24 * time.Hour
 	dashboardTopN        = 10
+
+	// dashboardClientActivityTopN/Bucket size the Client Activity stacked
+	// bar chart — a smaller top-N than dashboardTopN's tables since each
+	// one is a chart legend entry/color, not a table row (dataviz skill:
+	// stay within the validated 8-color categorical palette), and an hourly
+	// bucket over dashboardStatsWindow gives 24 bars, readable where the
+	// in-memory rollup's 10-minute buckets (RecentSeries) would be too fine.
+	dashboardClientActivityTopN   = 5
+	dashboardClientActivityBucket = time.Hour
 )
 
 func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +142,8 @@ func dashboardActivityData(r *http.Request) ui.DashboardActivityData {
 	data.StoreConfigured = true
 	data.TopDomains = top
 	data.TopClients, _ = log.TopClients(r.Context(), dashboardStatsWindow, dashboardTopN)
+	now := time.Now()
+	data.ClientActivity, _ = log.ClientActivity(r.Context(), now.Add(-dashboardStatsWindow), now, dashboardClientActivityBucket, dashboardClientActivityTopN)
 	return data
 }
 

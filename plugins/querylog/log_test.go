@@ -72,6 +72,14 @@ func TestLog_Series_StoreNotConfigured_ReturnsErr(t *testing.T) {
 	}
 }
 
+func TestLog_ClientActivity_StoreNotConfigured_ReturnsErr(t *testing.T) {
+	l := &Log{}
+	now := time.Now()
+	if _, err := l.ClientActivity(context.Background(), now.Add(-time.Hour), now, time.Minute, 5); !errors.Is(err, ErrStoreNotConfigured) {
+		t.Fatalf("err = %v, want ErrStoreNotConfigured", err)
+	}
+}
+
 func newTestLog(t *testing.T) *Log {
 	t.Helper()
 	s := openTestStore(t, StoreConfig{FlushInterval: 10 * time.Millisecond})
@@ -176,6 +184,63 @@ func TestLog_Series_DenseZeroFilledBuckets(t *testing.T) {
 		if !b.Start.Equal(wantStart) {
 			t.Fatalf("bucket %d start = %v, want %v", i, b.Start, wantStart)
 		}
+	}
+}
+
+func TestLog_ClientActivity_RanksAndFoldsOthers(t *testing.T) {
+	l := newTestLog(t)
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(2 * time.Minute)
+	bucket := time.Minute
+
+	// a: 3 queries (top), b: 2 queries (top), c: 1 query (folded into
+	// Other, since topN below is 2).
+	l.store.Record(Entry{Client: ClientInfo{IP: "a"}, Timestamp: from.Add(10 * time.Second)})
+	l.store.Record(Entry{Client: ClientInfo{IP: "a"}, Timestamp: from.Add(20 * time.Second)})
+	l.store.Record(Entry{Client: ClientInfo{IP: "a"}, Timestamp: from.Add(70 * time.Second)})
+	l.store.Record(Entry{Client: ClientInfo{IP: "b"}, Timestamp: from.Add(10 * time.Second)})
+	l.store.Record(Entry{Client: ClientInfo{IP: "b"}, Timestamp: from.Add(15 * time.Second)})
+	l.store.Record(Entry{Client: ClientInfo{IP: "c"}, Timestamp: from.Add(10 * time.Second)})
+	waitForRowCount(t, l.store, 6)
+
+	got, err := l.ClientActivity(context.Background(), from, to, bucket, 2)
+	if err != nil {
+		t.Fatalf("ClientActivity: %v", err)
+	}
+	if len(got.Buckets) != 2 {
+		t.Fatalf("len(Buckets) = %d, want 2", len(got.Buckets))
+	}
+	if len(got.Rows) != 3 {
+		t.Fatalf("len(Rows) = %d, want 3 (a, b, Other), got %+v", len(got.Rows), got.Rows)
+	}
+	if got.Rows[0].ClientIP != "a" || got.Rows[0].Counts[0] != 2 || got.Rows[0].Counts[1] != 1 {
+		t.Fatalf("Rows[0] = %+v, want a with counts [2 1]", got.Rows[0])
+	}
+	if got.Rows[1].ClientIP != "b" || got.Rows[1].Counts[0] != 2 || got.Rows[1].Counts[1] != 0 {
+		t.Fatalf("Rows[1] = %+v, want b with counts [2 0]", got.Rows[1])
+	}
+	if !got.Rows[2].IsOther || got.Rows[2].ClientIP != "" || got.Rows[2].Counts[0] != 1 || got.Rows[2].Counts[1] != 0 {
+		t.Fatalf("Rows[2] = %+v, want Other with counts [1 0]", got.Rows[2])
+	}
+}
+
+func TestLog_ClientActivity_NoOverflow_NoOtherRow(t *testing.T) {
+	l := newTestLog(t)
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Minute)
+
+	l.store.Record(Entry{Client: ClientInfo{IP: "a"}, Timestamp: from.Add(10 * time.Second)})
+	waitForRowCount(t, l.store, 1)
+
+	got, err := l.ClientActivity(context.Background(), from, to, time.Minute, 5)
+	if err != nil {
+		t.Fatalf("ClientActivity: %v", err)
+	}
+	if len(got.Rows) != 1 {
+		t.Fatalf("len(Rows) = %d, want 1 (no Other row when nothing overflows topN), got %+v", len(got.Rows), got.Rows)
+	}
+	if got.Rows[0].IsOther {
+		t.Fatalf("Rows[0] should not be IsOther: %+v", got.Rows[0])
 	}
 }
 

@@ -111,7 +111,40 @@
     };
   }
 
-  const BUILDERS = { timeseries: buildTimeSeries, doughnut: buildDoughnut };
+  // buildStackedBar: pihole-style "Client Activity" chart — one bar per
+  // time bucket, stacked by client (payload.series), folded "Other" series
+  // included as just another series (already summed server-side, see
+  // clientActivityPayload). Always shown with a legend, same rule as the
+  // doughnut builder, since there's always >=2 series once the card
+  // renders at all (a lone client still gets an implicit "Other" of zero,
+  // harmless either way).
+  function buildStackedBar(payload, t) {
+    const datasets = (payload.series || []).map(function (s, i) {
+      return {
+        label: s.name,
+        data: s.values,
+        backgroundColor: t.categorical[i % t.categorical.length],
+      };
+    });
+    return {
+      type: "bar",
+      data: { labels: payload.labels, datasets: datasets },
+      options: Object.assign(baseOptions(t), {
+        plugins: Object.assign(baseOptions(t).plugins, { legend: { position: "right", labels: baseOptions(t).plugins.legend.labels } }),
+        scales: {
+          x: { stacked: true, ticks: { color: t.ink.muted, maxTicksLimit: 8, font: { size: 10 } }, grid: { display: false } },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            ticks: { color: t.ink.muted, precision: 0, font: { size: 10 } },
+            grid: { color: t.ink.grid },
+          },
+        },
+      }),
+    };
+  }
+
+  const BUILDERS = { timeseries: buildTimeSeries, doughnut: buildDoughnut, stackedbar: buildStackedBar };
 
   const instances = new Map(); // canvas id -> Chart instance
 

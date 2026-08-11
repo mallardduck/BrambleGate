@@ -84,8 +84,8 @@ func TestDashboardActivity_EnabledNoStore_ShowsPersistenceNote(t *testing.T) {
 	if !strings.Contains(body, "Total queries") {
 		t.Fatalf("expected the cheap-rollup tiles to render even with no Store configured, got: %s", body)
 	}
-	if strings.Count(body, "Enable Query Log persistence") != 2 {
-		t.Fatalf("expected both top-domains and top-clients cards to show the persistence note, got: %s", body)
+	if strings.Count(body, "Enable Query Log persistence") != 3 {
+		t.Fatalf("expected the client-activity, top-domains and top-clients cards to show the persistence note, got: %s", body)
 	}
 }
 

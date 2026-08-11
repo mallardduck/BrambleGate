@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -147,6 +148,123 @@ func (l *Log) TopClients(ctx context.Context, window time.Duration, n int) ([]Cl
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// ClientActivityRow is one series in a ClientActivity result: a client's
+// (or the folded "Other" bucket's) query volume across the same buckets as
+// ClientActivitySeries.Buckets, dense/zero-filled like Series. IsOther is
+// true for the single trailing row folding every client outside the
+// top-N — ClientIP/VLAN are empty on that row, same convention as
+// vlanBarLabel's "(none)" handling for an unmatched VLAN, but left to the
+// caller to label since querylog stays display-agnostic.
+type ClientActivityRow struct {
+	ClientIP string
+	VLAN     string
+	IsOther  bool
+	Counts   []int64
+}
+
+// ClientActivitySeries is ClientActivity's result: a dense set of bucket
+// starts shared by every row, plus one row per top-N client and (if any
+// queries fell outside the top-N) a final IsOther row.
+type ClientActivitySeries struct {
+	Buckets []time.Time
+	Rows    []ClientActivityRow
+}
+
+// ClientActivity returns a stacked time series of query volume for the
+// topN most active (client IP, VLAN) pairs in [from,to), bucketed at the
+// given width, with every other client folded into a trailing "Other" row —
+// the per-client breakdown pihole's dashboard calls "Client Activity."
+// Store-backed only, like TopDomains/TopClients: client-level granularity
+// isn't in the cheap in-memory rollup (stats.go's doc comment on why).
+func (l *Log) ClientActivity(ctx context.Context, from, to time.Time, bucket time.Duration, topN int) (ClientActivitySeries, error) {
+	if l == nil || l.store == nil {
+		return ClientActivitySeries{}, ErrStoreNotConfigured
+	}
+	if !to.After(from) {
+		return ClientActivitySeries{}, errors.New("querylog: client activity: to must be after from")
+	}
+	bucketMs := bucket.Milliseconds()
+	if bucketMs <= 0 {
+		return ClientActivitySeries{}, errors.New("querylog: client activity: bucket must be positive")
+	}
+
+	fromMs, toMs := from.UnixMilli(), to.UnixMilli()
+	rows, err := l.store.db.QueryContext(ctx,
+		`SELECT (ts_unix_ms / ?) AS b, client_ip, vlan, COUNT(*) c FROM queries
+		 WHERE ts_unix_ms >= ? AND ts_unix_ms < ? GROUP BY b, client_ip, vlan`,
+		bucketMs, fromMs, toMs,
+	)
+	if err != nil {
+		return ClientActivitySeries{}, fmt.Errorf("querylog: client activity: %w", err)
+	}
+	defer rows.Close()
+
+	type clientKey struct{ ip, vlan string }
+	perBucket := make(map[clientKey]map[int64]int64)
+	totals := make(map[clientKey]int64)
+	for rows.Next() {
+		var b int64
+		var k clientKey
+		var c int64
+		if err := rows.Scan(&b, &k.ip, &k.vlan, &c); err != nil {
+			return ClientActivitySeries{}, fmt.Errorf("querylog: client activity: scan: %w", err)
+		}
+		if perBucket[k] == nil {
+			perBucket[k] = make(map[int64]int64)
+		}
+		perBucket[k][b] = c
+		totals[k] += c
+	}
+	if err := rows.Err(); err != nil {
+		return ClientActivitySeries{}, err
+	}
+
+	top := make([]clientKey, 0, len(totals))
+	for k := range totals {
+		top = append(top, k)
+	}
+	sort.Slice(top, func(i, j int) bool {
+		if totals[top[i]] != totals[top[j]] {
+			return totals[top[i]] > totals[top[j]]
+		}
+		if top[i].ip != top[j].ip {
+			return top[i].ip < top[j].ip
+		}
+		return top[i].vlan < top[j].vlan
+	})
+	var other []clientKey
+	if len(top) > topN {
+		top, other = top[:topN], top[topN:]
+	}
+
+	fromBucket := fromMs / bucketMs
+	lastBucket := (toMs - 1) / bucketMs
+	n := int(lastBucket - fromBucket + 1)
+	buckets := make([]time.Time, n)
+	for i := range n {
+		buckets[i] = time.UnixMilli((fromBucket + int64(i)) * bucketMs).UTC()
+	}
+
+	out := ClientActivitySeries{Buckets: buckets, Rows: make([]ClientActivityRow, 0, len(top)+1)}
+	for _, k := range top {
+		row := ClientActivityRow{ClientIP: k.ip, VLAN: k.vlan, Counts: make([]int64, n)}
+		for i := range n {
+			row.Counts[i] = perBucket[k][fromBucket+int64(i)]
+		}
+		out.Rows = append(out.Rows, row)
+	}
+	if len(other) > 0 {
+		row := ClientActivityRow{IsOther: true, Counts: make([]int64, n)}
+		for _, k := range other {
+			for i := range n {
+				row.Counts[i] += perBucket[k][fromBucket+int64(i)]
+			}
+		}
+		out.Rows = append(out.Rows, row)
+	}
+	return out, nil
 }
 
 // Series returns a dense, zero-filled query-volume time series over

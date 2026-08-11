@@ -26,6 +26,10 @@ type DashboardActivityData struct {
 	TopDomains      []querylog.DomainCount
 	TopClients      []querylog.ClientCount
 	StoreConfigured bool
+	// ClientActivity is the per-client stacked time series behind the
+	// Client Activity chart — Store-backed like TopDomains/TopClients, so
+	// only populated (and only rendered) when StoreConfigured.
+	ClientActivity querylog.ClientActivitySeries
 }
 
 // DashboardExtraHead is the Dashboard page's extra <head> content (see
@@ -61,6 +65,7 @@ templ DashboardActivity(data DashboardActivityData) {
 				<canvas id="chart-series" data-chart="timeseries" data-payload={ seriesPayload(data.Series) }></canvas>
 			</div>
 		</div>
+		@clientActivityCard(data)
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
 			<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 				<h3 class="text-sm font-semibold mb-3">Sources</h3>
@@ -122,6 +127,23 @@ templ vlanBar(lc labelCount, total int64) {
 			<div class="h-full bg-bramble-primary" style={ fmt.Sprintf("width:%.1f%%", barPct(lc.Count, total)) }></div>
 		</div>
 		<span class="w-10 text-right text-xs text-bramble-muted tabular-nums shrink-0">{ fmt.Sprintf("%d", lc.Count) }</span>
+	</div>
+}
+
+// clientActivityCard is pihole's "Client Activity" graph: query volume per
+// client stacked over time, one series per top-N client plus a folded
+// "Other" — mirrors topDomainsCard/topClientsCard's StoreConfigured gate
+// since client-level granularity is Store-only (querylog.Log.ClientActivity).
+templ clientActivityCard(data DashboardActivityData) {
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
+		<h3 class="text-sm font-semibold mb-3">Client activity — last 24h</h3>
+		if !data.StoreConfigured {
+			@statsStoreDisabledNote()
+		} else {
+			<div class="h-48">
+				<canvas id="chart-client-activity" data-chart="stackedbar" data-payload={ clientActivityPayload(data.ClientActivity) }></canvas>
+			</div>
+		}
 	</div>
 }
 
@@ -251,6 +273,43 @@ func barPct(count, total int64) float64 {
 type chartPayload struct {
 	Labels []string `json:"labels"`
 	Values []int64  `json:"values"`
+}
+
+// multiSeriesPayload is charts.js's stacked-bar payload shape: shared
+// bucket labels plus one named series per row (querylog.ClientActivityRow),
+// each holding a value per bucket — unlike chartPayload, whose single
+// Values slice pairs one value per label.
+type multiSeriesPayload struct {
+	Labels []string        `json:"labels"`
+	Series []namedSeries   `json:"series"`
+}
+
+type namedSeries struct {
+	Name   string  `json:"name"`
+	Values []int64 `json:"values"`
+}
+
+func clientActivityPayload(ca querylog.ClientActivitySeries) string {
+	p := multiSeriesPayload{Labels: make([]string, len(ca.Buckets)), Series: make([]namedSeries, len(ca.Rows))}
+	for i, b := range ca.Buckets {
+		p.Labels[i] = b.Format("15:04")
+	}
+	for i, row := range ca.Rows {
+		p.Series[i] = namedSeries{Name: clientActivityRowLabel(row), Values: row.Counts}
+	}
+	return mustJSON(p)
+}
+
+// clientActivityRowLabel mirrors vlanBarLabel's "(none)" convention for a
+// client whose address matched no VLAN.
+func clientActivityRowLabel(row querylog.ClientActivityRow) string {
+	if row.IsOther {
+		return "Other"
+	}
+	if row.VLAN == "" {
+		return row.ClientIP
+	}
+	return fmt.Sprintf("%s (%s)", row.ClientIP, row.VLAN)
 }
 
 func seriesPayload(buckets []querylog.Bucket) string {
