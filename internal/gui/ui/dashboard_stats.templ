@@ -61,7 +61,7 @@ templ DashboardActivity(data DashboardActivityData) {
 		</div>
 		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
 			<h3 class="text-sm font-semibold mb-3">Queries — last 24h</h3>
-			<div class="h-48">
+			<div class="h-48 relative">
 				<canvas id="chart-series" data-chart="timeseries" data-payload={ seriesPayload(data.Series) }></canvas>
 			</div>
 		</div>
@@ -69,13 +69,13 @@ templ DashboardActivity(data DashboardActivityData) {
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
 			<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 				<h3 class="text-sm font-semibold mb-3">Sources</h3>
-				<div class="h-48">
+				<div class="h-48 relative">
 					<canvas id="chart-sources" data-chart="doughnut" data-payload={ countsPayload(foldOther(sortedCounts(data.Totals.BySource), 6), sourceLabel) }></canvas>
 				</div>
 			</div>
 			<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 				<h3 class="text-sm font-semibold mb-3">Query types</h3>
-				<div class="h-48">
+				<div class="h-48 relative">
 					<canvas id="chart-qtypes" data-chart="doughnut" data-payload={ qtypeCountsPayload(data.Totals.ByQType) }></canvas>
 				</div>
 			</div>
@@ -140,7 +140,7 @@ templ clientActivityCard(data DashboardActivityData) {
 		if !data.StoreConfigured {
 			@statsStoreDisabledNote()
 		} else {
-			<div class="h-48">
+			<div class="h-48 relative">
 				<canvas id="chart-client-activity" data-chart="stackedbar" data-payload={ clientActivityPayload(data.ClientActivity) }></canvas>
 			</div>
 		}

@@ -141,7 +141,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3\">Queries — last 24h</h3><div class=\"h-48\"><canvas id=\"chart-series\" data-chart=\"timeseries\" data-payload=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3\">Queries — last 24h</h3><div class=\"h-48 relative\"><canvas id=\"chart-series\" data-chart=\"timeseries\" data-payload=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -162,7 +162,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4\"><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Sources</h3><div class=\"h-48\"><canvas id=\"chart-sources\" data-chart=\"doughnut\" data-payload=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4\"><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Sources</h3><div class=\"h-48 relative\"><canvas id=\"chart-sources\" data-chart=\"doughnut\" data-payload=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -175,7 +175,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"></canvas></div></div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Query types</h3><div class=\"h-48\"><canvas id=\"chart-qtypes\" data-chart=\"doughnut\" data-payload=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"></canvas></div></div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Query types</h3><div class=\"h-48 relative\"><canvas id=\"chart-qtypes\" data-chart=\"doughnut\" data-payload=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -460,7 +460,7 @@ func clientActivityCard(data DashboardActivityData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"h-48\"><canvas id=\"chart-client-activity\" data-chart=\"stackedbar\" data-payload=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"h-48 relative\"><canvas id=\"chart-client-activity\" data-chart=\"stackedbar\" data-payload=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
