@@ -12,7 +12,7 @@ import (
 // confirm what actually landed on disk without touching the closed handle.
 func reopenForVerification(t *testing.T, path string) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("turso", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatalf("reopen for verification: %v", err)
 	}

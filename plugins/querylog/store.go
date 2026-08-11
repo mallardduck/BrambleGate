@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "turso.tech/database/tursogo"
+	_ "modernc.org/sqlite"
 )
 
 // Defaults applied when a StoreConfig field is left at its zero value —
@@ -101,7 +101,7 @@ func OpenStore(cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("querylog: create store dir: %w", err)
 	}
 
-	db, err := sql.Open("turso", cfg.Path)
+	db, err := sql.Open("sqlite", cfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("querylog: open store: %w", err)
 	}

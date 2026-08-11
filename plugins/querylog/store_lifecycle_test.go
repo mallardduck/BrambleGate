@@ -23,8 +23,8 @@ func TestReconcileStore_EmptyPath_StaysNil(t *testing.T) {
 }
 
 func TestReconcileStore_OpensThenClosesOnDisable(t *testing.T) {
-	resetStoreSingleton(t)
 	dbPath := filepath.Join(t.TempDir(), "querylog.db")
+	resetStoreSingleton(t)
 
 	if err := ReconcileStore(StoreConfig{Path: dbPath}); err != nil {
 		t.Fatalf("ReconcileStore (enable): %v", err)
@@ -47,8 +47,8 @@ func TestReconcileStore_OpensThenClosesOnDisable(t *testing.T) {
 }
 
 func TestReconcileStore_SamePath_UpdatesTuningInPlace(t *testing.T) {
-	resetStoreSingleton(t)
 	dbPath := filepath.Join(t.TempDir(), "querylog.db")
+	resetStoreSingleton(t)
 
 	if err := ReconcileStore(StoreConfig{Path: dbPath, RetentionDays: 3}); err != nil {
 		t.Fatalf("ReconcileStore (open): %v", err)
@@ -69,8 +69,8 @@ func TestReconcileStore_SamePath_UpdatesTuningInPlace(t *testing.T) {
 }
 
 func TestReconcileStore_PathChange_ReopensStore(t *testing.T) {
-	resetStoreSingleton(t)
 	dir := t.TempDir()
+	resetStoreSingleton(t)
 	pathA := filepath.Join(dir, "a.db")
 	pathB := filepath.Join(dir, "b.db")
 
@@ -100,8 +100,8 @@ func TestCloseStore_NoStoreConfigured_NoOp(t *testing.T) {
 }
 
 func TestCloseStore_FlushesAndClearsSingleton(t *testing.T) {
-	resetStoreSingleton(t)
 	dbPath := filepath.Join(t.TempDir(), "querylog.db")
+	resetStoreSingleton(t)
 
 	if err := ReconcileStore(StoreConfig{Path: dbPath, FlushInterval: time.Hour}); err != nil {
 		t.Fatalf("ReconcileStore: %v", err)
