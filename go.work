@@ -10,5 +10,6 @@ use (
 	./plugins/localrecords
 	./plugins/mdnsbridge
 	./plugins/querylog
+	./plugins/vlancache
 	./vlanmatch
 )

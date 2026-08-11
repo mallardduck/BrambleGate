@@ -17,6 +17,7 @@ replace (
 	github.com/mallardduck/BrambleGate/plugins/localrecords => ./plugins/localrecords
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge => ./plugins/mdnsbridge
 	github.com/mallardduck/BrambleGate/plugins/querylog => ./plugins/querylog
+	github.com/mallardduck/BrambleGate/plugins/vlancache => ./plugins/vlancache
 	github.com/mallardduck/BrambleGate/vlanmatch => ./vlanmatch
 )
 
@@ -131,6 +132,7 @@ require (
 	github.com/mallardduck/BrambleGate/plugins/localrecords v0.0.0
 	github.com/mallardduck/BrambleGate/plugins/mdnsbridge v0.0.0
 	github.com/mallardduck/BrambleGate/plugins/querylog v0.0.0
+	github.com/mallardduck/BrambleGate/plugins/vlancache v0.0.0
 	github.com/mdlayher/socket v0.6.1 // indirect
 	github.com/mdlayher/vsock v1.3.0 // indirect
 	github.com/miekg/dns v1.1.72

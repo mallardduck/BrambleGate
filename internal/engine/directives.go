@@ -35,6 +35,7 @@ import (
 	_ "github.com/mallardduck/BrambleGate/plugins/localrecords"
 	_ "github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	_ "github.com/mallardduck/BrambleGate/plugins/querylog"
+	_ "github.com/mallardduck/BrambleGate/plugins/vlancache"
 
 	"github.com/coredns/coredns/core/dnsserver"
 )
@@ -103,6 +104,15 @@ func init() {
 		"mdnsbridge",
 		"localrecords",
 		"cache",
+		// vlancache is a from-scratch replacement for cache, not yet wired
+		// into configgen's rendering (writeCache still only ever emits
+		// "cache"). It keys entries by the requester's VLAN by default and
+		// by an upstream-echoed RFC 7871 SCOPE prefix when available, so it
+		// can safely run even when ecs_enabled is on — see
+		// plugins/vlancache/doc.go. Declared here so it's usable the moment
+		// configgen switches over; until then it simply can't appear in a
+		// rendered Corefile.
+		"vlancache",
 		"rewrite",
 		"acl",
 		"header",
