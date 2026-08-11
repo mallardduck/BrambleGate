@@ -438,16 +438,26 @@ func writeQueryLog(blk *corefile.Block, s model.Settings) {
 	})
 }
 
-// writeCache renders the cache directive, or omits it entirely: cache has no
-// concept of client subnet — it keys purely on qname/qtype/qclass
-// (plugin/cache) — so with ecs_enabled on it would cache one client's
-// subnet-scoped upstream answer and serve it to every other client regardless
-// of their real subnet, defeating ECS the same way caching a split-horizon
-// localrecords answer would (see localrecords/mdnsbridge's own cache-bypass
-// ordering above). That correctness rule always wins, before s.Cache's own
-// tuning is even considered.
+// writeCache renders the cache directive — the stock cache plugin when ECS is
+// off, or plugins/vlancache when ECS is on.
+//
+// The stock cache plugin has no concept of client subnet — it keys purely on
+// qname/qtype/qclass (plugin/cache) — so with ecs_enabled on it would cache
+// one client's subnet-scoped upstream answer and serve it to every other
+// client regardless of their real subnet, defeating ECS the same way caching
+// a split-horizon localrecords answer would (see localrecords/mdnsbridge's
+// own cache-bypass ordering above). vlancache exists precisely to be safe
+// here: it keys by the requester's VLAN by default, and by an
+// upstream-echoed RFC 7871 SCOPE prefix when available (plugins/vlancache/
+// doc.go).
+//
+// This split is a staged rollout, not the end state: vlancache doesn't yet
+// implement prefetch/serve_stale, so s.Cache's tuning only applies on the
+// ECS-off/stock-cache path for now. Once vlancache grows those, this can
+// collapse to always emitting vlancache.
 func writeCache(blk *corefile.Block, s model.Settings) {
 	if s.UpstreamDNS.ECS {
+		blk.Directive("vlancache")
 		return
 	}
 	c := s.Cache

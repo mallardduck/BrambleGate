@@ -83,8 +83,11 @@ type Observability struct {
 // BrambleGate use case that needs to move them — only to turn one off if it
 // ever causes surprising behavior for a given upstream.
 //
-// Note: cache is entirely omitted (regardless of these settings) whenever
-// upstream_dns.ecs_enabled is on — see configgen.writeCache.
+// Note: whenever upstream_dns.ecs_enabled is on, these settings are inert —
+// configgen.writeCache renders plugins/vlancache instead of the stock cache
+// plugin in that case (the stock plugin isn't safe to use with ECS: it has
+// no subnet dimension), and vlancache doesn't yet implement prefetch/
+// serve_stale.
 type CacheTuning struct {
 	// ServeStaleDisabled turns off `serve_stale` (rendered as `serve_stale 1h
 	// immediate` when enabled — CoreDNS's own default duration/refresh mode,

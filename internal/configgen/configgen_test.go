@@ -2,6 +2,7 @@ package configgen
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -654,10 +655,18 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 	if strings.Count(cf, "rewrite edns0 subnet set 32 128") != 2 { // one per server block (plain + dot)
 		t.Fatalf("expected rewrite edns0 subnet set 32 128 in both server blocks:\n%s", cf)
 	}
-	if strings.Contains(cf, "cache") {
-		t.Fatalf("cache should not be rendered when ecs is enabled — it isn't keyed on client subnet and would leak one client's ECS-scoped answer to another:\n%s", cf)
+	if stockCacheDirective.MatchString(cf) {
+		t.Fatalf("stock cache should not be rendered when ecs is enabled — it isn't keyed on client subnet and would leak one client's ECS-scoped answer to another:\n%s", cf)
+	}
+	if strings.Count(cf, "vlancache") != 2 { // one per server block (plain + dot)
+		t.Fatalf("expected vlancache in both server blocks when ecs is enabled:\n%s", cf)
 	}
 }
+
+// stockCacheDirective matches a bare "cache" directive line but not
+// "vlancache" — anchored so "vlancache" (which contains "cache" as a
+// substring) doesn't false-positive.
+var stockCacheDirective = regexp.MustCompile(`(?m)^\s*cache\b`)
 
 func TestRenderCacheDefaultsToServeStaleAndPrefetch(t *testing.T) {
 	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
