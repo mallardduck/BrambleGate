@@ -66,7 +66,10 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		return c.reply(w, r, e, now, do, ad)
 	}
 
-	bucket, _ := c.vlans.Lookup(ip)
+	bucket, ok := c.vlans.Lookup(ip)
+	if !ok {
+		bucket = globalBucket
+	}
 	directKey := hashDirect(bucket, qname, qtype, do, cd)
 	if e, ok := c.store.getDirect(directKey, now); ok {
 		return c.reply(w, r, e, now, do, ad)

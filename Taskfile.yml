@@ -13,7 +13,7 @@ version: '3'
 
 vars:
   # Keep in sync with the `use` block in go.work.
-  MODULES: ". mdnssd model plugins/localrecords plugins/mdnsbridge plugins/querylog pluginreg vlanmatch"
+  MODULES: ". mdnssd model plugins/localrecords plugins/mdnsbridge plugins/querylog plugins/vlancache pluginreg vlanmatch"
   BIN: bin/bramblegate
   IMAGE: bramblegate:dev
   GORELEASER: go tool -modfile=gotools/goreleaser/go.mod goreleaser
