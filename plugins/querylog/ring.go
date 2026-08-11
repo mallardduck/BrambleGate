@@ -57,6 +57,11 @@ func NewRing(capacity int) *Ring {
 	return &Ring{buf: make([]Entry, capacity)}
 }
 
+// Cap returns the ring's fixed entry capacity.
+func (r *Ring) Cap() int {
+	return len(r.buf)
+}
+
 // Push appends e, evicting the oldest entry once the ring is at capacity.
 func (r *Ring) Push(e Entry) {
 	r.mu.Lock()

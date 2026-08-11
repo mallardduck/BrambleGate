@@ -16,6 +16,11 @@ import (
 // is given.
 const defaultCapacity = 4096
 
+// ringMarker is the caddy Instance-storage key (via Controller.Get/Set) that
+// records "the ring decision for this parse has already been made" — see the
+// comment in setup where it's used.
+type ringMarker struct{}
+
 func init() {
 	plugin.Register("querylog", setup)
 	pluginreg.Register(pluginreg.Descriptor{
@@ -58,8 +63,33 @@ func setup(c *caddy.Controller) error {
 		}
 	}
 
-	ring := NewRing(capacity)
-	SetCurrent(ring)
+	// Ring lifecycle: shared process-wide, and deliberately NOT reset by every
+	// reload — from the operator's point of view BrambleGate itself didn't
+	// restart just because they applied a settings change, so their query
+	// history shouldn't vanish either, even though CoreDNS tears down and
+	// rebuilds its Instance underneath.
+	//
+	// Multi-listener deployments (Plain + DoT/DoH/DoQ/DoH3) render a querylog
+	// directive into every server block (buildServerBlock in configgen), and
+	// CoreDNS calls setup() once per block — all within the same reload. Every
+	// block must land on the exact same Ring, or each listener's handler ends
+	// up with its own independent ring and Current() (what the GUI reads)
+	// only ever reflects whichever block was parsed last.
+	//
+	// c.Get/c.Set (backed by the caddy Instance's own storage, shared by every
+	// Controller/block of one parse but freshly empty on the next) gives an
+	// explicit, reload-scoped "have I already decided the ring for this
+	// parse" signal — unlike inferring it from capacity equality, which can't
+	// tell "another block, same reload" apart from "a genuine reload that
+	// happens to reuse the same capacity" without accidentally resetting
+	// history on every unrelated reload.
+	if c.Get(ringMarker{}) == nil {
+		if current := Current(); current == nil || current.Cap() != capacity {
+			SetCurrent(NewRing(capacity))
+		}
+		c.Set(ringMarker{}, true)
+	}
+	ring := Current()
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		return &QueryLog{Next: next, Ring: ring, VLANs: vlanmatch.Current()}
