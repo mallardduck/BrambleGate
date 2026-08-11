@@ -13,6 +13,7 @@ import (
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -74,6 +75,19 @@ func queryFrom(lr *LocalRecords, clientIP, name string, qtype uint16) *dns.Msg {
 	rec := dnstest.NewRecorder(&clientWriter{ResponseWriter: &test.ResponseWriter{}, ip: clientIP})
 	lr.ServeDNS(context.Background(), rec, r)
 	return rec.Msg
+}
+
+// queryFromWithEntry mirrors queryFrom but wraps ctx with a querylog.Entry
+// first, the way the real querylog plugin does ahead of localrecords in the
+// chain — so tests can assert what localrecords self-attributes.
+func queryFromWithEntry(lr *LocalRecords, clientIP, name string, qtype uint16) (*dns.Msg, *querylog.Entry) {
+	r := new(dns.Msg)
+	r.SetQuestion(dns.Fqdn(name), qtype)
+	rec := dnstest.NewRecorder(&clientWriter{ResponseWriter: &test.ResponseWriter{}, ip: clientIP})
+	e := &querylog.Entry{}
+	ctx := querylog.NewContext(context.Background(), e)
+	lr.ServeDNS(ctx, rec, r)
+	return rec.Msg, e
 }
 
 func TestSplitHorizonValueOverride(t *testing.T) {
@@ -408,6 +422,44 @@ func TestDDRWrongTypeIsNODATA(t *testing.T) {
 	m := queryFrom(lr, "192.168.10.5", "_dns.resolver.arpa", dns.TypeA)
 	if m.Rcode != dns.RcodeSuccess || len(m.Answer) != 0 {
 		t.Fatalf("want NODATA, got rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+}
+
+func TestAttributesSuccessAnswer(t *testing.T) {
+	lr := build(t)
+	_, e := queryFromWithEntry(lr, "192.168.10.5", "nas.home.arpa", dns.TypeA)
+	if e.Source != "localrecords" || e.Verdict != "local" {
+		t.Fatalf("Source/Verdict = %q/%q, want localrecords/local", e.Source, e.Verdict)
+	}
+}
+
+func TestAttributesNXDOMAIN(t *testing.T) {
+	lr := build(t)
+	_, e := queryFromWithEntry(lr, "192.168.10.5", "nope.home.arpa", dns.TypeA)
+	if e.Source != "localrecords" || e.Verdict != "nxdomain" {
+		t.Fatalf("Source/Verdict = %q/%q, want localrecords/nxdomain", e.Source, e.Verdict)
+	}
+}
+
+func TestAttributesNODATA(t *testing.T) {
+	lr := build(t)
+	_, e := queryFromWithEntry(lr, "192.168.10.5", "nas.home.arpa", dns.TypeAAAA) // exists as A, not AAAA
+	if e.Source != "localrecords" || e.Verdict != "local" {
+		t.Fatalf("Source/Verdict = %q/%q, want localrecords/local", e.Source, e.Verdict)
+	}
+}
+
+func TestNoAttributionOnFallthrough(t *testing.T) {
+	lr := buildFallthrough(t)
+	r := new(dns.Msg)
+	r.SetQuestion(dns.Fqdn("other.dns.example.com"), dns.TypeA)
+	rec := dnstest.NewRecorder(&clientWriter{ResponseWriter: &test.ResponseWriter{}, ip: "192.168.10.5"})
+	e := &querylog.Entry{}
+	ctx := querylog.NewContext(context.Background(), e)
+	lr.ServeDNS(ctx, rec, r)
+
+	if e.Source != "" || e.Verdict != "" {
+		t.Fatalf("Source/Verdict = %q/%q, want empty (localrecords fell through, must not attribute)", e.Source, e.Verdict)
 	}
 }
 

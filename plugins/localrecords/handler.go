@@ -14,6 +14,7 @@ import (
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
 
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -99,19 +100,34 @@ func (lr *LocalRecords) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 		if !lr.namePresent(qname, vlan) {
 			m.Rcode = dns.RcodeNameError
 			m.Ns = []dns.RR{lr.soa(zone)}
+			attribute(ctx, "nxdomain")
 			_ = w.WriteMsg(m)
 			return dns.RcodeNameError, nil
 		}
 		// Name exists for this client but has no record of the requested type.
 		m.Ns = []dns.RR{lr.soa(zone)}
+		attribute(ctx, "local")
 		_ = w.WriteMsg(m)
 		return dns.RcodeSuccess, nil
 	}
 
 	m.Answer = answers
 	m.Extra = lr.ddrGlue(answers, vlan)
+	attribute(ctx, "local")
 	_ = w.WriteMsg(m)
 	return dns.RcodeSuccess, nil
+}
+
+// attribute self-reports this answer to querylog's in-flight Entry (if any —
+// nil-safe when querylog isn't in the chain, e.g. these plugin's own unit
+// tests). Only called on paths where localrecords itself produced the
+// response; a fallthrough leaves attribution to whatever plugin answers next
+// (docs/query-log.md).
+func attribute(ctx context.Context, verdict string) {
+	if e := querylog.FromContext(ctx); e != nil {
+		e.Source = "localrecords"
+		e.Verdict = verdict
+	}
 }
 
 // ddrGlue returns the target's own A/AAAA records for any DDR SVCB answers in

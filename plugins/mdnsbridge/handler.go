@@ -7,6 +7,8 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
+
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
 // DefaultAnswerTTL is the TTL on answers synthesized from discovered entries.
@@ -40,6 +42,10 @@ func (m *MDNSBridge) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 	msg.SetReply(r)
 	msg.Authoritative = true
 	msg.Answer = answersFor(state.Name(), state.QType(), ipv4, ipv6)
+	if e := querylog.FromContext(ctx); e != nil {
+		e.Source = "mdnsbridge"
+		e.Verdict = "local"
+	}
 	_ = w.WriteMsg(msg)
 	return dns.RcodeSuccess, nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -290,6 +291,39 @@ func TestServeDNS(t *testing.T) {
 	// AAAA with only v4 → owned NODATA (name exists, no v6).
 	if m := query(bridge(tbl), "printer.home.arpa", dns.TypeAAAA); m.Rcode != dns.RcodeSuccess || len(m.Answer) != 0 {
 		t.Fatalf("AAAA with no v6 should be NODATA, rcode=%d answers=%d", m.Rcode, len(m.Answer))
+	}
+}
+
+func TestServeDNS_AttributesOwnedAnswer(t *testing.T) {
+	cfg := baseCfg()
+	cfg.AutoPublish = SelectorSet{{}} // match-all: auto-publish everything
+	tbl := NewTable(cfg, time.Minute)
+	tbl.Upsert(Entry{Host: "printer.local.", Service: "_ipp._tcp", IPv4: []string{"192.168.1.9"}})
+
+	r := new(dns.Msg)
+	r.SetQuestion(dns.Fqdn("printer.home.arpa"), dns.TypeA)
+	rec := dnstest.NewRecorder(&test.ResponseWriter{})
+	e := &querylog.Entry{}
+	ctx := querylog.NewContext(context.Background(), e)
+	bridge(tbl).ServeDNS(ctx, rec, r)
+
+	if e.Source != "mdnsbridge" || e.Verdict != "local" {
+		t.Fatalf("Source/Verdict = %q/%q, want mdnsbridge/local", e.Source, e.Verdict)
+	}
+}
+
+func TestServeDNS_NoAttributionOnFallthrough(t *testing.T) {
+	tbl := NewTable(baseCfg(), time.Minute)
+
+	r := new(dns.Msg)
+	r.SetQuestion(dns.Fqdn("unknown.home.arpa"), dns.TypeA)
+	rec := dnstest.NewRecorder(&test.ResponseWriter{})
+	e := &querylog.Entry{}
+	ctx := querylog.NewContext(context.Background(), e)
+	bridge(tbl).ServeDNS(ctx, rec, r)
+
+	if e.Source != "" || e.Verdict != "" {
+		t.Fatalf("Source/Verdict = %q/%q, want empty (mdnsbridge fell through, must not attribute)", e.Source, e.Verdict)
 	}
 }
 
