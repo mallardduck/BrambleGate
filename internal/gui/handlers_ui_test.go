@@ -771,6 +771,40 @@ func TestQueryLogPage_ListenerLabelAndNewColumns(t *testing.T) {
 	}
 }
 
+func TestQueryLogGridFragmentFiltersByListener(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(16)
+	ring.Push(querylog.Entry{QName: "plain.home.arpa.", Listener: "0.0.0.0:53", Proto: "udp"})
+	ring.Push(querylog.Entry{QName: "encrypted.home.arpa.", Listener: "0.0.0.0:853", Proto: "tcp"})
+	querylog.SetCurrent(ring)
+
+	svc, st, _ := newService(t)
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.QueryLog.Enabled = true
+	settings.Listeners.Plain = model.Listener{Enabled: true, Port: 53}
+	settings.Listeners.DoT = model.Listener{Enabled: true, Port: 853}
+	if err := st.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/querylog/grid?listener=DoT", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "encrypted.home.arpa.") {
+		t.Fatalf("expected encrypted.home.arpa. (DoT) in a listener=DoT filtered grid, got: %s", body)
+	}
+	if strings.Contains(body, "plain.home.arpa.") {
+		t.Fatalf("did not expect plain.home.arpa. (Plain) in a listener=DoT filtered grid, got: %s", body)
+	}
+}
+
 func TestStaticAssetsServed(t *testing.T) {
 	h := newTestServer(t)
 	for _, path := range []string{"/static/style.css", "/static/js/htmx.min.js", "/static/js/theme.js"} {
