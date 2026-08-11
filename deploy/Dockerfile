@@ -37,7 +37,9 @@ COPY plugins/querylog/go.mod plugins/querylog/go.sum plugins/querylog/
 COPY plugins/vlancache/go.mod plugins/vlancache/go.sum plugins/vlancache/
 COPY vlanmatch/go.mod vlanmatch/
 
+# Cache Go modules and build output across runs
 RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
 COPY . .
