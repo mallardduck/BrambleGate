@@ -55,9 +55,9 @@ templ DashboardActivity(data DashboardActivityData) {
 		</h2>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
 			@activityTile("Total queries", fmt.Sprintf("%d", data.Totals.Queries))
-			@activityTile("Cache hit rate", pctLabel(data.Totals.BySource["cache"], data.Totals.Queries))
-			@activityTile("Answered locally", pctLabel(data.Totals.BySource["localrecords"]+data.Totals.BySource["mdnsbridge"], data.Totals.Queries))
-			@activityTile("Forwarded upstream", pctLabel(data.Totals.BySource["forward"], data.Totals.Queries))
+			@activityTile("Cache hit rate", pctLabel(data.Totals.ByVerdict["cached"]+data.Totals.ByVerdict["coalesced"], data.Totals.Queries))
+			@activityTile("Answered locally", pctLabel(data.Totals.ByVerdict["local"], data.Totals.Queries))
+			@activityTile("Forwarded upstream", pctLabel(data.Totals.ByVerdict["forwarded"], data.Totals.Queries))
 		</div>
 		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
 			<h3 class="text-sm font-semibold mb-3">Queries — last 24h</h3>

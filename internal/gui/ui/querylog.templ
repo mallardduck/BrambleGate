@@ -264,7 +264,7 @@ templ queryLogRow(e querylog.Entry, listeners model.Listeners) {
 			<p class="text-xs text-bramble-muted">{ dns.TypeToString[e.QType] }</p>
 		</td>
 		<td class="px-3 py-2">
-			<p class="text-xs">{ sourceLabel(e.Source) }</p>
+			<p class="text-xs">{ outcomeLabel(e.Source, e.Verdict) }</p>
 			<p class="text-xs text-bramble-muted">{ dns.RcodeToString[e.Rcode] }</p>
 		</td>
 		<td class="px-3 py-2 text-xs">
@@ -342,8 +342,10 @@ func ListenerLabel(listener string, l model.Listeners) string {
 }
 
 // sourceLabel maps querylog's raw Source values to slightly friendlier
-// display text; unrecognized values (open enum — dev-docs/query-log.md) pass
-// through as-is rather than showing blank.
+// display text for the "By Source" chart legend (a per-plugin breakdown, so
+// e.g. "vlancache" is deliberately its own slice there); unrecognized values
+// (open enum — dev-docs/query-log.md) pass through as-is rather than showing
+// blank.
 func sourceLabel(source string) string {
 	switch source {
 	case "localrecords":
@@ -358,5 +360,35 @@ func sourceLabel(source string) string {
 		return "—"
 	default:
 		return source
+	}
+}
+
+// outcomeLabel renders a query log row's outcome as friendly display text.
+// self-attributing plugins (localrecords, mdnsbridge) are identified by
+// Source; the forward/cache path — including vlancache, whose Source is
+// always "vlancache" regardless of outcome (dev-docs/query-log.md) — is
+// identified by Verdict instead, since that's what actually distinguishes a
+// cache hit from a real upstream call from a deduped-in-flight one (unlike
+// sourceLabel above, which exists for the per-plugin chart breakdown, not
+// this per-query outcome). An unrecognized verdict (open enum) passes
+// through as-is rather than showing blank.
+func outcomeLabel(source, verdict string) string {
+	switch source {
+	case "localrecords":
+		return "Local record"
+	case "mdnsbridge":
+		return "mDNS"
+	}
+	switch verdict {
+	case "cached":
+		return "Cache"
+	case "coalesced":
+		return "Cache (coalesced)"
+	case "forwarded", "nxdomain":
+		return "Forwarded upstream"
+	case "":
+		return "—"
+	default:
+		return verdict
 	}
 }

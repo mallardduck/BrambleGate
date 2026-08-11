@@ -2,6 +2,7 @@ package vlancache
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"sync"
@@ -104,8 +105,8 @@ func TestAttributesDirectCacheHit(t *testing.T) {
 
 	queryFrom(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA) // populate the cache
 	_, e := queryFromWithEntry(vc, "192.168.10.6", "nas.home.arpa", dns.TypeA)
-	if e.Source != "vlancache" || e.Verdict != "cache" {
-		t.Fatalf("Source/Verdict = %q/%q, want vlancache/cache", e.Source, e.Verdict)
+	if e.Source != "vlancache" || e.Verdict != "cached" {
+		t.Fatalf("Source/Verdict = %q/%q, want vlancache/cached", e.Source, e.Verdict)
 	}
 }
 
@@ -119,8 +120,8 @@ func TestAttributesLeaderFetchAsForward(t *testing.T) {
 	vc := build(t, next)
 
 	_, e := queryFromWithEntry(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA)
-	if e.Source != "vlancache" || e.Verdict != "forward" {
-		t.Fatalf("Source/Verdict = %q/%q, want vlancache/forward", e.Source, e.Verdict)
+	if e.Source != "vlancache" || e.Verdict != "forwarded" {
+		t.Fatalf("Source/Verdict = %q/%q, want vlancache/forwarded", e.Source, e.Verdict)
 	}
 }
 
@@ -151,12 +152,12 @@ func TestAttributesCoalescedFollowerDistinctFromForward(t *testing.T) {
 			t.Fatalf("Source = %q, want vlancache", e.Source)
 		}
 		switch e.Verdict {
-		case "forward":
+		case "forwarded":
 			forwards++
 		case "coalesced":
 			coalesced++
 		default:
-			t.Fatalf("Verdict = %q, want forward or coalesced", e.Verdict)
+			t.Fatalf("Verdict = %q, want forwarded or coalesced", e.Verdict)
 		}
 	}
 	if forwards != 1 || coalesced != 1 {
@@ -464,6 +465,78 @@ func TestConcurrentHerdNarrowScopeDoesNotLeakAcrossHosts(t *testing.T) {
 		if got != "192.0.2.200" {
 			t.Fatalf("host B query %d got %s, want its own scoped answer (192.0.2.200), not host A's", i, got)
 		}
+	}
+}
+
+// timeoutNext simulates the real forward plugin's behavior on a genuine
+// upstream connection failure (plugin/forward's ServeDNS: once every proxy's
+// connect attempt has timed out/failed, it returns (dns.RcodeServerFailure,
+// upstreamErr) without ever calling WriteMsg — the client's eventual SERVFAIL
+// comes from CoreDNS's own top-level fallback, not from a real DNS response
+// forward received). None of this package's other test doubles exercise
+// that: they all call w.WriteMsg with a real *dns.Msg. That gap is exactly
+// why the AAAA storm kept happening in production despite this plugin's
+// SERVFAIL caching — a connection-level timeout never reached the
+// cacheable() path at all, because fetch bailed out on the bare error
+// before ever looking at a response.
+type timeoutNext struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (t *timeoutNext) Name() string { return "timeout" }
+
+func (t *timeoutNext) ServeDNS(_ context.Context, _ dns.ResponseWriter, _ *dns.Msg) (int, error) {
+	t.mu.Lock()
+	t.calls++
+	t.mu.Unlock()
+	return dns.RcodeServerFailure, errors.New("simulated: no healthy upstream")
+}
+
+func TestUpstreamConnectionFailureIsCachedAndExpires(t *testing.T) {
+	next := &timeoutNext{}
+	vc := build(t, next)
+	vc.failTTL = 2 * time.Second
+
+	now := time.Now().UTC()
+	vc.now = func() time.Time { return now }
+
+	m := queryFrom(vc, "192.168.10.5", "pihole.lan", dns.TypeAAAA)
+	if m == nil || m.Rcode != dns.RcodeServerFailure {
+		t.Fatalf("want a written SERVFAIL reply, got %+v", m)
+	}
+	next.mu.Lock()
+	calls := next.calls
+	next.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("want 1 upstream call, got %d", calls)
+	}
+
+	queryFrom(vc, "192.168.10.6", "pihole.lan", dns.TypeAAAA) // same VLAN, within failTTL
+	next.mu.Lock()
+	calls = next.calls
+	next.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("want 1 upstream call (connection-failure storm should be deduped), got %d", calls)
+	}
+
+	now = now.Add(3 * time.Second)
+	queryFrom(vc, "192.168.10.7", "pihole.lan", dns.TypeAAAA)
+	next.mu.Lock()
+	calls = next.calls
+	next.mu.Unlock()
+	if calls != 2 {
+		t.Fatalf("want 2 upstream calls after failTTL expiry, got %d", calls)
+	}
+}
+
+func TestAttributesUpstreamConnectionFailureAsForward(t *testing.T) {
+	next := &timeoutNext{}
+	vc := build(t, next)
+
+	_, e := queryFromWithEntry(vc, "192.168.10.5", "pihole.lan", dns.TypeAAAA)
+	if e.Source != "vlancache" || e.Verdict != "forwarded" {
+		t.Fatalf("Source/Verdict = %q/%q, want vlancache/forwarded", e.Source, e.Verdict)
 	}
 }
 

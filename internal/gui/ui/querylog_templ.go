@@ -1064,9 +1064,9 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var44 string
-		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(sourceLabel(e.Source))
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(outcomeLabel(e.Source, e.Verdict))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 267, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 267, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -1198,8 +1198,10 @@ func ListenerLabel(listener string, l model.Listeners) string {
 }
 
 // sourceLabel maps querylog's raw Source values to slightly friendlier
-// display text; unrecognized values (open enum — dev-docs/query-log.md) pass
-// through as-is rather than showing blank.
+// display text for the "By Source" chart legend (a per-plugin breakdown, so
+// e.g. "vlancache" is deliberately its own slice there); unrecognized values
+// (open enum — dev-docs/query-log.md) pass through as-is rather than showing
+// blank.
 func sourceLabel(source string) string {
 	switch source {
 	case "localrecords":
@@ -1214,6 +1216,36 @@ func sourceLabel(source string) string {
 		return "—"
 	default:
 		return source
+	}
+}
+
+// outcomeLabel renders a query log row's outcome as friendly display text.
+// self-attributing plugins (localrecords, mdnsbridge) are identified by
+// Source; the forward/cache path — including vlancache, whose Source is
+// always "vlancache" regardless of outcome (dev-docs/query-log.md) — is
+// identified by Verdict instead, since that's what actually distinguishes a
+// cache hit from a real upstream call from a deduped-in-flight one (unlike
+// sourceLabel above, which exists for the per-plugin chart breakdown, not
+// this per-query outcome). An unrecognized verdict (open enum) passes
+// through as-is rather than showing blank.
+func outcomeLabel(source, verdict string) string {
+	switch source {
+	case "localrecords":
+		return "Local record"
+	case "mdnsbridge":
+		return "mDNS"
+	}
+	switch verdict {
+	case "cached":
+		return "Cache"
+	case "coalesced":
+		return "Cache (coalesced)"
+	case "forwarded", "nxdomain":
+		return "Forwarded upstream"
+	case "":
+		return "—"
+	default:
+		return verdict
 	}
 }
 

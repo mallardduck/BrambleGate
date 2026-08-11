@@ -79,7 +79,7 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 
 	scopedKey := hashScoped(qname, qtype, do, cd)
 	if e, ok := c.store.getScoped(scopedKey, ip, now); ok {
-		attribute(ctx, "cache")
+		attribute(ctx, "cached")
 		return c.reply(w, r, e, now, do, ad)
 	}
 
@@ -89,7 +89,7 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	}
 	directKey := hashDirect(bucket, qname, qtype, do, cd)
 	if e, ok := c.store.getDirect(directKey, now); ok {
-		attribute(ctx, "cache")
+		attribute(ctx, "cached")
 		return c.reply(w, r, e, now, do, ad)
 	}
 
@@ -120,7 +120,7 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	// "forwarded" — exactly what made a real SERVFAIL storm look unfixed in
 	// the query log.
 	if leader {
-		attribute(ctx, "forward")
+		attribute(ctx, "forwarded")
 	} else {
 		attribute(ctx, "coalesced")
 	}
@@ -187,14 +187,29 @@ func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string,
 	v, err, _ := c.sf.Do(key, func() (any, error) {
 		leader = true
 		cw := &captureWriter{ResponseWriter: w}
-		if _, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, r); err != nil {
-			return nil, err
-		}
-		if cw.msg == nil {
-			return nil, errNoUpstreamResponse
-		}
+		_, nextErr := plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, r)
 
 		res := cw.msg
+		if res == nil {
+			if nextErr == nil {
+				return nil, errNoUpstreamResponse
+			}
+			// Next failed without writing a response — e.g. plugin/forward's
+			// real behavior once every upstream connect attempt has
+			// timed out: it returns (RcodeServerFailure, err) and leaves the
+			// client's SERVFAIL to CoreDNS's own top-level fallback, never
+			// producing a *dns.Msg captureWriter can see. That's a genuine
+			// upstream failure, not a "no plugin answered" bug, so
+			// synthesize the same SERVFAIL the client would otherwise get
+			// from that fallback and run it through the normal
+			// cacheable()/ttlFor() path below — otherwise this exact
+			// failure mode (a connection timeout, as opposed to a DNS-level
+			// SERVFAIL reply) would silently bypass caching every time and
+			// reproduce the storm this plugin exists to fix.
+			res = new(dns.Msg)
+			res.SetRcode(r, dns.RcodeServerFailure)
+		}
+
 		mt, _ := response.Typify(res, now)
 		fr := &fetchResult{msg: res}
 		if cacheable(res, mt) {

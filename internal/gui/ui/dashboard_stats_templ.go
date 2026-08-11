@@ -129,15 +129,15 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Cache hit rate", pctLabel(data.Totals.BySource["cache"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Cache hit rate", pctLabel(data.Totals.ByVerdict["cached"]+data.Totals.ByVerdict["coalesced"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Answered locally", pctLabel(data.Totals.BySource["localrecords"]+data.Totals.BySource["mdnsbridge"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Answered locally", pctLabel(data.Totals.ByVerdict["local"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Forwarded upstream", pctLabel(data.Totals.BySource["forward"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Forwarded upstream", pctLabel(data.Totals.ByVerdict["forwarded"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
