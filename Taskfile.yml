@@ -17,6 +17,7 @@ vars:
   BIN: bin/bramblegate
   IMAGE: bramblegate:dev
   GORELEASER: go tool -modfile=gotools/goreleaser/go.mod goreleaser
+  GOLANGCI_LINT: go tool -modfile=gotools/golangci-lint/go.mod golangci-lint
 
 env:
   # The root module resolves sibling modules via committed `replace` directives,
@@ -58,6 +59,15 @@ tasks:
           (cd "$m" && go vet ./...) || exit 1
         done
 
+  lint:
+    desc: Run golangci-lint in every module (mirrors CI)
+    cmds:
+      - |
+        for m in {{.MODULES}}; do
+          echo "== $m =="
+          (cd "$m" && {{.GOLANGCI_LINT}} run ./...) || exit 1
+        done
+
   snapshot:
     desc: Build a local snapshot release with goreleaser (no publish, no tag needed)
     cmds:
@@ -71,7 +81,8 @@ tasks:
   ci:
     desc: Run the same checks CI runs (build+test, vet, generated-asset drift check)
     cmds:
-      - task: test
+      - task: lint
       - task: vet
+      - task: test
       - task: generate
       - git diff --exit-code -- internal/gui/ui internal/gui/static/style.css
