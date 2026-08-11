@@ -5,15 +5,21 @@ package ui
 // of the response's primary hx-target, so any handler can flash one
 // alongside its normal fragment — see render/renderError in handlers_ui.go.
 templ Toast(message string) {
-	<div
-		hx-swap-oob="afterbegin:#toast-container"
-		data-toast
-		class="pointer-events-auto flex items-start gap-2 rounded border border-bramble-danger bg-bramble-bg-card2 px-3 py-2 text-sm text-bramble-danger shadow-lg max-w-sm transition-opacity duration-200"
-	>
-		@iconAlertTriangle("w-4 h-4 shrink-0 mt-0.5")
-		<span class="flex-1 break-words">{ message }</span>
-		<button type="button" data-toast-close aria-label="Dismiss" class="shrink-0 text-bramble-muted hover:text-bramble-text">
-			@iconX("w-3.5 h-3.5")
-		</button>
+	// The afterbegin swap style only inserts this wrapper's *children* into
+	// #toast-container (htmx discards the element carrying hx-swap-oob itself
+	// for any non-outerHTML swap style) — so the actual styled/interactive
+	// toast must be nested one level down, or its classes and data-toast
+	// marker never make it into the DOM.
+	<div hx-swap-oob="afterbegin:#toast-container">
+		<div
+			data-toast
+			class="pointer-events-auto flex items-start gap-2 rounded border border-bramble-danger bg-bramble-bg-card2 px-3 py-2 text-sm text-bramble-danger shadow-lg max-w-sm transition-opacity duration-200"
+		>
+			@iconAlertTriangle("w-4 h-4 shrink-0 mt-0.5")
+			<span class="flex-1 break-words">{ message }</span>
+			<button type="button" data-toast-close aria-label="Dismiss" class="shrink-0 text-bramble-muted hover:text-bramble-text">
+				@iconX("w-3.5 h-3.5")
+			</button>
+		</div>
 	</div>
 }
