@@ -112,11 +112,11 @@ func TestRing_ConcurrentPushAndSnapshot(t *testing.T) {
 	r := NewRing(64)
 	var wg sync.WaitGroup
 
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			for j := 0; j < 200; j++ {
+			for j := range 200 {
 				r.Push(entryNamed(fmt.Sprintf("w%d-%d", i, j)))
 			}
 		}(i)
@@ -125,7 +125,7 @@ func TestRing_ConcurrentPushAndSnapshot(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for j := 0; j < 200; j++ {
+		for range 200 {
 			_ = r.Snapshot(Filter{})
 		}
 	}()

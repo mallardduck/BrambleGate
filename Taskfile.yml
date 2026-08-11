@@ -17,7 +17,7 @@ vars:
   BIN: bin/bramblegate
   IMAGE: bramblegate:dev
   GORELEASER: go tool -modfile=gotools/goreleaser/go.mod goreleaser
-  GOLANGCI_LINT: go tool -modfile=gotools/golangci-lint/go.mod golangci-lint
+  GOLANGCI_LINT: go tool -modfile={{.ROOT_DIR}}/gotools/golangci-lint/go.mod golangci-lint
 
 env:
   # The root module resolves sibling modules via committed `replace` directives,

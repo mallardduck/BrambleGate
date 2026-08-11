@@ -657,7 +657,7 @@ func TestQueryLogGridFragmentFiltersByQType(t *testing.T) {
 func TestQueryLogGridFragmentPagination(t *testing.T) {
 	t.Cleanup(func() { querylog.SetCurrent(nil) })
 	ring := querylog.NewRing(200)
-	for i := 0; i < 120; i++ {
+	for i := range 120 {
 		ring.Push(querylog.Entry{QName: fmt.Sprintf("q%03d.home.arpa.", i)})
 	}
 	querylog.SetCurrent(ring)
@@ -702,7 +702,7 @@ func TestQueryLogGridFragmentPagination(t *testing.T) {
 func TestQueryLogGridFragmentInterval_ReflectedInPollTrigger(t *testing.T) {
 	t.Cleanup(func() { querylog.SetCurrent(nil) })
 	ring := querylog.NewRing(200)
-	for i := 0; i < 60; i++ { // > one page (50/page), so page=2 below is real
+	for i := range 60 { // > one page (50/page), so page=2 below is real
 		ring.Push(querylog.Entry{QName: fmt.Sprintf("q%02d.home.arpa.", i)})
 	}
 	querylog.SetCurrent(ring)

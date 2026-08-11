@@ -77,7 +77,7 @@ func (r *Ring) Snapshot(f Filter) []Entry {
 
 	out := make([]Entry, 0, r.size)
 	// head-1 is the most recently written slot; walk backward r.size steps.
-	for i := 0; i < r.size; i++ {
+	for i := range r.size {
 		idx := (r.head - 1 - i + len(r.buf)) % len(r.buf)
 		e := r.buf[idx]
 		if f.matches(e) {
