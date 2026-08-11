@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/mallardduck/BrambleGate/model"
 )
@@ -14,10 +15,26 @@ type RecordsData struct {
 	Records model.RecordSet
 	VLANs   []model.VLAN
 	Editing *model.Record
+	// Zones is every zone the localrecords plugin is authoritative for
+	// (configgen.OwnedZones) — a record's name must fall under one of
+	// these or the save is rejected.
+	Zones []string
+	// Fallthrough is the subset of Zones (configgen.FallthroughZones) that
+	// defer to the upstream forwarder on a miss instead of answering
+	// NXDOMAIN — currently just the ACME domain, if configured.
+	Fallthrough []string
 }
 
 templ Records(data RecordsData) {
 	<h1 class="text-xl font-semibold mb-4">Records</h1>
+	<p class="mb-4 flex flex-wrap items-center text-xs text-bramble-muted">
+		Names must fall under an owned zone: <span class="font-mono mx-1">{ zoneList(nxdomainZones(data.Zones, data.Fallthrough)) }</span>
+		if len(data.Fallthrough) > 0 {
+			, or a fallthrough zone: <span class="font-mono mx-1">{ zoneList(data.Fallthrough) }</span>
+		}
+		.
+		@helpTooltip(zoneTooltip(data.Zones, data.Fallthrough))
+	</p>
 	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto">
 		<table class="w-full text-sm">
 			<thead>
@@ -172,7 +189,10 @@ templ recordForm(data RecordsData) {
 		</h2>
 		<div class="flex flex-wrap gap-3 items-end">
 			<label class="flex flex-col gap-1 text-sm">
-				<span class="text-bramble-muted text-xs">Name</span>
+				<span class="text-bramble-muted text-xs flex items-center">
+					Name
+					@helpTooltip(zoneTooltip(data.Zones, data.Fallthrough))
+				</span>
 				<input name="name" value={ name } placeholder="nas.home.arpa" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[180px]"/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
@@ -235,6 +255,54 @@ templ recordForm(data RecordsData) {
 			}
 		</div>
 	</form>
+}
+
+// zoneList renders owned zones as a human-readable list for the records-page
+// disclaimer, e.g. "home.arpa" or "home.arpa, example.com, and resolver.arpa".
+func zoneList(zones []string) string {
+	switch len(zones) {
+	case 0:
+		return "none configured"
+	case 1:
+		return zones[0]
+	case 2:
+		return zones[0] + " and " + zones[1]
+	default:
+		return strings.Join(zones[:len(zones)-1], ", ") + ", and " + zones[len(zones)-1]
+	}
+}
+
+// nxdomainZones returns zones (a subset of the owned zones) that are not in
+// fallthroughZones — the ones that answer NXDOMAIN for any unmatched name.
+func nxdomainZones(zones, fallthroughZones []string) []string {
+	fallthroughSet := map[string]bool{}
+	for _, z := range fallthroughZones {
+		fallthroughSet[z] = true
+	}
+	var nxdomain []string
+	for _, z := range zones {
+		if !fallthroughSet[z] {
+			nxdomain = append(nxdomain, z)
+		}
+	}
+	return nxdomain
+}
+
+// zoneTooltip explains the owned-zone restriction: which zones NXDOMAIN on a
+// miss vs. which fall through to the upstream forwarder, plus a note that
+// arbitrary custom zones (PiHole-style) aren't supported yet.
+func zoneTooltip(zones, fallthroughZones []string) string {
+	nxdomain := nxdomainZones(zones, fallthroughZones)
+
+	msg := "A record's name must fall under one of these zones or the save is rejected — names outside them are never silently forwarded."
+	if len(nxdomain) > 0 {
+		msg += " " + zoneList(nxdomain) + " answers NXDOMAIN for any unmatched name."
+	}
+	if len(fallthroughZones) > 0 {
+		msg += " " + zoneList(fallthroughZones) + " defers to your upstream resolver for names you haven't declared here (it's a real domain you still own in public DNS) — you can add any number of records under it, not just its auto-detected self-record."
+	}
+	msg += " Arbitrary custom zones (PiHole-style local DNS) aren't supported yet — a potential future feature."
+	return msg
 }
 
 func findOverride(overrides []model.VLANOverride, vlan string) model.VLANOverride {

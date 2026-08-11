@@ -1,8 +1,17 @@
 # Local records and split-horizon
 
-BrambleGate is authoritative for `home.arpa` (and any subdomains of it you use,
-e.g. `k8s.home.arpa`). Records you add here are answered directly — they never
-go to your upstream ad-block resolver.
+BrambleGate is authoritative for a fixed set of zones — `home.arpa` (and any
+subdomains of it you use, e.g. `k8s.home.arpa`), plus your ACME domain if
+configured and `resolver.arpa` if you have DDR records. Records you add here
+are answered directly — they never go to your upstream ad-block resolver.
+
+Unlike PiHole's arbitrary local-DNS-records feature, you cannot point a record
+at any domain name you like (e.g. `pihole.lan` or a real public domain).
+Saving a record whose name falls outside the owned zones is rejected at
+validation time with an "outside the owned zones" error — the write never
+reaches `records.yaml`. The GUI's `/records` page lists the currently owned
+zones. Supporting arbitrary custom zones is a potential future feature, not
+implemented today.
 
 ## Adding a record
 
@@ -85,10 +94,10 @@ land in any of your VLAN CIDRs unless you're on one).
 
 ## Troubleshooting
 
-**A record isn't resolving at all.** Confirm the name is actually under
-`home.arpa` (or a configured subdomain) — anything outside that zone falls
-through to your upstream forwarder instead, so a typo'd zone will "work" but
-resolve via forwarding, not this plugin.
+**A record won't save.** Confirm the name is actually under one of the owned
+zones (`home.arpa` or a configured subdomain, the ACME domain, or
+`resolver.arpa`) — a name outside all of them is rejected at save time with an
+"outside the owned zones" error, not silently accepted or forwarded.
 
 **Every VLAN gets the same answer.** Check the client's actual source subnet
 against your declared CIDRs — a device with a static IP outside the VLAN's

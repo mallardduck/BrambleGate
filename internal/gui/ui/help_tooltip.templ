@@ -21,7 +21,7 @@ templ helpTooltip(text string) {
 		<button type="button" aria-label="Help" class="inline-flex items-center justify-center text-bramble-primary cursor-help">
 			@iconHelp("w-3.5 h-3.5")
 		</button>
-		<span role="tooltip" class="invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 absolute bottom-full left-0 mb-1.5 w-64 max-w-[70vw] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20">
+		<span role="tooltip" class="invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-64 max-w-[min(16rem,90vw)] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20">
 			{ text }
 		</span>
 	</span>

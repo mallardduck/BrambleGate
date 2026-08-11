@@ -34,6 +34,20 @@ const OwnedZone = "home.arpa"
 // at least one DDR record to answer with (see ddrRecords).
 const DDRZone = "resolver.arpa"
 
+// OwnedZones is the exported form of ownedZones, for callers outside this
+// package (e.g. the GUI) that need to display which zones records must live
+// under without duplicating the zone-assembly logic.
+func OwnedZones(s model.Settings) []string {
+	return ownedZones(s)
+}
+
+// FallthroughZones is the exported form of fallthroughZones, for callers
+// outside this package that need to know which owned zones defer to the
+// upstream forwarder on a miss instead of answering NXDOMAIN.
+func FallthroughZones(s model.Settings) []string {
+	return fallthroughZones(s)
+}
+
 // ownedZones returns every zone localrecords should serve, in the order
 // they're written to the Corefile line: OwnedZone first, then the ACME domain
 // when enabled/configured, then DDRZone when there's DDR data to serve. See

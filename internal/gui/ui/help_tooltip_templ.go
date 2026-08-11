@@ -53,7 +53,7 @@ func helpTooltip(text string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</button> <span role=\"tooltip\" class=\"invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 absolute bottom-full left-0 mb-1.5 w-64 max-w-[70vw] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</button> <span role=\"tooltip\" class=\"invisible opacity-0 group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-64 max-w-[min(16rem,90vw)] rounded border border-bramble-border bg-bramble-bg-card2 p-2.5 text-xs leading-relaxed text-bramble-text shadow-md transition-opacity z-20\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

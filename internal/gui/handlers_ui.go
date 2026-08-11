@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/miekg/dns"
 
+	"github.com/mallardduck/BrambleGate/internal/configgen"
 	"github.com/mallardduck/BrambleGate/internal/gui/ui"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
@@ -168,7 +169,13 @@ func (h *handlers) renderRecords(w http.ResponseWriter, r *http.Request, editing
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data := ui.RecordsData{Records: rs, VLANs: settings.VLANs, Editing: editing}
+	data := ui.RecordsData{
+		Records:     rs,
+		VLANs:       settings.VLANs,
+		Editing:     editing,
+		Zones:       configgen.OwnedZones(settings),
+		Fallthrough: configgen.FallthroughZones(settings),
+	}
 	renderError(w, r, "Records", ui.PathRecords, ui.Records(data), formErr)
 }
 
