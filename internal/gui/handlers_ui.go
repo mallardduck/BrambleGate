@@ -122,15 +122,25 @@ func (h *handlers) dashboardActivityFragment(w http.ResponseWriter, r *http.Requ
 	_ = ui.DashboardActivity(dashboardActivityData(r)).Render(r.Context(), w)
 }
 
-// queryLogStats is a debug/troubleshooting surface: the exact same
-// in-memory rollup Totals the Dashboard's Activity tiles/charts render
-// (dashboardActivityData below), exposed as raw JSON — so a discrepancy
-// between what a chart shows and what the underlying counters actually hold
-// can be checked directly (e.g. `curl .../api/querylog/stats`) without
-// having to trust chart rendering/legend reading. The UI itself never calls
-// this; it's for humans, mirroring listPlugins' same rationale.
+// queryLogStatsResponse is /api/querylog/stats's JSON shape: Totals plus the
+// same RecentSeries bucket data the "Queries — last 24h" chart renders
+// (dashboardActivityData below) — both come from the exact in-memory
+// rollup the Dashboard reads, so this is a debug/troubleshooting surface: a
+// discrepancy between what a chart shows and what the underlying counters
+// actually hold can be checked directly (e.g. `curl .../api/querylog/stats`)
+// without having to trust chart rendering/legend reading. The UI itself
+// never calls this; it's for humans, mirroring listPlugins' same rationale.
+type queryLogStatsResponse struct {
+	querylog.Totals
+	Series []querylog.Bucket `json:"series"`
+}
+
 func (h *handlers) queryLogStats(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, querylog.CurrentLog().Totals())
+	log := querylog.CurrentLog()
+	writeJSON(w, http.StatusOK, queryLogStatsResponse{
+		Totals: log.Totals(),
+		Series: log.RecentSeries(),
+	})
 }
 
 // dashboardActivityData reads querylog.CurrentLog() for the Dashboard's

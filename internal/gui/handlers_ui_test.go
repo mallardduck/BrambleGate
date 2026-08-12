@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -676,6 +677,40 @@ func TestQueryLogPageEnabledShowsEmptyState(t *testing.T) {
 	// must still render (empty table), not error.
 	if !strings.Contains(rec.Body.String(), "No queries") {
 		t.Fatalf("expected the empty-state row when the ring is nil, got: %s", rec.Body.String())
+	}
+}
+
+// TestQueryLogStats_IncludesTotalsAndSeries locks in queryLogStatsResponse's
+// shape: Totals' fields promoted to the top level (so existing curl/jq
+// usage against by_source etc keeps working unchanged) plus a "series" key
+// carrying the same RecentSeries bucket data the "Queries — last 24h" chart
+// renders — previously only reachable via the HTML dashboard, not the raw
+// JSON debug endpoint.
+func TestQueryLogStats_IncludesTotalsAndSeries(t *testing.T) {
+	t.Cleanup(func() { querylog.SetCurrent(nil) })
+	ring := querylog.NewRing(16)
+	ring.Push(querylog.Entry{QName: "nas.home.arpa.", Source: "hosts", Verdict: "local"})
+	querylog.SetCurrent(ring)
+
+	h := newTestServer(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/querylog/stats", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Unmarshal: %v, body: %s", err, rec.Body.String())
+	}
+	for _, key := range []string{"queries", "by_verdict", "by_source", "by_vlan", "by_qtype", "by_cache_outcome", "series"} {
+		if _, ok := body[key]; !ok {
+			t.Errorf("response missing key %q, got: %s", key, rec.Body.String())
+		}
+	}
+	series, ok := body["series"].([]any)
+	if !ok || len(series) == 0 {
+		t.Fatalf("series = %v, want a non-empty bucket array", body["series"])
 	}
 }
 

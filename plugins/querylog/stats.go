@@ -35,8 +35,8 @@ type Totals struct {
 
 // Bucket is one point in a query-volume time series (Log.RecentSeries/Series).
 type Bucket struct {
-	Start time.Time
-	Count int64
+	Start time.Time `json:"start"`
+	Count int64     `json:"count"`
 }
 
 // statsRollup accumulates the cheap rollups every Entry feeds, alongside
