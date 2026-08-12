@@ -126,11 +126,17 @@ func TestNewHostsOverrideWinsAndFallsThrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query not-in-hosts.example: %v", err)
 	}
-	if len(resp2.Answer) != 1 {
-		t.Fatalf("want 1 fallthrough answer from whoami, got %d: %+v", len(resp2.Answer), resp2.Answer)
+	// whoami answers via the Additional section (its own A/SRV records go in
+	// Extra, never Answer — see plugin/whoami's ServeDNS), so a fallthrough
+	// here is confirmed by Extra, unlike the hosts override above.
+	if len(resp2.Answer) != 0 {
+		t.Fatalf("want 0 Answer entries from whoami's fallthrough, got %d: %+v", len(resp2.Answer), resp2.Answer)
 	}
-	if a, ok := resp2.Answer[0].(*dns.A); !ok || a.A.String() == "192.0.2.55" {
-		t.Fatalf("want a fallthrough answer distinct from the hosts override, got %+v", resp2.Answer[0])
+	if len(resp2.Extra) != 2 {
+		t.Fatalf("want 2 fallthrough Extra records from whoami, got %d: %+v", len(resp2.Extra), resp2.Extra)
+	}
+	if a, ok := resp2.Extra[0].(*dns.A); !ok || a.A.String() == "192.0.2.55" {
+		t.Fatalf("want a fallthrough answer distinct from the hosts override, got %+v", resp2.Extra[0])
 	}
 }
 
