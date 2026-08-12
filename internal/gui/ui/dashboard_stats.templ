@@ -56,7 +56,7 @@ templ DashboardActivity(data DashboardActivityData) {
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
 			@activityTile("Total queries", fmt.Sprintf("%d", data.Totals.Queries))
 			@activityTile("Cache hit rate", pctLabel(sourceGroupTotal(data.Totals.BySource, "cache", "vlancache"), data.Totals.Queries))
-			@activityTile("Answered locally", pctLabel(sourceGroupTotal(data.Totals.BySource, "localrecords", "mdnsbridge"), data.Totals.Queries))
+			@activityTile("Answered locally", pctLabel(sourceGroupTotal(data.Totals.BySource, "localrecords", "mdnsbridge", "hosts"), data.Totals.Queries))
 			@activityTile("Forwarded upstream", pctLabel(sourceGroupTotal(data.Totals.BySource, "forward"), data.Totals.Queries))
 		</div>
 		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
@@ -324,8 +324,8 @@ func vlanBarLabel(vlan string) string {
 // sourceGroupTotal sums BySource across the given Source values — the top
 // tiles group by Source (which plugin actually handled the query), not
 // Verdict (the outcome), so a tile's percentage always reflects real query
-// volume: e.g. "Answered locally" counts everything localrecords/mdnsbridge
-// took ownership of, including an authoritative NXDOMAIN denial for an
+// volume: e.g. "Answered locally" counts everything localrecords/mdnsbridge/
+// hosts took ownership of, including an authoritative NXDOMAIN denial for an
 // owned zone, not just a successful answer (Verdict "local" alone
 // undercounts this). Grouping this way keeps the four top tiles summing to
 // Totals.Queries.

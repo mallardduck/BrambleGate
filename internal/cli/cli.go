@@ -95,6 +95,11 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	// and refreshed again in reloadFn below on every later settings change
 	// (dev-docs/query-log.md).
 	vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
+	// querylog's fallback classifier needs hosts.yaml's own name set to
+	// attribute Source "hosts" correctly (the stock hosts plugin can't
+	// self-attribute — plugins/querylog/hosts.go) — same "before engine.New,
+	// refreshed again in reloadFn" lifecycle as vlanmatch above.
+	querylog.SetHostNames(hostNames(hosts))
 
 	// Cert paths are always populated, regardless of whether an encrypted
 	// listener happens to be on yet at boot — they're the same fixed
@@ -323,6 +328,7 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 			return err
 		}
 		vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
+		querylog.SetHostNames(hostNames(hosts))
 		if err := querylog.ReconcileStore(configgen.QueryLogStoreConfig(settings.QueryLog, opts.ConfigDir)); err != nil {
 			return err
 		}
@@ -343,6 +349,18 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 		pluginreg.SetLoaded("hosts", true, "") // see the matching comment in run() above
 		return nil
 	}
+}
+
+// hostNames flattens a model.HostSet into the flat hostname+alias list
+// querylog.SetHostNames wants — querylog's module deliberately doesn't
+// depend on model (dev-docs/repo-layout.md), so this conversion lives here,
+// same boundary as vlancfg.Build for vlanmatch.
+func hostNames(hs model.HostSet) []string {
+	var out []string
+	for _, h := range hs.Hosts {
+		out = append(out, h.Names()...)
+	}
+	return out
 }
 
 // defaultConfigDir is /config (the mounted volume root) when running inside a

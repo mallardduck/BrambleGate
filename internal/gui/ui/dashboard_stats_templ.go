@@ -133,7 +133,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Answered locally", pctLabel(sourceGroupTotal(data.Totals.BySource, "localrecords", "mdnsbridge"), data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Answered locally", pctLabel(sourceGroupTotal(data.Totals.BySource, "localrecords", "mdnsbridge", "hosts"), data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -884,8 +884,8 @@ func vlanBarLabel(vlan string) string {
 // sourceGroupTotal sums BySource across the given Source values — the top
 // tiles group by Source (which plugin actually handled the query), not
 // Verdict (the outcome), so a tile's percentage always reflects real query
-// volume: e.g. "Answered locally" counts everything localrecords/mdnsbridge
-// took ownership of, including an authoritative NXDOMAIN denial for an
+// volume: e.g. "Answered locally" counts everything localrecords/mdnsbridge/
+// hosts took ownership of, including an authoritative NXDOMAIN denial for an
 // owned zone, not just a successful answer (Verdict "local" alone
 // undercounts this). Grouping this way keeps the four top tiles summing to
 // Totals.Queries.

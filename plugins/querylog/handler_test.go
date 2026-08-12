@@ -227,6 +227,61 @@ func TestServeDNS_FallbackClassification_FastIsCache_SlowIsForward(t *testing.T)
 	}
 }
 
+// TestServeDNS_FallbackClassification_HostsNameMatch_AttributesHosts covers
+// the stock hosts plugin, which (unlike localrecords/mdnsbridge) can't
+// self-attribute via FromContext — it has no idea querylog exists. A name
+// match against SetHostNames must win over the latency heuristic in both
+// directions: fast (a real hosts.yaml lookup is in-process, so it usually
+// looks exactly like a cache hit) and slow (a loaded box shouldn't
+// misclassify a hosts answer as a real forward either).
+func TestServeDNS_FallbackClassification_HostsNameMatch_AttributesHosts(t *testing.T) {
+	defer SetHostNames(nil)
+	SetHostNames([]string{"nas.home.arpa"})
+
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	fast := newTestQueryLog(noopHandler(), fakeClock(start, start))
+	if _, err := fast.ServeDNS(context.Background(), &coretest.ResponseWriter{}, mustQuestion("nas.home.arpa.")); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+	fastEntry := fast.Ring.Snapshot(Filter{})[0]
+	if fastEntry.Source != "hosts" || fastEntry.Verdict != "local" {
+		t.Errorf("fast Source/Verdict = %q/%q, want hosts/local", fastEntry.Source, fastEntry.Verdict)
+	}
+
+	slow := newTestQueryLog(noopHandler(), fakeClock(start, start.Add(50*time.Millisecond)))
+	if _, err := slow.ServeDNS(context.Background(), &coretest.ResponseWriter{}, mustQuestion("nas.home.arpa.")); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+	slowEntry := slow.Ring.Snapshot(Filter{})[0]
+	if slowEntry.Source != "hosts" || slowEntry.Verdict != "local" {
+		t.Errorf("slow Source/Verdict = %q/%q, want hosts/local", slowEntry.Source, slowEntry.Verdict)
+	}
+}
+
+// TestServeDNS_HostsNameMatch_NXDOMAIN_StaysFallback covers the (unusual)
+// case of a query name that happens to match hosts.yaml but comes back
+// NXDOMAIN anyway — e.g. a query type the stock hosts plugin doesn't
+// recognize and falls through on. isHostName alone isn't sufficient
+// evidence hosts actually answered, so this must not be attributed "hosts".
+func TestServeDNS_HostsNameMatch_NXDOMAIN_StaysFallback(t *testing.T) {
+	defer SetHostNames(nil)
+	SetHostNames([]string{"nope.example.com"})
+
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	q := newTestQueryLog(nxdomainHandler(), fakeClock(start, start))
+
+	r := new(dns.Msg)
+	r.SetQuestion("nope.example.com.", dns.TypeA)
+	if _, err := q.ServeDNS(context.Background(), &coretest.ResponseWriter{}, r); err != nil {
+		t.Fatalf("ServeDNS: %v", err)
+	}
+	got := q.Ring.Snapshot(Filter{})[0]
+	if got.Source != "forward" || got.Verdict != "nxdomain" {
+		t.Errorf("Source/Verdict = %q/%q, want forward/nxdomain (hosts name-match isn't proof hosts answered)", got.Source, got.Verdict)
+	}
+}
+
 func mustQuestion(qname string) *dns.Msg {
 	r := new(dns.Msg)
 	r.SetQuestion(qname, dns.TypeA)

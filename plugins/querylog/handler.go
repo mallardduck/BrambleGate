@@ -74,7 +74,14 @@ func (q *QueryLog) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	entry.Latency = q.now().Sub(start)
 	entry.Rcode = rec.Rcode
 	if entry.Source == "" {
-		entry.Verdict, entry.Source = classifyFallback(rec.Rcode, entry.Latency, q.cacheLatencyThreshold())
+		if rec.Rcode == dns.RcodeSuccess && isHostName(entry.QName) {
+			// The stock hosts plugin can't self-attribute (it's third-party
+			// code with no idea querylog exists) — a name match against
+			// hosts.yaml's own set is a reliable substitute; see hosts.go.
+			entry.Verdict, entry.Source = "local", "hosts"
+		} else {
+			entry.Verdict, entry.Source = classifyFallback(rec.Rcode, entry.Latency, q.cacheLatencyThreshold())
+		}
 	}
 	// "none" is an explicit enum value for "the cache layer never saw this
 	// query" (e.g. localrecords/mdnsbridge answered directly, never calling

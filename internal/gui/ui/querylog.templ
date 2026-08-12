@@ -352,8 +352,12 @@ func sourceLabel(source string) string {
 		return "Local record"
 	case "mdnsbridge":
 		return "mDNS"
+	case "hosts":
+		return "Static host"
 	case "cache":
 		return "Cache"
+	case "vlancache":
+		return "VLAN cache"
 	case "forward":
 		return "Forwarded upstream"
 	case "":
@@ -378,6 +382,8 @@ func outcomeLabel(source, verdict string) string {
 		return "Local record"
 	case "mdnsbridge":
 		return "mDNS"
+	case "hosts":
+		return "Static host"
 	}
 	switch verdict {
 	case "cached":
