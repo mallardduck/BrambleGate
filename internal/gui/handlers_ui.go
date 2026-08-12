@@ -122,6 +122,17 @@ func (h *handlers) dashboardActivityFragment(w http.ResponseWriter, r *http.Requ
 	_ = ui.DashboardActivity(dashboardActivityData(r)).Render(r.Context(), w)
 }
 
+// queryLogStats is a debug/troubleshooting surface: the exact same
+// in-memory rollup Totals the Dashboard's Activity tiles/charts render
+// (dashboardActivityData below), exposed as raw JSON — so a discrepancy
+// between what a chart shows and what the underlying counters actually hold
+// can be checked directly (e.g. `curl .../api/querylog/stats`) without
+// having to trust chart rendering/legend reading. The UI itself never calls
+// this; it's for humans, mirroring listPlugins' same rationale.
+func (h *handlers) queryLogStats(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, querylog.CurrentLog().Totals())
+}
+
 // dashboardActivityData reads querylog.CurrentLog() for the Dashboard's
 // Activity section. TopDomains/TopClients share one underlying
 // "is Store configured" check (Log.TopDomains/TopClients, plugins/querylog/

@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,6 +154,31 @@ func TestDashboardActivityFragment_DisabledStillRendersDashboard(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestQueryLogStats_ReturnsTotalsJSON: a debug/troubleshooting endpoint
+// (server.go's queryLogStats) exposing the exact same Totals the Dashboard's
+// Activity tiles/charts render, as raw JSON — so a discrepancy between what
+// a chart shows and what the underlying counters hold can be checked
+// directly instead of trusting chart rendering/legend reading.
+func TestQueryLogStats_ReturnsTotalsJSON(t *testing.T) {
+	svc, _, _ := newService(t)
+	enableQueryLog(t, svc)
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/querylog/stats", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+	var got querylog.Totals
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response body isn't valid querylog.Totals JSON: %v (body: %s)", err, rec.Body.String())
 	}
 }
 
