@@ -127,7 +127,7 @@ func Settings(data SettingsData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = segOption("upstream_protocol", "plain", "Plain", data.Settings.UpstreamDNS.Protocol == "plain").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = segOption("upstream_protocol", "plain", "Do53", data.Settings.UpstreamDNS.Protocol == "plain").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -249,7 +249,7 @@ func Settings(data SettingsData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53, "").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = listenerFields("plain", "Do53", data.Settings.Listeners.Plain, 53, "Do53 is plain, unencrypted DNS over UDP/TCP port 53 — RFC-standard \"Do{x}\" shorthand alongside DoT/DoH/DoQ.").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -746,7 +746,7 @@ func Settings(data SettingsData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: plain DNS as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: Do53 (plain DNS) as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -770,7 +770,7 @@ func Settings(data SettingsData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(data.AdvertisedServices) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "<p class=\"text-bramble-muted text-sm\">Nothing to advertise yet — enable a DNS listener above (plain DNS or DoT).</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "<p class=\"text-bramble-muted text-sm\">Nothing to advertise yet — enable a DNS listener above (Do53 or DoT).</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -83,7 +83,7 @@ templ Dashboard(data DashboardData) {
 					</tr>
 				</thead>
 				<tbody>
-					@listenerRow("Plain", data.Settings.Listeners.Plain, false, privateDNS{})
+					@listenerRow("Do53", data.Settings.Listeners.Plain, false, privateDNS{})
 					@listenerRow("DoH", data.Settings.Listeners.DoH, true, dohPrivateDNS(data.Settings))
 					@listenerRow("DoH3", data.Settings.Listeners.DoH3.Listener, false, doh3PrivateDNS(data.Settings))
 					@listenerRow("DoT", data.Settings.Listeners.DoT, true, dotPrivateDNS(data.Settings))
@@ -187,7 +187,7 @@ templ acmeStatusCard(settings model.Settings, cert acme.Status, selfRecords []mo
 				<div>
 					<p class="text-bramble-muted text-xs uppercase tracking-wide mb-1 flex items-center">
 						<abbr title="Discovery of Designated Resolvers" class="no-underline cursor-help">DDR</abbr>
-						@helpTooltip("Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from plain DNS")
+						@helpTooltip("Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from Do53 (plain DNS)")
 					</p>
 					if settings.ACME.Enabled && settings.ACME.Domain != "" && settings.EncryptedListenerEnabled() {
 						@tag("Served", true)

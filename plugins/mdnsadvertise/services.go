@@ -25,7 +25,7 @@ func instanceNameFor(serviceType string) string {
 }
 
 // desiredServices computes the mDNS-SD service set this process should be
-// advertising for the given settings. Plain DNS uses the IANA-registered
+// advertising for the given settings. Do53 (plain DNS) uses the IANA-registered
 // service name for port 53, "domain" (CoreDNS's plain server block serves both
 // UDP and TCP, so both service types are advertised). Encrypted transports
 // follow draft-liu-add-dnssd-edns-01; DoH/DoQ aren't rendered by configgen yet,

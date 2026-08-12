@@ -267,16 +267,16 @@ type MDNS struct {
 }
 
 // MDNSAdvertise configures self-advertisement of this server's own DNS
-// service(s) (plain DNS, and DoT/DoH/DoQ when those listeners are enabled) via
-// mDNS-SD (draft-liu-add-dnssd-edns-01 for the encrypted transports; the
-// IANA-registered "domain" service name for plain port 53).
+// service(s) (Do53, plain DNS, and DoT/DoH/DoQ when those listeners are
+// enabled) via mDNS-SD (draft-liu-add-dnssd-edns-01 for the encrypted
+// transports; the IANA-registered "domain" service name for plain port 53).
 type MDNSAdvertise struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // DefaultSettings returns a minimal, immediately-usable configuration seeded on
 // first run when no settings.yaml exists yet (see internal/cli). It brings the
-// container up as a working plain-DNS front door that forwards to a public
+// container up as a working Do53 (plain DNS) front door that forwards to a public
 // resolver, so a fresh user gets a resolving server out of the box and can then
 // point upstream_dns at their own ad-block resolver (PiHole/AdGuard/Technitium)
 // and add VLANs/records. Encrypted listeners, ACME, and mDNS stay off until

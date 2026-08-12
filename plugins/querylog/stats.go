@@ -25,6 +25,11 @@ type Totals struct {
 	BySource  map[string]int64
 	ByVLAN    map[string]int64
 	ByQType   map[uint16]int64
+	// ByCacheOutcome mirrors Entry.CacheOutcome — see its doc comment.
+	// Empty-string entries (queries no cache plugin attributed) are counted
+	// like every other rollup here; callers rendering this as a chart should
+	// skip the "" key the same way they'd skip any other zero-signal bucket.
+	ByCacheOutcome map[string]int64
 }
 
 // Bucket is one point in a query-volume time series (Log.RecentSeries/Series).
@@ -42,11 +47,12 @@ type Bucket struct {
 type statsRollup struct {
 	mu sync.Mutex
 
-	queries   int64
-	byVerdict map[string]int64
-	bySource  map[string]int64
-	byVLAN    map[string]int64
-	byQType   map[uint16]int64
+	queries        int64
+	byVerdict      map[string]int64
+	bySource       map[string]int64
+	byVLAN         map[string]int64
+	byQType        map[uint16]int64
+	byCacheOutcome map[string]int64
 
 	bucketWidth time.Duration
 	buckets     []statsBucket
@@ -66,12 +72,13 @@ type statsBucket struct {
 
 func newStatsRollup(bucketWidth time.Duration, bucketCount int) *statsRollup {
 	return &statsRollup{
-		byVerdict:   make(map[string]int64),
-		bySource:    make(map[string]int64),
-		byVLAN:      make(map[string]int64),
-		byQType:     make(map[uint16]int64),
-		bucketWidth: bucketWidth,
-		buckets:     make([]statsBucket, bucketCount),
+		byVerdict:      make(map[string]int64),
+		bySource:       make(map[string]int64),
+		byVLAN:         make(map[string]int64),
+		byQType:        make(map[uint16]int64),
+		byCacheOutcome: make(map[string]int64),
+		bucketWidth:    bucketWidth,
+		buckets:        make([]statsBucket, bucketCount),
 	}
 }
 
@@ -87,6 +94,7 @@ func (s *statsRollup) observe(e Entry) {
 	s.bySource[e.Source]++
 	s.byVLAN[e.Client.VLAN]++
 	s.byQType[e.QType]++
+	s.byCacheOutcome[e.CacheOutcome]++
 
 	epoch := bucketEpoch(e.Timestamp, s.bucketWidth)
 	idx := bucketIndex(epoch, s.bucketWidth, len(s.buckets))
@@ -105,11 +113,12 @@ func (s *statsRollup) totals() Totals {
 	defer s.mu.Unlock()
 
 	return Totals{
-		Queries:   s.queries,
-		ByVerdict: copyStringCounts(s.byVerdict),
-		BySource:  copyStringCounts(s.bySource),
-		ByVLAN:    copyStringCounts(s.byVLAN),
-		ByQType:   copyQTypeCounts(s.byQType),
+		Queries:        s.queries,
+		ByVerdict:      copyStringCounts(s.byVerdict),
+		BySource:       copyStringCounts(s.bySource),
+		ByVLAN:         copyStringCounts(s.byVLAN),
+		ByQType:        copyQTypeCounts(s.byQType),
+		ByCacheOutcome: copyStringCounts(s.byCacheOutcome),
 	}
 }
 

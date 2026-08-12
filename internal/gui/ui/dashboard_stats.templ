@@ -80,6 +80,7 @@ templ DashboardActivity(data DashboardActivityData) {
 				</div>
 			</div>
 		</div>
+		@vlanCacheActivityCard(data.Totals.ByCacheOutcome)
 		@vlanBreakdown(data.Totals.ByVLAN, data.Totals.Queries)
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			@topDomainsCard(data)
@@ -128,6 +129,29 @@ templ vlanBar(lc labelCount, total int64) {
 		</div>
 		<span class="w-10 text-right text-xs text-bramble-muted tabular-nums shrink-0">{ fmt.Sprintf("%d", lc.Count) }</span>
 	</div>
+}
+
+// vlanCacheActivityCard shows vlancache's own outcome breakdown (hit /
+// coalesced / miss) — a dimension independent of the Sources chart above,
+// since a real miss that falls through to a forward is deliberately NOT
+// attributed to Source "vlancache" (plugins/querylog's Entry.CacheOutcome
+// doc comment explains why: Source is meant to answer "did this come from
+// cache," and a miss didn't). This card instead answers "what has vlancache
+// itself seen," including the misses the Sources chart intentionally
+// excludes. Hidden entirely when nothing has populated it yet (no ECS/
+// vlancache traffic, or Query Log just started).
+templ vlanCacheActivityCard(byOutcome map[string]int64) {
+	if cacheActivityTotal(byOutcome) > 0 {
+		<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4">
+			<h3 class="text-sm font-semibold mb-3 flex items-center">
+				Cache activity
+				@helpTooltip("vlancache's own outcome breakdown: answered from cache, deduped against an in-flight identical request (coalesced), or a genuine miss that went to the network. Independent of the Sources chart, which only counts a query as \"vlancache\" when it actually came from the cache.")
+			</h3>
+			<div class="h-48 relative">
+				<canvas id="chart-cache-activity" data-chart="doughnut" data-payload={ countsPayload(nonEmptyCounts(byOutcome), cacheOutcomeLabel) }></canvas>
+			</div>
+		</div>
+	}
 }
 
 // clientActivityCard is pihole's "Client Activity" graph: query volume per
@@ -241,6 +265,48 @@ func foldOther(counts []labelCount, max int) []labelCount {
 		other += c.Count
 	}
 	return append(out, labelCount{Label: "Other", Count: other})
+}
+
+// nonEmptyCounts drops the "" key some rollups (e.g. ByCacheOutcome) carry
+// for queries no relevant plugin touched — irrelevant noise for a chart
+// specifically about that plugin's own activity, unlike Sources/VLAN/QType
+// charts where "" is itself a meaningful bucket (vlanBarLabel, sourceLabel).
+func nonEmptyCounts(m map[string]int64) []labelCount {
+	all := sortedCounts(m)
+	out := make([]labelCount, 0, len(all))
+	for _, c := range all {
+		if c.Label != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// cacheActivityTotal sums every non-"" bucket — gates vlanCacheActivityCard,
+// since "" alone (nothing attributed) shouldn't render an empty chart.
+func cacheActivityTotal(byOutcome map[string]int64) int64 {
+	var total int64
+	for k, v := range byOutcome {
+		if k != "" {
+			total += v
+		}
+	}
+	return total
+}
+
+// cacheOutcomeLabel maps Entry.CacheOutcome's raw values to display text for
+// the "Cache activity" chart.
+func cacheOutcomeLabel(outcome string) string {
+	switch outcome {
+	case "hit":
+		return "Cache hit"
+	case "coalesced":
+		return "Coalesced"
+	case "miss":
+		return "Forwarded (miss)"
+	default:
+		return outcome
+	}
 }
 
 // vlanBarLabel: an empty VLAN means "the client's address matched no

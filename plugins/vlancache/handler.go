@@ -80,6 +80,7 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	scopedKey := hashScoped(qname, qtype, do, cd)
 	if e, ok := c.store.getScoped(scopedKey, ip, now); ok {
 		attribute(ctx, "cached")
+		attributeCache(ctx, "hit")
 		return c.reply(w, r, e, now, do, ad)
 	}
 
@@ -90,6 +91,7 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	directKey := hashDirect(bucket, qname, qtype, do, cd)
 	if e, ok := c.store.getDirect(directKey, now); ok {
 		attribute(ctx, "cached")
+		attributeCache(ctx, "hit")
 		return c.reply(w, r, e, now, do, ad)
 	}
 
@@ -111,18 +113,23 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		}
 	}
 	// leader is the one caller whose goroutine actually drove Next and hit
-	// upstream; every other caller sharing the same fetch got the leader's
-	// result without a network call of its own. Distinguishing them here
-	// matters: both can take equally long from the client's perspective (a
-	// follower waits for the same slow/timing-out upstream call), so
-	// querylog's latency-based fallback classification can't tell them
-	// apart and would mislabel every coalesced follower as its own
-	// "forwarded" — exactly what made a real SERVFAIL storm look unfixed in
-	// the query log.
+	// upstream — that request wasn't served by vlancache, it was a genuine
+	// cache miss that fell through to forward, so it must NOT self-attribute
+	// here (same fallthrough convention as localrecords/mdnsbridge): leave
+	// entry.Source/Verdict blank and let querylog's own latency-based
+	// classifyFallback label it "forward"/"forwarded", exactly as it would
+	// without vlancache in the chain at all. Only a follower that got the
+	// leader's result without a network call of its own is genuinely
+	// vlancache's own doing — self-attributed as "coalesced" so it reads as
+	// a flavor of vlancache activity (alongside "cached" above), distinct
+	// from a real forward, instead of querylog's latency heuristic
+	// mislabeling it "forwarded" just because it took just as long as the
+	// leader's real upstream call.
 	if leader {
-		attribute(ctx, "forwarded")
+		attributeCache(ctx, "miss")
 	} else {
 		attribute(ctx, "coalesced")
+		attributeCache(ctx, "coalesced")
 	}
 	if err := w.WriteMsg(toClientReply(fr.msg, r, do, ad)); err != nil {
 		return dns.RcodeServerFailure, err
@@ -132,11 +139,27 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 
 // attribute self-reports this answer to querylog's in-flight Entry (if any —
 // nil-safe when querylog isn't in the chain, e.g. these plugin's own unit
-// tests), mirroring plugins/localrecords' own attribute helper.
+// tests), mirroring plugins/localrecords' own attribute helper. Only called
+// on paths vlancache itself actually served (a hit, or a coalesced follower)
+// — a real cache miss that falls through to forward must NOT go through
+// this, so it stays attributed to "forward" like it would without vlancache
+// in the chain at all (see the ServeDNS call sites).
 func attribute(ctx context.Context, verdict string) {
 	if e := querylog.FromContext(ctx); e != nil {
 		e.Source = "vlancache"
 		e.Verdict = verdict
+	}
+}
+
+// attributeCache records outcome ("hit", "coalesced", "miss") to the
+// in-flight Entry's CacheOutcome, unconditionally — unlike attribute, this
+// runs on every path including a real miss/forward, so the dashboard can
+// show vlancache's full activity breakdown even for the queries that must
+// NOT be claimed as Source "vlancache" (see Entry.CacheOutcome's doc
+// comment).
+func attributeCache(ctx context.Context, outcome string) {
+	if e := querylog.FromContext(ctx); e != nil {
+		e.CacheOutcome = outcome
 	}
 }
 

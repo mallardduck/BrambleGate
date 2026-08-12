@@ -22,6 +22,16 @@ type Entry struct {
 	Rcode     int
 	Latency   time.Duration
 
+	// CacheOutcome is a cache-subsystem-specific dimension, independent of
+	// Verdict/Source: plugins/vlancache sets it ("hit", "coalesced", "miss")
+	// on every query it handles, even ones it must NOT claim as Source
+	// "vlancache" (a genuine miss that falls through to a real forward stays
+	// unattributed in Source/Verdict — see plugins/vlancache/handler.go —
+	// but is still a "miss" here). Lets the dashboard show a full breakdown
+	// of vlancache's own activity without polluting the general Source
+	// breakdown with misses that are really forwards.
+	CacheOutcome string
+
 	// Listener is the local address the query arrived on (w.LocalAddr()),
 	// e.g. "0.0.0.0:53" — answers "what port did this come through" without
 	// querylog needing model's listener/transport vocabulary (it deliberately

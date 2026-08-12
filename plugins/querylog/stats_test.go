@@ -8,7 +8,7 @@ import (
 func TestStatsRollup_Totals_Empty(t *testing.T) {
 	s := newStatsRollup(time.Minute, 10)
 	got := s.totals()
-	if got.Queries != 0 || len(got.ByVerdict) != 0 || len(got.BySource) != 0 || len(got.ByVLAN) != 0 || len(got.ByQType) != 0 {
+	if got.Queries != 0 || len(got.ByVerdict) != 0 || len(got.BySource) != 0 || len(got.ByVLAN) != 0 || len(got.ByQType) != 0 || len(got.ByCacheOutcome) != 0 {
 		t.Fatalf("expected an empty Totals, got %+v", got)
 	}
 }

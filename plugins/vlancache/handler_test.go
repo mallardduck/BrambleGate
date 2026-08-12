@@ -105,12 +105,23 @@ func TestAttributesDirectCacheHit(t *testing.T) {
 
 	queryFrom(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA) // populate the cache
 	_, e := queryFromWithEntry(vc, "192.168.10.6", "nas.home.arpa", dns.TypeA)
-	if e.Source != "vlancache" || e.Verdict != "cached" {
-		t.Fatalf("Source/Verdict = %q/%q, want vlancache/cached", e.Source, e.Verdict)
+	if e.Source != "vlancache" || e.Verdict != "cached" || e.CacheOutcome != "hit" {
+		t.Fatalf("Source/Verdict/CacheOutcome = %q/%q/%q, want vlancache/cached/hit", e.Source, e.Verdict, e.CacheOutcome)
 	}
 }
 
-func TestAttributesLeaderFetchAsForward(t *testing.T) {
+// TestNoAttributionOnRealForward mirrors localrecords' own
+// TestNoAttributionOnFallthrough: a genuine cache miss that falls through to
+// Next and hits upstream was NOT served by vlancache, so vlancache must not
+// claim it as Source "vlancache" — it must leave Source/Verdict blank and
+// let querylog's own classifyFallback label it "forward"/"forwarded", the
+// same as it would without vlancache in the chain at all. Attributing every
+// vlancache-handled query to "vlancache" (including real forwards) is
+// exactly what made the query log's Source breakdown misleading: it no
+// longer distinguished "answered from cache" from "went to the network." The
+// dashboard's separate vlancache-activity breakdown still sees this as a
+// "miss" via CacheOutcome, independent of Source/Verdict.
+func TestNoAttributionOnRealForward(t *testing.T) {
 	next := &stubNext{fn: func(r *dns.Msg) *dns.Msg {
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -120,12 +131,22 @@ func TestAttributesLeaderFetchAsForward(t *testing.T) {
 	vc := build(t, next)
 
 	_, e := queryFromWithEntry(vc, "192.168.10.5", "nas.home.arpa", dns.TypeA)
-	if e.Source != "vlancache" || e.Verdict != "forwarded" {
-		t.Fatalf("Source/Verdict = %q/%q, want vlancache/forwarded", e.Source, e.Verdict)
+	if e.Source != "" || e.Verdict != "" {
+		t.Fatalf("Source/Verdict = %q/%q, want empty (vlancache fell through to a real forward, must not attribute)", e.Source, e.Verdict)
+	}
+	if e.CacheOutcome != "miss" {
+		t.Fatalf("CacheOutcome = %q, want miss", e.CacheOutcome)
 	}
 }
 
-func TestAttributesCoalescedFollowerDistinctFromForward(t *testing.T) {
+// TestAttributesCoalescedFollowerNotTheLeader checks the other half of that
+// same distinction under concurrency: of a coalesced pair, only the follower
+// (which never touched the network) is genuinely vlancache's own doing and
+// gets Source "vlancache"/Verdict "coalesced" — the leader, which made the
+// real upstream call, must stay unattributed exactly like the solo-miss case
+// above, not get folded into "vlancache" just because it happened to run
+// inside the same fetch.
+func TestAttributesCoalescedFollowerNotTheLeader(t *testing.T) {
 	next := &blockingNext{}
 	vc := build(t, next)
 
@@ -146,22 +167,25 @@ func TestAttributesCoalescedFollowerDistinctFromForward(t *testing.T) {
 	close(start)
 	wg.Wait()
 
-	var forwards, coalesced int
+	var unattributed, coalesced int
 	for _, e := range entries {
-		if e.Source != "vlancache" {
-			t.Fatalf("Source = %q, want vlancache", e.Source)
-		}
-		switch e.Verdict {
-		case "forwarded":
-			forwards++
-		case "coalesced":
+		switch {
+		case e.Source == "" && e.Verdict == "":
+			if e.CacheOutcome != "miss" {
+				t.Fatalf("leader CacheOutcome = %q, want miss", e.CacheOutcome)
+			}
+			unattributed++
+		case e.Source == "vlancache" && e.Verdict == "coalesced":
+			if e.CacheOutcome != "coalesced" {
+				t.Fatalf("follower CacheOutcome = %q, want coalesced", e.CacheOutcome)
+			}
 			coalesced++
 		default:
-			t.Fatalf("Verdict = %q, want forwarded or coalesced", e.Verdict)
+			t.Fatalf("Source/Verdict = %q/%q, want either empty (the leader) or vlancache/coalesced (the follower)", e.Source, e.Verdict)
 		}
 	}
-	if forwards != 1 || coalesced != 1 {
-		t.Fatalf("want exactly 1 forward + 1 coalesced (the real upstream call vs. the deduped one), got %d forward + %d coalesced", forwards, coalesced)
+	if unattributed != 1 || coalesced != 1 {
+		t.Fatalf("want exactly 1 unattributed leader + 1 vlancache/coalesced follower, got %d unattributed + %d coalesced", unattributed, coalesced)
 	}
 }
 
@@ -530,13 +554,21 @@ func TestUpstreamConnectionFailureIsCachedAndExpires(t *testing.T) {
 	}
 }
 
-func TestAttributesUpstreamConnectionFailureAsForward(t *testing.T) {
+// TestNoAttributionOnUpstreamConnectionFailure: a connection-level failure
+// (timeoutNext, mirroring plugin/forward's real timeout behavior) is still a
+// genuine forward attempt, not something vlancache itself answered — same
+// fallthrough rule as TestNoAttributionOnRealForward, just via the
+// synthesized-SERVFAIL path instead of a normal response.
+func TestNoAttributionOnUpstreamConnectionFailure(t *testing.T) {
 	next := &timeoutNext{}
 	vc := build(t, next)
 
 	_, e := queryFromWithEntry(vc, "192.168.10.5", "pihole.lan", dns.TypeAAAA)
-	if e.Source != "vlancache" || e.Verdict != "forwarded" {
-		t.Fatalf("Source/Verdict = %q/%q, want vlancache/forwarded", e.Source, e.Verdict)
+	if e.Source != "" || e.Verdict != "" {
+		t.Fatalf("Source/Verdict = %q/%q, want empty (a real forward attempt, must not attribute)", e.Source, e.Verdict)
+	}
+	if e.CacheOutcome != "miss" {
+		t.Fatalf("CacheOutcome = %q, want miss", e.CacheOutcome)
 	}
 }
 

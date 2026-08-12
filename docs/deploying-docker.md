@@ -52,7 +52,7 @@ docker run -d --name bramblegate --restart unless-stopped \
 
 | Port | Protocol | Purpose |
 | --- | --- | --- |
-| 53 | UDP + TCP | Plain DNS. Point clients/your router's DHCP DNS option here. |
+| 53 | UDP + TCP | Do53 (plain DNS). Point clients/your router's DHCP DNS option here. |
 | 853 | TCP | DoT. Only actually listens once `listeners.dot.enabled: true`. |
 | 8080 | TCP | Web GUI + JSON API. |
 

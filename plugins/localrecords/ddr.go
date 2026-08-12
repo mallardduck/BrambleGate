@@ -10,7 +10,7 @@ import (
 
 // ddrQName is the fixed Discovery of Designated Resolvers query name (RFC 9462
 // §5) — a special-use name under the reserved "resolver.arpa" domain, not tied
-// to any zone the operator owns. Clients query it, over plain DNS, to learn
+// to any zone the operator owns. Clients query it, over Do53 (plain DNS), to learn
 // this same server's encrypted upgrade paths (DoT/DoH/DoQ).
 const ddrQName = "_dns.resolver.arpa."
 

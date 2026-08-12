@@ -67,7 +67,7 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	log.Info("loading config", "dir", configDir, "settings", st.SettingsPath(), "records", st.RecordsPath())
 
 	// Onboarding: a fresh install has no settings.yaml. Seed a working default
-	// (plain DNS forwarding to a public resolver) so the container comes up as a
+	// (Do53, plain DNS, forwarding to a public resolver) so the container comes up as a
 	// resolving front door immediately; the operator then points upstream_dns at
 	// their own ad-block resolver and adds VLANs/records via the GUI or YAML.
 	if !st.SettingsExist() {
@@ -188,7 +188,7 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	}
 
 	if settings.Listeners.Plain.Enabled {
-		log.Info("plain DNS listener up", "port", settings.Listeners.Plain.Port)
+		log.Info("Do53 (plain DNS) listener up", "port", settings.Listeners.Plain.Port)
 	}
 	if settings.Listeners.DoT.Enabled {
 		log.Info("DoT listener up", "port", settings.Listeners.DoT.Port)

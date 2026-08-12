@@ -145,7 +145,7 @@ func Dashboard(data DashboardData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = listenerRow("Plain", data.Settings.Listeners.Plain, false, privateDNS{}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = listenerRow("Do53", data.Settings.Listeners.Plain, false, privateDNS{}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -331,7 +331,7 @@ func acmeStatusCard(settings model.Settings, cert acme.Status, selfRecords []mod
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = helpTooltip("Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from plain DNS").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = helpTooltip("Discovery of Designated Resolvers (RFC 9462) — lets supporting clients auto-upgrade to DoT/DoH/DoQ/DoH3 from Do53 (plain DNS)").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

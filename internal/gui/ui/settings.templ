@@ -83,7 +83,7 @@ templ Settings(data SettingsData) {
 					<label class="flex flex-col gap-1 text-sm">
 						<span class="text-bramble-muted text-xs">Upstream protocol</span>
 						<div class="flex rounded border border-bramble-border overflow-hidden">
-							@segOption("upstream_protocol", "plain", "Plain", data.Settings.UpstreamDNS.Protocol == "plain")
+							@segOption("upstream_protocol", "plain", "Do53", data.Settings.UpstreamDNS.Protocol == "plain")
 							@segOption("upstream_protocol", "dot", "DoT", data.Settings.UpstreamDNS.Protocol == "dot")
 							@segOption("upstream_protocol", "doh", "DoH", data.Settings.UpstreamDNS.Protocol == "doh")
 						</div>
@@ -140,7 +140,7 @@ templ Settings(data SettingsData) {
 		</details>
 			<h3 class="text-xs font-semibold text-bramble-muted mt-4 mb-2">Listeners</h3>
 			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-				@listenerFields("plain", "Plain", data.Settings.Listeners.Plain, 53, "")
+				@listenerFields("plain", "Do53", data.Settings.Listeners.Plain, 53, "Do53 is plain, unencrypted DNS over UDP/TCP port 53 — RFC-standard \"Do{x}\" shorthand alongside DoT/DoH/DoQ.")
 				<div class="col-span-2 flex flex-col sm:flex-row gap-3 rounded border border-dashed border-bramble-border p-2 min-w-0">
 					@listenerFields("doh", "DoH", data.Settings.Listeners.DoH, 443, "DoH and DoH3 can share the same default port number (443) — the OS keeps TCP and UDP bindings separate, so this isn't a conflict. See docs/deploying-docker.md.")
 					@doh3ListenerFields(data.Settings.Listeners.DoH3)
@@ -320,7 +320,7 @@ templ Settings(data SettingsData) {
 		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
 			<h2 class="text-sm font-semibold mb-3 flex items-center">
 				mDNS self-advertisement
-				@helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: plain DNS as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.")
+				@helpTooltip("Independent of discovery above — advertises this server's own DNS service(s) via mDNS-SD so other devices/apps on the LAN can find it: Do53 (plain DNS) as _domain._udp/_domain._tcp, plus _dot._tcp when DoT is enabled. Off by default — broadcasting \"there is a DNS resolver here\" to the whole network segment is a bigger exposure than passively discovering other devices. Takes effect immediately — no restart needed.")
 			</h2>
 			<div class="flex flex-wrap gap-3 items-end">
 				<label class="flex items-center gap-2 text-sm">
@@ -332,7 +332,7 @@ templ Settings(data SettingsData) {
 				<div class="mt-3 pl-0.5">
 					<p class="text-bramble-muted text-xs mb-2">Currently published:</p>
 					if len(data.AdvertisedServices) == 0 {
-						<p class="text-bramble-muted text-sm">Nothing to advertise yet — enable a DNS listener above (plain DNS or DoT).</p>
+						<p class="text-bramble-muted text-sm">Nothing to advertise yet — enable a DNS listener above (Do53 or DoT).</p>
 					} else {
 						<div class="flex flex-col gap-1">
 							for _, svc := range data.AdvertisedServices {
