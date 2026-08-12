@@ -292,7 +292,10 @@ templ Settings(data SettingsData) {
 					<input name="mdns_interfaces" value={ strings.Join(data.Settings.MDNS.Interfaces, ", ") } placeholder="all" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
-					<span class="text-bramble-muted text-xs">Service types</span>
+					<span class="text-bramble-muted text-xs flex items-center">
+						Service types
+						@helpTooltip("None: mDNS listens but discovers nothing. Default: the curated list — web servers (HTTP/HTTPS), SSH, file shares (SMB), printers (IPP/IPPS/raw), AirPlay/RAOP (Apple media), Chromecast, Sonos, and HomeKit accessories (HAP). All: dynamically discover every service type advertised on the network, not just the curated list. Custom list: name the exact service types to browse for, e.g. _http._tcp.")
+					</span>
 					<select name="mdns_service_types_mode" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm" onchange={ toggleHiddenBySelectValue("mdns_custom_group", "custom") }>
 						@mdnsServiceTypesModeOption("none", "None (discovery off)", data.Settings.MDNS.ServiceTypes)
 						@mdnsServiceTypesModeOption("default", "Default (curated list)", data.Settings.MDNS.ServiceTypes)
