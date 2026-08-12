@@ -22,6 +22,7 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/vlancfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
+
 	// plugins/hosts is registration-only (its init() is what reload's
 	// SetLoaded("hosts", ...) call below reports against) — blank-imported
 	// here for the same reason internal/engine/directives.go does: gui
