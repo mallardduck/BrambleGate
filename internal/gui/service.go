@@ -22,6 +22,11 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/vlancfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
+	// plugins/hosts is registration-only (its init() is what reload's
+	// SetLoaded("hosts", ...) call below reports against) — blank-imported
+	// here for the same reason internal/engine/directives.go does: gui
+	// never calls anything in that package, only pluginreg by name.
+	_ "github.com/mallardduck/BrambleGate/plugins/hosts"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleGate/plugins/querylog"
@@ -338,7 +343,11 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	if err != nil {
 		return err
 	}
-	rendered, err := s.render(settings, rs)
+	hs, err := s.store.LoadHosts()
+	if err != nil {
+		return err
+	}
+	rendered, err := s.render(settings, rs, hs)
 	if err != nil {
 		return err
 	}
@@ -453,7 +462,11 @@ var ErrNotFound = errors.New("record not found")
 // applyRecords renders (validating), then persists, then reloads. Validation
 // runs BEFORE the write so an invalid edit never touches the YAML on disk.
 func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) error {
-	rendered, err := s.render(settings, rs)
+	hs, err := s.store.LoadHosts()
+	if err != nil {
+		return err
+	}
+	rendered, err := s.render(settings, rs, hs)
 	if err != nil {
 		return err
 	}
@@ -465,16 +478,139 @@ func (s *Service) applyRecords(settings model.Settings, rs model.RecordSet) erro
 	return reloadErr
 }
 
-func (s *Service) render(settings model.Settings, rs model.RecordSet) (configgen.Rendered, error) {
+// Hosts returns the current host set.
+func (s *Service) Hosts() (model.HostSet, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.store.LoadHosts()
+}
+
+// AddHost appends a host entry, rejecting a duplicate name across
+// hostname+aliases project-wide (mirrors AddRecord's duplicate check;
+// configgen.Validate would also catch this at render time, but rejecting it
+// here gives a clearer, field-specific error before any write happens).
+// AddHost's, UpdateHost's, and DeleteHost's warnings return value is
+// configgen.Rendered.Warnings from the render this call triggered (e.g. a
+// hosts.yaml name shadowing a records.yaml one) — non-fatal, but worth
+// surfacing to whoever just made the edit (dev-docs/static-hosts.md's
+// "precedence consequence" note); nil on a real error, since nothing was
+// rendered.
+func (s *Service) AddHost(h model.Host) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.store.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	hs, err := s.store.LoadHosts()
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range h.Names() {
+		if idx := indexOfHostName(hs, name); idx >= 0 {
+			return nil, ValidationError{fmt.Errorf("a hosts entry for %q already exists", name)}
+		}
+	}
+	hs.Hosts = append(hs.Hosts, h)
+	return s.applyHosts(settings, hs)
+}
+
+// UpdateHost replaces the host entry identified by its current hostname;
+// 404-style error if absent.
+func (s *Service) UpdateHost(hostname string, h model.Host) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.store.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	hs, err := s.store.LoadHosts()
+	if err != nil {
+		return nil, err
+	}
+	idx := indexOfHost(hs, hostname)
+	if idx < 0 {
+		return nil, ErrNotFound
+	}
+	hs.Hosts[idx] = h
+	return s.applyHosts(settings, hs)
+}
+
+// DeleteHost removes the host entry identified by its hostname; 404-style
+// if absent.
+func (s *Service) DeleteHost(hostname string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.store.LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	hs, err := s.store.LoadHosts()
+	if err != nil {
+		return nil, err
+	}
+	idx := indexOfHost(hs, hostname)
+	if idx < 0 {
+		return nil, ErrNotFound
+	}
+	hs.Hosts = append(hs.Hosts[:idx], hs.Hosts[idx+1:]...)
+	return s.applyHosts(settings, hs)
+}
+
+// applyHosts mirrors applyRecords: render (validating) before persisting,
+// then reload. Hosts never affect mDNS, so there's no refreshMDNS
+// counterpart here.
+func (s *Service) applyHosts(settings model.Settings, hs model.HostSet) ([]string, error) {
+	rs, err := s.store.LoadRecords()
+	if err != nil {
+		return nil, err
+	}
+	rendered, err := s.render(settings, rs, hs)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.SaveHosts(hs); err != nil {
+		return nil, err
+	}
+	return rendered.Warnings, s.reload(rendered)
+}
+
+func indexOfHost(hs model.HostSet, hostname string) int {
+	target := model.NormalizedHostName(hostname)
+	for i, h := range hs.Hosts {
+		if model.NormalizedHostName(h.Hostname) == target {
+			return i
+		}
+	}
+	return -1
+}
+
+// indexOfHostName searches across every host's full name set (hostname +
+// aliases), unlike indexOfHost which only matches the canonical hostname —
+// used for AddHost's project-wide duplicate check (dev-docs/static-hosts.md:
+// dedup applies across hostname and aliases alike).
+func indexOfHostName(hs model.HostSet, name string) int {
+	target := model.NormalizedHostName(name)
+	for i, h := range hs.Hosts {
+		for _, n := range h.Names() {
+			if model.NormalizedHostName(n) == target {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func (s *Service) render(settings model.Settings, rs model.RecordSet, hs model.HostSet) (configgen.Rendered, error) {
 	// The process-wide configured-VLANs table localrecords/mdnsbridge read as
 	// their source of truth at request time. render is the single choke
-	// point every settings/records change (SaveSettings, Add/Update/Delete
-	// Record, mDNS promotion) passes through, so this is the one place the
-	// GUI side needs to refresh it (dev-docs/query-log.md).
+	// point every settings/records/hosts change (SaveSettings, Add/Update/Delete
+	// Record, Add/Update/Delete Host, mDNS promotion) passes through, so this
+	// is the one place the GUI side needs to refresh it (dev-docs/query-log.md).
 	vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
 	opts := s.certOpts
 	opts.ACMESelfIPs = detectSelfIPs(settings.VLANs)
-	rendered, err := configgen.Render(settings, rs, opts)
+	rendered, err := configgen.Render(settings, rs, hs, opts)
 	if err != nil {
 		return configgen.Rendered{}, ValidationError{err}
 	}
@@ -522,10 +658,18 @@ func (s *Service) reload(rendered configgen.Rendered) error {
 	if err := configgen.WriteZoneData(s.configDir, rendered.ZoneData); err != nil {
 		return fmt.Errorf("write zone data: %w", err)
 	}
+	if err := configgen.WriteHostsData(s.configDir, rendered.HostsData); err != nil {
+		return fmt.Errorf("write hosts data: %w", err)
+	}
 	_ = configgen.WriteRuntimeCorefile(s.configDir, rendered.Corefile)
 	if err := s.reloader.Reload(rendered.Corefile); err != nil {
 		return fmt.Errorf("config saved but engine reload failed (previous config still serving): %w", err)
 	}
+	// plugins/hosts has no setup() of its own to call this from — the hosts
+	// stanza is unconditionally present in every rendered Corefile, so
+	// "loaded" just tracks a successful reload, same as internal/cli's
+	// matching calls (run/reloadFn) for the CLI-only startup path.
+	pluginreg.SetLoaded("hosts", true, "")
 	return nil
 }
 

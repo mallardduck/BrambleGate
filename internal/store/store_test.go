@@ -83,6 +83,40 @@ func TestRecordsRoundTripPreservesOverrides(t *testing.T) {
 	}
 }
 
+func TestHostsRoundTripPreservesAliases(t *testing.T) {
+	s := New(t.TempDir())
+	in := model.HostSet{Hosts: []model.Host{
+		{IP: "192.168.10.55", Hostname: "kitchen-tablet.home.arpa", Aliases: []string{"tablet.home.arpa"}},
+		{IP: "192.168.10.20", Hostname: "nas.home.arpa"},
+	}}
+	if err := s.SaveHosts(in); err != nil {
+		t.Fatalf("SaveHosts: %v", err)
+	}
+	got, err := s.LoadHosts()
+	if err != nil {
+		t.Fatalf("LoadHosts: %v", err)
+	}
+	if len(got.Hosts) != 2 {
+		t.Fatalf("want 2 hosts, got %d", len(got.Hosts))
+	}
+	if len(got.Hosts[0].Aliases) != 1 || got.Hosts[0].Aliases[0] != "tablet.home.arpa" {
+		t.Fatalf("aliases not preserved: %+v", got.Hosts[0])
+	}
+	if len(got.Hosts[1].Aliases) != 0 {
+		t.Fatalf("want no aliases on second host, got %+v", got.Hosts[1])
+	}
+}
+
+func TestLoadHostsMissingIsEmpty(t *testing.T) {
+	got, err := New(t.TempDir()).LoadHosts()
+	if err != nil {
+		t.Fatalf("LoadHosts on missing file should be nil error, got %v", err)
+	}
+	if len(got.Hosts) != 0 {
+		t.Fatalf("want empty host set, got %+v", got)
+	}
+}
+
 func TestLoadRecordsMissingIsEmpty(t *testing.T) {
 	got, err := New(t.TempDir()).LoadRecords()
 	if err != nil {

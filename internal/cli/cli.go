@@ -86,6 +86,10 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	if err != nil {
 		return err
 	}
+	hosts, err := st.LoadHosts()
+	if err != nil {
+		return err
+	}
 	// The process-wide configured-VLANs table localrecords/mdnsbridge read as
 	// their source of truth at request time — must be set before engine.New,
 	// and refreshed again in reloadFn below on every later settings change
@@ -159,13 +163,18 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 		return fmt.Errorf("configure query log store: %w", err)
 	}
 
-	rendered, err := configgen.Render(settings, records, opts)
+	rendered, err := configgen.Render(settings, records, hosts, opts)
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
 	}
 	// The localrecords plugin reads this at setup — it MUST exist before New.
 	if err := configgen.WriteZoneData(configDir, rendered.ZoneData); err != nil {
 		return fmt.Errorf("write zone data: %w", err)
+	}
+	// The stock hosts plugin reads this at setup — it MUST exist before New,
+	// same rule as zone data above.
+	if err := configgen.WriteHostsData(configDir, rendered.HostsData); err != nil {
+		return fmt.Errorf("write hosts data: %w", err)
 	}
 	// Runtime Corefile copy for operator visibility only — not the reload mechanism.
 	if err := configgen.WriteRuntimeCorefile(configDir, rendered.Corefile); err != nil {
@@ -176,6 +185,12 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	if err != nil {
 		return fmt.Errorf("start engine: %w", err)
 	}
+	// The stock hosts plugin has no BrambleGate-owned setup() to report
+	// pluginreg.SetLoaded from itself (plugins/hosts/doc.go) — the hosts
+	// stanza is unconditionally present in every rendered Corefile, so
+	// "loaded" just tracks "the engine is running a Corefile that includes
+	// it," reported here alongside the reload that made it true.
+	pluginreg.SetLoaded("hosts", true, "")
 
 	// engine.New has just run every CoreDNS-chain plugin's setup() against the
 	// rendered Corefile, so Required plugins (localrecords) have had their
@@ -303,19 +318,30 @@ func reloadFn(st *store.Store, eng *engine.Engine, opts configgen.Options) func(
 		if err != nil {
 			return err
 		}
+		hosts, err := st.LoadHosts()
+		if err != nil {
+			return err
+		}
 		vlanmatch.SetCurrent(vlanmatch.NewTable(vlancfg.Build(settings.VLANs)))
 		if err := querylog.ReconcileStore(configgen.QueryLogStoreConfig(settings.QueryLog, opts.ConfigDir)); err != nil {
 			return err
 		}
-		rendered, err := configgen.Render(settings, records, opts)
+		rendered, err := configgen.Render(settings, records, hosts, opts)
 		if err != nil {
 			return err
 		}
 		if err := configgen.WriteZoneData(opts.ConfigDir, rendered.ZoneData); err != nil {
 			return err
 		}
+		if err := configgen.WriteHostsData(opts.ConfigDir, rendered.HostsData); err != nil {
+			return err
+		}
 		_ = configgen.WriteRuntimeCorefile(opts.ConfigDir, rendered.Corefile)
-		return eng.Reload(rendered.Corefile)
+		if err := eng.Reload(rendered.Corefile); err != nil {
+			return err
+		}
+		pluginreg.SetLoaded("hosts", true, "") // see the matching comment in run() above
+		return nil
 	}
 }
 

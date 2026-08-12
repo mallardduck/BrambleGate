@@ -24,6 +24,15 @@ func ZoneDataPath(configDir string) string {
 	return filepath.Join(configDir, ".runtime", "zones", "records.json")
 }
 
+// HostsDataPath is where the rendered /etc/hosts-format file lives and
+// where the rendered Corefile points the stock hosts plugin
+// (dev-docs/static-hosts.md). Same ".runtime/zones/" tree as
+// ZoneDataPath, and IS read by the plugin at setup, so it must be written
+// before engine New/Reload.
+func HostsDataPath(configDir string) string {
+	return filepath.Join(configDir, ".runtime", "zones", "hosts.txt")
+}
+
 // QueryLogDBPath is where the querylog plugin's disposable libSQL-backed
 // history lives (dev-docs/query-log.md's Phase 7b) — same ".runtime/"
 // tree as the other regenerated, not-backed-up files above; safe to delete
@@ -64,6 +73,13 @@ func WriteRuntimeCorefile(configDir string, corefile []byte) error {
 // Write it before calling engine.New/Reload.
 func WriteZoneData(configDir string, data []byte) error {
 	return writeFileAtomic(ZoneDataPath(configDir), data)
+}
+
+// WriteHostsData writes the hosts-format file the stock hosts plugin loads
+// at setup. Write it before calling engine.New/Reload, same rule as
+// WriteZoneData.
+func WriteHostsData(configDir string, data []byte) error {
+	return writeFileAtomic(HostsDataPath(configDir), data)
 }
 
 // writeFileAtomic writes via a temp file + rename in the same directory, so a

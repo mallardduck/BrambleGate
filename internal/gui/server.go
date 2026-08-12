@@ -27,6 +27,10 @@ func NewServer(svc *Service, addr string) *http.Server {
 		r.Post("/records", h.addRecord)
 		r.Put("/records/{name}/{type}", h.updateRecord)
 		r.Delete("/records/{name}/{type}", h.deleteRecord)
+		r.Get("/hosts", h.listHosts)
+		r.Post("/hosts", h.addHost)
+		r.Put("/hosts/{hostname}", h.updateHost)
+		r.Delete("/hosts/{hostname}", h.deleteHost)
 		r.Get("/settings", h.getSettings)
 		r.Put("/settings", h.putSettings)
 
@@ -49,6 +53,11 @@ func NewServer(svc *Service, addr string) *http.Server {
 	r.Get("/records/{name}/{type}/edit", h.recordsEdit)
 	r.Put("/records/{name}/{type}", h.recordsUpdate)
 	r.Delete("/records/{name}/{type}", h.recordsDelete)
+	r.Get("/hosts", h.hostsPage)
+	r.Post("/hosts", h.hostsCreate)
+	r.Get("/hosts/{hostname}/edit", h.hostsEdit)
+	r.Put("/hosts/{hostname}", h.hostsUpdate)
+	r.Delete("/hosts/{hostname}", h.hostsDelete)
 	r.Get("/settings", h.settingsPage)
 	r.Post("/settings", h.settingsSave)
 	r.Post("/settings/vlans", h.vlanAdd)
@@ -117,6 +126,58 @@ func (h *handlers) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handlers) listHosts(w http.ResponseWriter, r *http.Request) {
+	hs, err := h.svc.Hosts()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, hs)
+}
+
+func (h *handlers) addHost(w http.ResponseWriter, r *http.Request) {
+	host, ok := decodeHost(w, r)
+	if !ok {
+		return
+	}
+	if _, err := h.svc.AddHost(host); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, host)
+}
+
+func (h *handlers) updateHost(w http.ResponseWriter, r *http.Request) {
+	host, ok := decodeHost(w, r)
+	if !ok {
+		return
+	}
+	hostname := chi.URLParam(r, "hostname")
+	if _, err := h.svc.UpdateHost(hostname, host); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, host)
+}
+
+func (h *handlers) deleteHost(w http.ResponseWriter, r *http.Request) {
+	hostname := chi.URLParam(r, "hostname")
+	if _, err := h.svc.DeleteHost(hostname); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func decodeHost(w http.ResponseWriter, r *http.Request) (model.Host, bool) {
+	var host model.Host
+	if err := json.NewDecoder(r.Body).Decode(&host); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody{"invalid JSON: " + err.Error()})
+		return host, false
+	}
+	return host, true
 }
 
 func (h *handlers) getSettings(w http.ResponseWriter, r *http.Request) {

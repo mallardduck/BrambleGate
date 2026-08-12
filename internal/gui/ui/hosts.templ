@@ -1,0 +1,152 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/mallardduck/BrambleGate/model"
+)
+
+// HostsData is everything the hosts page needs to render. Editing is nil for
+// the "add a host" state; set it (from a GET .../edit request) to pre-fill
+// the form for an update — mirrors RecordsData.
+type HostsData struct {
+	Hosts   model.HostSet
+	Editing *model.Host
+}
+
+templ Hosts(data HostsData) {
+	<h1 class="text-xl font-semibold mb-4 flex items-center">
+		Hosts
+		@helpTooltip("A deliberately dumb escape hatch (like Pi-hole's Local DNS Records): one hostname (plus optional aliases) per IP, answering any domain — not just your owned zones. A hosts entry always wins over a records.yaml entry with the same name, including any per-VLAN behavior it had.")
+	</h1>
+	<div class="rounded border border-bramble-border bg-bramble-bg-card shadow-sm overflow-x-auto">
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="border-b border-bramble-border text-left text-xs text-bramble-muted uppercase">
+					<th class="px-3 py-2">IP</th>
+					<th class="px-3 py-2">Hostname</th>
+					<th class="px-3 py-2">Aliases</th>
+					<th class="px-3 py-2"></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, h := range data.Hosts.Hosts {
+					@hostRow(h)
+				}
+				if len(data.Hosts.Hosts) == 0 {
+					<tr>
+						<td colspan="4" class="px-3 py-4 text-center text-bramble-muted">No hosts entries yet.</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+
+	@hostForm(data)
+
+	if len(data.Hosts.Hosts) > 0 {
+		<p class="mt-3 text-xs text-bramble-muted">Changes are saved to hosts.yaml and applied live — no restart required.</p>
+	}
+}
+
+templ hostRow(h model.Host) {
+	<tr class="border-b border-bramble-border last:border-0">
+		<td class="px-3 py-2 font-mono select-all">{ h.IP }</td>
+		<td class="px-3 py-2 font-mono">{ h.Hostname }</td>
+		<td class="px-3 py-2 text-xs text-bramble-muted">
+			if len(h.Aliases) == 0 {
+				—
+			} else {
+				{ strings.Join(h.Aliases, ", ") }
+			}
+		</td>
+		<td class="px-3 py-2 text-right whitespace-nowrap">
+			<a
+				href={ templ.SafeURL(HostPath(h.Hostname) + "/edit") }
+				hx-get={ HostPath(h.Hostname) + "/edit" }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				class="inline-flex items-center gap-1 text-bramble-primary hover:underline text-xs mr-3"
+			>
+				@iconPencil("w-3 h-3")
+				Edit
+			</a>
+			<button
+				hx-delete={ HostPath(h.Hostname) }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-confirm={ fmt.Sprintf("Delete hosts entry %s?", h.Hostname) }
+				type="button"
+				class="inline-flex items-center gap-1 text-bramble-danger hover:underline text-xs"
+			>
+				@iconTrash("w-3 h-3")
+				Delete
+			</button>
+		</td>
+	</tr>
+}
+
+templ hostForm(data HostsData) {
+	{{
+		ip, hostname, aliases := "", "", ""
+		if data.Editing != nil {
+			ip = data.Editing.IP
+			hostname = data.Editing.Hostname
+			aliases = strings.Join(data.Editing.Aliases, ", ")
+		}
+	}}
+	<form
+		if data.Editing != nil {
+			hx-put={ HostPath(data.Editing.Hostname) }
+		} else {
+			hx-post={ PathHosts }
+		}
+		hx-target="#content"
+		hx-swap="innerHTML"
+		class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4"
+	>
+		<h2 class="text-sm font-semibold mb-3">
+			if data.Editing != nil {
+				Edit { hostname }
+			} else {
+				Add a hosts entry
+			}
+		</h2>
+		<div class="flex flex-wrap gap-3 items-end">
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs">IP</span>
+				<input name="ip" value={ ip } placeholder="192.168.10.55" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[160px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs flex items-center">
+					Hostname
+					@helpTooltip("The canonical name for this IP — what shows up as its display name once client name resolution reads from this file.")
+				</span>
+				<input name="hostname" value={ hostname } placeholder="kitchen-tablet.home.arpa" required class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[200px]"/>
+			</label>
+			<label class="flex flex-col gap-1 text-sm">
+				<span class="text-bramble-muted text-xs flex items-center">
+					Aliases
+					@helpTooltip("Optional additional names that resolve to the same IP, comma-separated. Leave blank if this IP only needs one name.")
+				</span>
+				<input name="aliases" value={ aliases } placeholder="tablet.home.arpa, tab.home.arpa" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[220px]"/>
+			</label>
+		</div>
+
+		<div class="mt-4 flex gap-2">
+			<button type="submit" class="px-4 py-2 rounded border border-bramble-primary text-bramble-primary text-sm font-semibold hover:bg-bramble-primary/10">
+				if data.Editing != nil {
+					Save changes
+				} else {
+					Add host
+				}
+			</button>
+			if data.Editing != nil {
+				<a href={ templ.SafeURL(PathHosts) } hx-get={ PathHosts } hx-target="#content" hx-swap="innerHTML" class="px-3 py-1.5 rounded border border-bramble-border text-sm">
+					Cancel
+				</a>
+			}
+		</div>
+	</form>
+}

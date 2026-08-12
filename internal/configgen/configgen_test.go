@@ -38,7 +38,7 @@ func acmeEnabledSettings() model.Settings {
 // a valid Corefile with no further input, otherwise a fresh container would fail
 // to start before the operator has touched anything.
 func TestDefaultSettingsRenderWithNoRecords(t *testing.T) {
-	out, err := Render(model.DefaultSettings(), model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(model.DefaultSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("default settings must render cleanly: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 	rs := model.RecordSet{Records: []model.Record{
 		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},
 	}}
-	out, err := Render(baseSettings(), rs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), rs, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestRenderCorefilePointsAtZoneData(t *testing.T) {
 }
 
 func TestRenderForwardBareByDefault(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestRenderForwardTuningSubBlock(t *testing.T) {
 	s.UpstreamDNS.PreferUDP = true
 	s.UpstreamDNS.MaxConcurrent = 500
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRenderForwardTuningOnlySetFieldsEmitted(t *testing.T) {
 	s := baseSettings()
 	s.UpstreamDNS.PreferUDP = true
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestRenderCorefileIncludesACMEDomainAsFallthroughZone(t *testing.T) {
 		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
 	}}
 
-	out, err := Render(s, rs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, rs, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestRenderIncludesDDRZoneAndFallthroughIsACMEDomainOnly(t *testing.T) {
 	rs := model.RecordSet{Records: []model.Record{
 		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
 	}}
-	out, err := Render(s, rs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, rs, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestValidateRejectsACMEDomainRecordWhenACMEDisabled(t *testing.T) {
 	rs := model.RecordSet{Records: []model.Record{
 		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
 	}}
-	if err := Validate(s, rs); err == nil {
+	if err := Validate(s, rs, model.HostSet{}); err == nil {
 		t.Fatal("expected an error: dns.example.com is outside home.arpa while ACME is disabled")
 	}
 }
@@ -204,7 +204,7 @@ func TestRenderSynthesizesACMEAddressRecords(t *testing.T) {
 		Primary: selfip.VLANAddrs{V4: "192.168.10.53"},
 	}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestRenderDoesNotOverrideExplicitACMERecord(t *testing.T) {
 	}}
 	ips := selfip.Result{Primary: selfip.VLANAddrs{V4: "192.168.10.53"}}
 
-	out, err := Render(s, rs, Options{ConfigDir: "/config", ACMESelfIPs: ips})
+	out, err := Render(s, rs, model.HostSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestRenderSkipsACMESynthesisWhenNothingDetected(t *testing.T) {
 	s := acmeEnabledSettings()
 	s.Listeners.DoT.Enabled = false // no encrypted listener: DDR doesn't apply, so a missing address is fine
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"}) // zero ACMESelfIPs
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"}) // zero ACMESelfIPs
 	if err != nil {
 		t.Fatalf("Render should not fail when nothing was detected: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestRenderACMESynthesisRespectsFamilySeparately(t *testing.T) {
 	s := acmeEnabledSettings()
 	ips := selfip.Result{Primary: selfip.VLANAddrs{V4: "192.168.10.53"}} // no V6
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", ACMESelfIPs: ips})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestRenderZoneDataDDRRecords(t *testing.T) {
 		{Name: "dns.example.com", Type: model.TypeA, Default: "192.168.10.53"},
 	}}
 
-	out, err := Render(s, rs, Options{ConfigDir: "/config"})
+	out, err := Render(s, rs, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -362,7 +362,7 @@ func hasParam(params []ddrParam, key, value string) bool {
 
 func TestRenderNoDDRZoneWhenACMEDisabled(t *testing.T) {
 	s := baseSettings() // ACME disabled; DoT enabled
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestRenderNoDDRZoneWhenACMEDisabled(t *testing.T) {
 func TestRenderNoDDRZoneWhenNoEncryptedListenerEnabled(t *testing.T) {
 	s := acmeEnabledSettings()
 	s.Listeners.DoT.Enabled = false // only plain enabled now
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestRenderNoDDRZoneWhenNoEncryptedListenerEnabled(t *testing.T) {
 // found nothing and no explicit record was declared for the ACME domain).
 func TestRenderFailsWhenDDRTargetHasNoAddress(t *testing.T) {
 	s := acmeEnabledSettings() // DoT enabled, no explicit record, zero ACMESelfIPs
-	_, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	_, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err == nil {
 		t.Fatal("expected an error: DDR is enabled but nothing resolves the target address")
 	}
@@ -403,7 +403,7 @@ func TestRenderCorefileDoHAndDoQ(t *testing.T) {
 	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
 	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 853}}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -433,7 +433,7 @@ func TestRenderCorefileDoQTuning(t *testing.T) {
 		WorkerPoolSize: 512,
 	}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestRenderCorefileDoQTuning(t *testing.T) {
 func TestValidateRejectsNegativeQUICTuning(t *testing.T) {
 	s := baseSettings()
 	s.Listeners.DoQ = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 853}, MaxStreams: -1}
-	if err := Validate(s, model.RecordSet{}); err == nil {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
 		t.Fatal("expected an error for negative max_streams")
 	}
 }
@@ -462,7 +462,7 @@ func TestRenderCorefileDoH3(t *testing.T) {
 	s := baseSettings()
 	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestRenderCorefileDoH3Tuning(t *testing.T) {
 		MaxStreams: 128,
 	}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestRenderCorefileDoH3Tuning(t *testing.T) {
 func TestValidateRejectsNegativeDoH3MaxStreams(t *testing.T) {
 	s := baseSettings()
 	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}, MaxStreams: -1}
-	if err := Validate(s, model.RecordSet{}); err == nil {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
 		t.Fatal("expected an error for negative max_streams")
 	}
 }
@@ -519,7 +519,7 @@ func TestValidateRejectsNegativeDoH3MaxStreams(t *testing.T) {
 func TestValidateRejectsDoH3WorkerPoolSize(t *testing.T) {
 	s := baseSettings()
 	s.Listeners.DoH3 = model.QUICListener{Listener: model.Listener{Enabled: true, Port: 8443}, WorkerPoolSize: 1}
-	if err := Validate(s, model.RecordSet{}); err == nil {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
 		t.Fatal("expected an error: https3 does not support worker_pool_size")
 	}
 }
@@ -528,7 +528,7 @@ func TestRenderMDNSStanzaOnlyWhenEnabled(t *testing.T) {
 	rs := model.RecordSet{}
 
 	off := baseSettings() // mdns disabled by default
-	out, err := Render(off, rs, Options{ConfigDir: "/config"})
+	out, err := Render(off, rs, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +538,7 @@ func TestRenderMDNSStanzaOnlyWhenEnabled(t *testing.T) {
 
 	on := baseSettings()
 	on.MDNS.Enabled = true
-	out, err = Render(on, rs, Options{ConfigDir: "/config"})
+	out, err = Render(on, rs, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,7 +554,7 @@ func TestRenderMDNSStanzaOnlyWhenEnabled(t *testing.T) {
 }
 
 func TestRenderQueryLogOffByDefault(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +566,7 @@ func TestRenderQueryLogOffByDefault(t *testing.T) {
 func TestRenderQueryLogBareWhenEnabledNoCapacity(t *testing.T) {
 	s := baseSettings()
 	s.QueryLog.Enabled = true
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +589,7 @@ func TestRenderQueryLogCapacitySubBlock(t *testing.T) {
 	s := baseSettings()
 	s.QueryLog.Enabled = true
 	s.QueryLog.Capacity = 2048
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -607,7 +607,7 @@ func TestRenderZoneDataJSON(t *testing.T) {
 	rs := model.RecordSet{Records: []model.Record{
 		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20", TTL: 120, VLANOverrides: []model.VLANOverride{deny}},
 	}}
-	out, err := Render(baseSettings(), rs, Options{ConfigDir: "/config"})
+	out, err := Render(baseSettings(), rs, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -633,7 +633,7 @@ func TestRenderZoneDataJSON(t *testing.T) {
 
 func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 	off := baseSettings() // ecs disabled by default, upstream already private
-	out, err := Render(off, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err := Render(off, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -646,7 +646,7 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 
 	on := baseSettings()
 	on.UpstreamDNS.ECS = true // baseSettings upstream (192.168.10.5:53) is private
-	out, err = Render(on, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(on, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -660,7 +660,7 @@ func TestRenderECSRewriteOnlyWhenEnabled(t *testing.T) {
 }
 
 func TestRenderCacheDefaultsToServeStaleAndPrefetch(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -678,7 +678,7 @@ func TestRenderCacheDefaultsToServeStaleAndPrefetch(t *testing.T) {
 func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
 	noPrefetch := baseSettings()
 	noPrefetch.Cache.PrefetchDisabled = true
-	out, err := Render(noPrefetch, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(noPrefetch, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -692,7 +692,7 @@ func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
 
 	noServeStale := baseSettings()
 	noServeStale.Cache.ServeStaleDisabled = true
-	out, err = Render(noServeStale, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(noServeStale, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -707,7 +707,7 @@ func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
 	bothOff := baseSettings()
 	bothOff.Cache.ServeStaleDisabled = true
 	bothOff.Cache.PrefetchDisabled = true
-	out, err = Render(bothOff, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(bothOff, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -717,8 +717,122 @@ func TestRenderCacheTuningCanBeDisabledIndependently(t *testing.T) {
 	}
 }
 
+// TestRenderHostsStanzaAlwaysPresent: the hosts directive is static
+// infrastructure (dev-docs/static-hosts.md), rendered regardless of
+// hosts.yaml's content — same convention as localrecords always being
+// present even with zero records.
+func TestRenderHostsStanzaAlwaysPresent(t *testing.T) {
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	cf := string(out.Corefile)
+	if strings.Count(cf, "hosts "+HostsDataPath("/config")+" .") != 2 { // one per server block (plain + dot)
+		t.Errorf("expected the hosts directive in both server blocks:\n%s", cf)
+	}
+	if !strings.Contains(cf, "fallthrough") {
+		t.Errorf("hosts must always render with fallthrough:\n%s", cf)
+	}
+	// hosts must run before mdnsbridge/localrecords in the rendered text —
+	// text order isn't what drives the actual chain (dnsserver.Directives
+	// does), but it should still read in the intended order for a human
+	// inspecting .runtime/Corefile.
+	if strings.Index(cf, "hosts ") > strings.Index(cf, "localrecords ") {
+		t.Errorf("expected hosts to render before localrecords:\n%s", cf)
+	}
+}
+
+func TestRenderHostsFileContent(t *testing.T) {
+	hs := model.HostSet{Hosts: []model.Host{
+		{IP: "192.168.10.55", Hostname: "kitchen-tablet.home.arpa", Aliases: []string{"tablet.home.arpa"}},
+		{IP: "192.168.10.20", Hostname: "nas.home.arpa"},
+	}}
+	out, err := Render(baseSettings(), model.RecordSet{}, hs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	data := string(out.HostsData)
+	if !strings.Contains(data, "192.168.10.55 kitchen-tablet.home.arpa tablet.home.arpa\n") {
+		t.Errorf("expected hostname+alias line, got:\n%s", data)
+	}
+	if !strings.Contains(data, "192.168.10.20 nas.home.arpa\n") {
+		t.Errorf("expected hostname-only line, got:\n%s", data)
+	}
+}
+
+func TestValidateHostsRejectsBadIP(t *testing.T) {
+	hs := model.HostSet{Hosts: []model.Host{{IP: "not-an-ip", Hostname: "x.example"}}}
+	if err := Validate(baseSettings(), model.RecordSet{}, hs); err == nil {
+		t.Fatal("expected a validation error for a malformed IP")
+	}
+}
+
+func TestValidateHostsRejectsEmptyHostname(t *testing.T) {
+	hs := model.HostSet{Hosts: []model.Host{{IP: "192.168.10.55"}}}
+	if err := Validate(baseSettings(), model.RecordSet{}, hs); err == nil {
+		t.Fatal("expected a validation error for an empty hostname")
+	}
+}
+
+func TestValidateHostsRejectsDuplicateNameAcrossEntries(t *testing.T) {
+	hs := model.HostSet{Hosts: []model.Host{
+		{IP: "192.168.10.55", Hostname: "dup.example"},
+		{IP: "192.168.10.56", Hostname: "dup.example"},
+	}}
+	if err := Validate(baseSettings(), model.RecordSet{}, hs); err == nil {
+		t.Fatal("expected a validation error for a name duplicated across entries")
+	}
+}
+
+func TestValidateHostsRejectsDuplicateAcrossHostnameAndAlias(t *testing.T) {
+	hs := model.HostSet{Hosts: []model.Host{
+		{IP: "192.168.10.55", Hostname: "a.example", Aliases: []string{"b.example"}},
+		{IP: "192.168.10.56", Hostname: "b.example"},
+	}}
+	if err := Validate(baseSettings(), model.RecordSet{}, hs); err == nil {
+		t.Fatal("expected a validation error: b.example is claimed by both an alias and a hostname")
+	}
+}
+
+func TestValidateHostsAllowsNameOutsideOwnedZones(t *testing.T) {
+	// Unlike records.yaml, hosts.yaml is not restricted to home.arpa —
+	// dev-docs/static-hosts.md's "zone ." design.
+	hs := model.HostSet{Hosts: []model.Host{{IP: "192.168.10.55", Hostname: "override.example.com"}}}
+	if err := Validate(baseSettings(), model.RecordSet{}, hs); err != nil {
+		t.Fatalf("hosts entries outside owned zones must be allowed: %v", err)
+	}
+}
+
+func TestRenderWarnsWhenHostsShadowsRecord(t *testing.T) {
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},
+	}}
+	hs := model.HostSet{Hosts: []model.Host{{IP: "192.168.10.99", Hostname: "nas.home.arpa"}}}
+	out, err := Render(baseSettings(), rs, hs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("a shadowed name must warn, not fail Render: %v", err)
+	}
+	if len(out.Warnings) != 1 {
+		t.Fatalf("want 1 warning for the shadowed name, got %d: %v", len(out.Warnings), out.Warnings)
+	}
+}
+
+func TestRenderNoWarningWhenNoShadow(t *testing.T) {
+	rs := model.RecordSet{Records: []model.Record{
+		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},
+	}}
+	hs := model.HostSet{Hosts: []model.Host{{IP: "192.168.10.99", Hostname: "other.home.arpa"}}}
+	out, err := Render(baseSettings(), rs, hs, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if len(out.Warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", out.Warnings)
+	}
+}
+
 func TestRenderBufsizeDefaultAndDisabled(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -729,7 +843,7 @@ func TestRenderBufsizeDefaultAndDisabled(t *testing.T) {
 
 	disabled := baseSettings()
 	disabled.BufsizeDisabled = true
-	out, err = Render(disabled, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(disabled, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -740,7 +854,7 @@ func TestRenderBufsizeDefaultAndDisabled(t *testing.T) {
 }
 
 func TestRenderTimeoutsOnEncryptedListenersOnly(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -754,7 +868,7 @@ func TestRenderTimeoutsOnEncryptedListenersOnly(t *testing.T) {
 
 	plainOnly := baseSettings()
 	plainOnly.Listeners.DoT.Enabled = false
-	out, err = Render(plainOnly, model.RecordSet{}, Options{ConfigDir: "/config"})
+	out, err = Render(plainOnly, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -764,7 +878,7 @@ func TestRenderTimeoutsOnEncryptedListenersOnly(t *testing.T) {
 }
 
 func TestRenderObservabilityOffByDefault(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -784,7 +898,7 @@ func TestRenderObservabilityEmittedOnceInFirstEnabledListener(t *testing.T) {
 	s.Observability = model.Observability{Health: true, Ready: true, Prometheus: true}
 	s.Listeners.DoH = model.Listener{Enabled: true, Port: 443}
 
-	out, err := Render(s, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(s, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -802,7 +916,7 @@ func TestRenderObservabilityEmittedOnceInFirstEnabledListener(t *testing.T) {
 }
 
 func TestRenderErrorsConsolidateDefaultAndDisabled(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -813,7 +927,7 @@ func TestRenderErrorsConsolidateDefaultAndDisabled(t *testing.T) {
 
 	disabled := baseSettings()
 	disabled.Errors.ConsolidateDisabled = true
-	out, err = Render(disabled, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(disabled, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -827,7 +941,7 @@ func TestRenderErrorsConsolidateDefaultAndDisabled(t *testing.T) {
 }
 
 func TestRenderLogDefaultDisabledAndClasses(t *testing.T) {
-	out, err := Render(baseSettings(), model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err := Render(baseSettings(), model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -838,7 +952,7 @@ func TestRenderLogDefaultDisabledAndClasses(t *testing.T) {
 
 	disabled := baseSettings()
 	disabled.Log.Disabled = true
-	out, err = Render(disabled, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(disabled, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -849,7 +963,7 @@ func TestRenderLogDefaultDisabledAndClasses(t *testing.T) {
 
 	classed := baseSettings()
 	classed.Log.Classes = []string{"denial", "error"}
-	out, err = Render(classed, model.RecordSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
+	out, err = Render(classed, model.RecordSet{}, model.HostSet{}, Options{ConfigDir: "/config", CertFile: "/c/cert.pem", KeyFile: "/c/key.pem"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -862,7 +976,7 @@ func TestRenderLogDefaultDisabledAndClasses(t *testing.T) {
 func TestValidateRejectsInvalidLogClass(t *testing.T) {
 	s := baseSettings()
 	s.Log.Classes = []string{"bogus"}
-	if err := Validate(s, model.RecordSet{}); err == nil || !strings.Contains(err.Error(), "log.classes") {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil || !strings.Contains(err.Error(), "log.classes") {
 		t.Fatalf("expected a log.classes validation error, got: %v", err)
 	}
 }
@@ -946,7 +1060,7 @@ func TestValidateRejects(t *testing.T) {
 	for name, mk := range cases {
 		t.Run(name, func(t *testing.T) {
 			s, rs := mk()
-			if _, err := Render(s, rs, Options{}); err == nil {
+			if _, err := Render(s, rs, model.HostSet{}, Options{}); err == nil {
 				t.Fatalf("expected validation error for %q", name)
 			}
 		})
@@ -959,7 +1073,7 @@ func TestMDNSRecordExcludedFromZoneDataAndValidated(t *testing.T) {
 		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},
 		{Name: "printer.home.arpa", Type: model.TypeMDNS, Match: &model.Selector{Host: "printer.local"}},
 	}}
-	out, err := Render(s, rs, Options{ConfigDir: "/config"})
+	out, err := Render(s, rs, model.HostSet{}, Options{ConfigDir: "/config"})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -979,7 +1093,7 @@ func TestMDNSRecordExcludedFromZoneDataAndValidated(t *testing.T) {
 	}
 	for name, rec := range bad {
 		t.Run(name, func(t *testing.T) {
-			if err := Validate(baseSettings(), model.RecordSet{Records: []model.Record{rec}}); err == nil {
+			if err := Validate(baseSettings(), model.RecordSet{Records: []model.Record{rec}}, model.HostSet{}); err == nil {
 				t.Fatalf("expected validation error for %q", name)
 			}
 		})
@@ -993,18 +1107,18 @@ func TestValidateMDNSBlock(t *testing.T) {
 		Suffix:      "not-in-zone.example.com", // outside owned zone → error
 		AutoPublish: []model.Selector{{Service: "_airplay._tcp"}},
 	}
-	if err := Validate(s, model.RecordSet{}); err == nil {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
 		t.Fatal("suffix outside owned zone should be rejected")
 	}
 
 	s.MDNS.Suffix = "media.home.arpa"
 	s.MDNS.AutoPublish = []model.Selector{{VLAN: "ghost"}} // unknown vlan
-	if err := Validate(s, model.RecordSet{}); err == nil {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
 		t.Fatal("auto_publish selector with unknown vlan should be rejected")
 	}
 
 	s.MDNS.AutoPublish = []model.Selector{{Service: "_airplay._tcp", VLAN: "trusted"}}
-	if err := Validate(s, model.RecordSet{}); err != nil {
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err != nil {
 		t.Fatalf("valid mdns block should pass: %v", err)
 	}
 }
@@ -1018,7 +1132,7 @@ func TestValidateAcceptsRichOverrides(t *testing.T) {
 			{VLAN: "guests", TTL: 30}, // ttl-only, inherits default
 		}},
 	}}
-	if err := Validate(s, rs); err != nil {
+	if err := Validate(s, rs, model.HostSet{}); err != nil {
 		t.Fatalf("rich overrides should validate: %v", err)
 	}
 }

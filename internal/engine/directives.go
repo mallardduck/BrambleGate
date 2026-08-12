@@ -19,6 +19,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/errors"
 	_ "github.com/coredns/coredns/plugin/forward"
 	_ "github.com/coredns/coredns/plugin/health"
+	_ "github.com/coredns/coredns/plugin/hosts"
 	_ "github.com/coredns/coredns/plugin/https3"
 	_ "github.com/coredns/coredns/plugin/log"
 	_ "github.com/coredns/coredns/plugin/metrics"
@@ -35,6 +36,11 @@ import (
 	_ "github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	_ "github.com/mallardduck/BrambleGate/plugins/querylog"
 	_ "github.com/mallardduck/BrambleGate/plugins/vlancache"
+
+	// plugins/hosts is pluginreg bookkeeping only, not a CoreDNS-chain
+	// plugin — the actual "hosts" directive setup is the stock
+	// coredns/plugin/hosts import above. See plugins/hosts/doc.go.
+	_ "github.com/mallardduck/BrambleGate/plugins/hosts"
 
 	"github.com/coredns/coredns/core/dnsserver"
 )
@@ -98,11 +104,22 @@ func init() {
 		// shouldn't be cached. Out-of-zone queries fall through past vlancache
 		// to forward as usual.
 		//
+		// hosts runs FIRST, even before mdnsbridge: it's a hard-win escape
+		// hatch (dev-docs/static-hosts.md) — same intent as Pi-hole's Local DNS
+		// Records taking precedence over everything else, including a
+		// records.yaml vlan_overrides entry for the same name. CoreDNS's stock
+		// ordering puts "hosts" well after "cache", where it would never even
+		// see a home.arpa query localrecords already authoritatively NXDOMAIN'd.
+		// hosts.yaml always renders with "fallthrough", so any name it doesn't
+		// have an entry for falls through to mdnsbridge → localrecords
+		// unchanged — this only ever intercepts names a user explicitly listed.
+		//
 		// mdnsbridge runs BEFORE localrecords: localrecords is the authoritative
 		// home.arpa NXDOMAIN emitter (no fallthrough on miss, to avoid leaking
 		// internal queries), so anything that wants to answer a home.arpa name must
 		// precede it. mdnsbridge answers published discoveries and otherwise falls
 		// through to localrecords (docs/plugins.md).
+		"hosts",
 		"mdnsbridge",
 		"localrecords",
 		"vlancache",
@@ -114,7 +131,6 @@ func init() {
 		"minimal",
 		"template",
 		"transfer",
-		"hosts",
 		"route53",
 		"azure",
 		"clouddns",

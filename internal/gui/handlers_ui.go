@@ -323,6 +323,140 @@ func parseRecordForm(r *http.Request, vlans []model.VLAN) (model.Record, error) 
 	return rec, nil
 }
 
+// --- Hosts -----------------------------------------------------------------
+
+func (h *handlers) hostsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderHosts(w, r, nil, "")
+}
+
+func (h *handlers) hostsEdit(w http.ResponseWriter, r *http.Request) {
+	hostname := chi.URLParam(r, "hostname")
+	hs, err := h.svc.Hosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	host, ok := findHost(hs, hostname)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	h.renderHosts(w, r, &host, "")
+}
+
+func (h *handlers) hostsCreate(w http.ResponseWriter, r *http.Request) {
+	host, err := parseHostForm(r)
+	if err != nil {
+		h.renderHosts(w, r, nil, err.Error())
+		return
+	}
+	warnings, err := h.svc.AddHost(host)
+	if err != nil {
+		h.renderHosts(w, r, nil, err.Error())
+		return
+	}
+	h.renderHostsWithWarnings(w, r, nil, "", warnings)
+}
+
+func (h *handlers) hostsUpdate(w http.ResponseWriter, r *http.Request) {
+	hostname := chi.URLParam(r, "hostname")
+	host, err := parseHostForm(r)
+	if err != nil {
+		h.renderHostsAtIdentity(w, r, hostname, err.Error())
+		return
+	}
+	warnings, err := h.svc.UpdateHost(hostname, host)
+	if err != nil {
+		h.renderHostsAtIdentity(w, r, hostname, err.Error())
+		return
+	}
+	h.renderHostsWithWarnings(w, r, nil, "", warnings)
+}
+
+func (h *handlers) hostsDelete(w http.ResponseWriter, r *http.Request) {
+	hostname := chi.URLParam(r, "hostname")
+	warnings, err := h.svc.DeleteHost(hostname)
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	h.renderHostsWithWarnings(w, r, nil, errMsg, warnings)
+}
+
+// renderHosts renders the hosts page with the current on-disk host set.
+// editing, when non-nil, pre-fills the form for an update instead of an add.
+func (h *handlers) renderHosts(w http.ResponseWriter, r *http.Request, editing *model.Host, formErr string) {
+	h.renderHostsWithWarnings(w, r, editing, formErr, nil)
+}
+
+// renderHostsWithWarnings is renderHosts plus configgen's non-fatal render
+// warnings (e.g. a hosts entry shadowing a records.yaml name) — surfaced the
+// same way as a form error (a toast), just not blocking the save that
+// triggered it (dev-docs/static-hosts.md's "precedence consequence" note).
+func (h *handlers) renderHostsWithWarnings(w http.ResponseWriter, r *http.Request, editing *model.Host, formErr string, warnings []string) {
+	hs, err := h.svc.Hosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := ui.HostsData{Hosts: hs, Editing: editing}
+	msg := formErr
+	if len(warnings) > 0 {
+		warnMsg := "Warning: " + strings.Join(warnings, "; ")
+		if msg == "" {
+			msg = warnMsg
+		} else {
+			msg += "; " + warnMsg
+		}
+	}
+	renderError(w, r, "Hosts", ui.PathHosts, ui.Hosts(data), msg)
+}
+
+// renderHostsAtIdentity re-renders the form in edit mode for hostname (the
+// on-disk values, not the failed submission) alongside formErr — mirrors
+// renderRecordsAtIdentity.
+func (h *handlers) renderHostsAtIdentity(w http.ResponseWriter, r *http.Request, hostname string, formErr string) {
+	hs, err := h.svc.Hosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	host, ok := findHost(hs, hostname)
+	if !ok {
+		h.renderHosts(w, r, nil, formErr)
+		return
+	}
+	h.renderHosts(w, r, &host, formErr)
+}
+
+func findHost(hs model.HostSet, hostname string) (model.Host, bool) {
+	target := model.NormalizedHostName(hostname)
+	for _, host := range hs.Hosts {
+		if model.NormalizedHostName(host.Hostname) == target {
+			return host, true
+		}
+	}
+	return model.Host{}, false
+}
+
+// parseHostForm reads the add/edit hosts form: ip, hostname, and a
+// comma-separated aliases field.
+func parseHostForm(r *http.Request) (model.Host, error) {
+	if err := r.ParseForm(); err != nil {
+		return model.Host{}, err
+	}
+	host := model.Host{
+		IP:       strings.TrimSpace(r.FormValue("ip")),
+		Hostname: strings.TrimSpace(r.FormValue("hostname")),
+	}
+	for _, a := range strings.Split(r.FormValue("aliases"), ",") {
+		if a = strings.TrimSpace(a); a != "" {
+			host.Aliases = append(host.Aliases, a)
+		}
+	}
+	return host, nil
+}
+
 // --- Settings --------------------------------------------------------------
 
 func (h *handlers) settingsPage(w http.ResponseWriter, r *http.Request) {

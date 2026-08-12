@@ -66,6 +66,7 @@ templ Topbar(active string) {
 			<nav class="flex items-center gap-1">
 				@navLink(PathDashboard, "Dashboard", active == PathDashboard)
 				@navLink(PathRecords, "Records", active == PathRecords)
+				@navLink(PathHosts, "Hosts", active == PathHosts)
 				@navLink(PathMDNS, "mDNS", active == PathMDNS)
 				@navLink(PathQueryLog, "Query Log", active == PathQueryLog)
 				@navLink(PathSettings, "Settings", active == PathSettings)

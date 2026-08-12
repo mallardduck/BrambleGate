@@ -264,12 +264,21 @@ type Options struct {
 	ACMESelfIPs selfip.Result
 }
 
-// Rendered is the output of Render: the Corefile bytes for the engine, and the
-// JSON zone-data bytes that must be written to ZoneDataPath(ConfigDir) before the
-// engine loads/reloads (the localrecords plugin reads it at setup).
+// Rendered is the output of Render: the Corefile bytes for the engine, the
+// JSON zone-data bytes that must be written to ZoneDataPath(ConfigDir), and
+// the hosts-format bytes that must be written to HostsDataPath(ConfigDir) —
+// both before the engine loads/reloads (localrecords and the stock hosts
+// plugin each read their file at setup).
 type Rendered struct {
-	Corefile []byte
-	ZoneData []byte
+	Corefile  []byte
+	ZoneData  []byte
+	HostsData []byte
+	// Warnings are non-fatal issues worth surfacing to the user but that
+	// don't block a save/reload — e.g. a hosts.yaml name shadowing a
+	// records.yaml name (dev-docs/static-hosts.md's "precedence
+	// consequence" note). Unlike a Validate error, Render still succeeds
+	// and Corefile/ZoneData/HostsData are still usable.
+	Warnings []string
 }
 
 // zoneData is the wire contract between configgen (writer) and the localrecords
@@ -282,11 +291,12 @@ type zoneData struct {
 	DDR        []ddrRecord    `json:"ddr,omitempty"`
 }
 
-// Render validates the model and returns the Corefile plus JSON zone data. On any
-// validation failure it returns an error and no output — configgen fails loudly
-// here rather than handing CoreDNS an invalid config (docs/config-schema.md).
-func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error) {
-	if err := Validate(s, rs); err != nil {
+// Render validates the model and returns the Corefile plus JSON zone data and
+// hosts-format data. On any validation failure it returns an error and no
+// output — configgen fails loudly here rather than handing CoreDNS an
+// invalid config (docs/config-schema.md).
+func Render(s model.Settings, rs model.RecordSet, hs model.HostSet, opts Options) (Rendered, error) {
+	if err := Validate(s, rs, hs); err != nil {
 		return Rendered{}, err
 	}
 
@@ -315,7 +325,53 @@ func Render(s model.Settings, rs model.RecordSet, opts Options) (Rendered, error
 		return Rendered{}, fmt.Errorf("marshal zone data: %w", err)
 	}
 
-	return Rendered{Corefile: buildCorefile(s, opts), ZoneData: zone}, nil
+	return Rendered{
+		Corefile:  buildCorefile(s, opts),
+		ZoneData:  zone,
+		HostsData: renderHostsFile(hs),
+		Warnings:  hostsShadowWarnings(hs, rs),
+	}, nil
+}
+
+// renderHostsFile renders hs to /etc/hosts syntax, one line per Host —
+// hostname first then aliases (dev-docs/static-hosts.md) — with a leading
+// comment pointing back at the user-owned source file, same convention as
+// the ".runtime/" tree's other generated artifacts.
+func renderHostsFile(hs model.HostSet) []byte {
+	var out strings.Builder
+	out.WriteString("# generated — do not edit; see /config/hosts.yaml\n")
+	for _, h := range hs.Hosts {
+		out.WriteString(h.IP)
+		for _, name := range h.Names() {
+			out.WriteString(" ")
+			out.WriteString(name)
+		}
+		out.WriteString("\n")
+	}
+	return []byte(out.String())
+}
+
+// hostsShadowWarnings flags a hosts.yaml name (hostname or alias) that
+// collides with a records.yaml name — not a validation failure (the
+// override is intentional escape-hatch behavior, see static-hosts.md's
+// "precedence consequence" note), but worth surfacing since hosts always
+// wins outright, silently defeating any records.yaml vlan_overrides for
+// that name.
+func hostsShadowWarnings(hs model.HostSet, rs model.RecordSet) []string {
+	recordNames := map[string]bool{}
+	for _, r := range rs.Records {
+		recordNames[r.NormalizedName()] = true
+	}
+	var warnings []string
+	for _, h := range hs.Hosts {
+		for _, name := range h.Names() {
+			n := model.NormalizedHostName(name)
+			if recordNames[n] {
+				warnings = append(warnings, fmt.Sprintf("hosts.yaml entry %q for %s shadows a records.yaml entry with the same name — hosts always wins, including over any vlan_overrides it had", name, h.IP))
+			}
+		}
+	}
+	return warnings
 }
 
 func buildCorefile(s model.Settings, opts Options) []byte {
@@ -387,6 +443,15 @@ func buildServerBlock(addr string, tls bool, quic *model.QUICListener, quicPlugi
 	// (dev-docs/query-log.md) — it must observe the full round trip, including
 	// answers those two plugins produce. Only rendered when enabled.
 	writeQueryLog(blk, s)
+	// hosts runs first, ahead of even mdnsbridge — a hard-win escape hatch
+	// (dev-docs/static-hosts.md). Always rendered, same convention as
+	// localrecords below: the file may be empty, but the stanza is static
+	// regardless of hosts.yaml's content. fallthrough means an unmatched
+	// name is unaffected — it proceeds to mdnsbridge/localrecords/forward
+	// exactly as it would without this plugin in the chain at all.
+	blk.SubBlock(fmt.Sprintf("hosts %s .", HostsDataPath(opts.ConfigDir)), func(inner *corefile.Block) {
+		inner.Directive("fallthrough")
+	})
 	// mdnsbridge (argument-free; reads the process-owned discovery table) runs
 	// ahead of localrecords per the directive order. Only rendered when enabled.
 	blk.DirectiveIf(s.MDNS.Enabled, "mdnsbridge")

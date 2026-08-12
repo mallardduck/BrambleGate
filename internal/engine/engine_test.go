@@ -1,8 +1,12 @@
 package engine
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/miekg/dns"
 )
 
 // A minimal, dependency-free Corefile: whoami answers locally with no upstream,
@@ -79,6 +83,55 @@ func TestNewAcceptsForwardTuningDirectives(t *testing.T) {
 		t.Fatalf("New with forward tuning sub-block: %v", err)
 	}
 	_ = eng.Stop()
+}
+
+// The hosts directive (dev-docs/static-hosts.md, Phase 8 migration step 1)
+// must both (a) actually override the name it lists and (b) fall through to
+// whatever's next in the chain for anything it doesn't — confirmed against a
+// real hosts-format file and real DNS queries over the wire, not just that
+// New() accepts the Corefile syntax. whoami is the fallthrough target: it
+// answers any A/AAAA query with the requester's own address, which is
+// trivially distinguishable from the hosts entry's static answer.
+func TestNewHostsOverrideWinsAndFallsThrough(t *testing.T) {
+	skipIfWindows(t)
+	hostsPath := filepath.Join(t.TempDir(), "hosts.txt")
+	if err := os.WriteFile(hostsPath, []byte("192.0.2.55 override.example.\n"), 0o644); err != nil {
+		t.Fatalf("write hosts file: %v", err)
+	}
+	cf := []byte(".:45358 {\n\tbind 127.0.0.1\n\thosts " + filepath.ToSlash(hostsPath) + " . {\n\t\tfallthrough\n\t}\n\twhoami\n}\n")
+	eng, err := New(cf)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = eng.Stop() })
+
+	c := new(dns.Client)
+
+	override := new(dns.Msg)
+	override.SetQuestion("override.example.", dns.TypeA)
+	resp, _, err := c.Exchange(override, "127.0.0.1:45358")
+	if err != nil {
+		t.Fatalf("query override.example: %v", err)
+	}
+	if len(resp.Answer) != 1 {
+		t.Fatalf("want 1 answer from the hosts override, got %d: %+v", len(resp.Answer), resp.Answer)
+	}
+	if a, ok := resp.Answer[0].(*dns.A); !ok || a.A.String() != "192.0.2.55" {
+		t.Fatalf("want the hosts override answer 192.0.2.55, got %+v", resp.Answer[0])
+	}
+
+	miss := new(dns.Msg)
+	miss.SetQuestion("not-in-hosts.example.", dns.TypeA)
+	resp2, _, err := c.Exchange(miss, "127.0.0.1:45358")
+	if err != nil {
+		t.Fatalf("query not-in-hosts.example: %v", err)
+	}
+	if len(resp2.Answer) != 1 {
+		t.Fatalf("want 1 fallthrough answer from whoami, got %d: %+v", len(resp2.Answer), resp2.Answer)
+	}
+	if a, ok := resp2.Answer[0].(*dns.A); !ok || a.A.String() == "192.0.2.55" {
+		t.Fatalf("want a fallthrough answer distinct from the hosts override, got %+v", resp2.Answer[0])
+	}
 }
 
 func TestNewInvalidFails(t *testing.T) {

@@ -172,6 +172,95 @@ func TestRecordsEditRejectsMDNSRecord(t *testing.T) {
 	}
 }
 
+func TestHostsCreateEditDelete(t *testing.T) {
+	h := newTestServer(t)
+
+	// Create.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/hosts", url.Values{
+		"ip": {"192.168.10.55"}, "hostname": {"kitchen-tablet.home.arpa"}, "aliases": {"tablet.home.arpa, tab.home.arpa"},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "kitchen-tablet.home.arpa") || !strings.Contains(rec.Body.String(), "tablet.home.arpa, tab.home.arpa") {
+		t.Fatalf("expected new host + aliases in table, got: %s", rec.Body.String())
+	}
+
+	// Edit form pre-fill.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodGet, "/hosts/kitchen-tablet.home.arpa/edit", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "value=\"kitchen-tablet.home.arpa\"") {
+		t.Fatalf("edit prefill status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	// Update.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPut, "/hosts/kitchen-tablet.home.arpa", url.Values{
+		"ip": {"192.168.10.99"}, "hostname": {"kitchen-tablet.home.arpa"},
+	}))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "192.168.10.99") {
+		t.Fatalf("update status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	// Delete.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodDelete, "/hosts/kitchen-tablet.home.arpa", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "No hosts entries yet.") {
+		t.Fatalf("delete status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHostsCreateDuplicateNameShowsFormError(t *testing.T) {
+	h := newTestServer(t)
+	form := url.Values{"ip": {"192.168.10.1"}, "hostname": {"dup.example"}}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/hosts", form))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first create status = %d", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/hosts", form))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "already exists") {
+		t.Fatalf("expected duplicate FormError, got status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHostsCreateShadowingRecordShowsWarning: a hosts entry with the same
+// name as an existing records.yaml record must still succeed (it's an
+// intentional escape hatch, dev-docs/static-hosts.md), but should surface
+// configgen's non-fatal shadow warning rather than silently doing nothing.
+func TestHostsCreateShadowingRecordShowsWarning(t *testing.T) {
+	svc, st, _ := newService(t)
+	if err := st.SaveRecords(model.RecordSet{Records: []model.Record{
+		{Name: "nas.home.arpa", Type: model.TypeA, Default: "192.168.10.20"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/hosts", url.Values{
+		"ip": {"192.168.10.99"}, "hostname": {"nas.home.arpa"},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "shadows a records.yaml entry") {
+		t.Fatalf("expected shadow warning toast, got: %s", rec.Body.String())
+	}
+	// The entry must still have been saved despite the warning.
+	hs, err := st.LoadHosts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hs.Hosts) != 1 || hs.Hosts[0].Hostname != "nas.home.arpa" {
+		t.Fatalf("expected the shadowing host to be saved anyway, got: %+v", hs.Hosts)
+	}
+}
+
 func TestSettingsSaveAndVLANLifecycle(t *testing.T) {
 	h := newTestServer(t)
 

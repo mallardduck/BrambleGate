@@ -21,6 +21,7 @@ import (
 const (
 	settingsFile = "settings.yaml"
 	recordsFile  = "records.yaml"
+	hostsFile    = "hosts.yaml"
 )
 
 // Store reads and writes the config files under a single config directory.
@@ -39,6 +40,7 @@ func (s *Store) Dir() string { return s.dir }
 // SettingsPath and RecordsPath expose the on-disk locations (useful for logs).
 func (s *Store) SettingsPath() string { return filepath.Join(s.dir, settingsFile) }
 func (s *Store) RecordsPath() string  { return filepath.Join(s.dir, recordsFile) }
+func (s *Store) HostsPath() string    { return filepath.Join(s.dir, hostsFile) }
 
 // SettingsExist reports whether settings.yaml is already present. A fresh install
 // has none; the CLI seeds model.DefaultSettings() on first run (onboarding) so the
@@ -78,6 +80,25 @@ func (s *Store) LoadRecords() (model.RecordSet, error) {
 // SaveRecords atomically writes <configDir>/records.yaml.
 func (s *Store) SaveRecords(records model.RecordSet) error {
 	return writeYAML(s.RecordsPath(), records)
+}
+
+// LoadHosts reads and parses <configDir>/hosts.yaml. A missing file is
+// treated as an empty host set — a fresh install has none yet, same
+// convention as LoadRecords.
+func (s *Store) LoadHosts() (model.HostSet, error) {
+	var out model.HostSet
+	if _, err := os.Stat(s.HostsPath()); os.IsNotExist(err) {
+		return out, nil
+	}
+	if err := readYAML(s.HostsPath(), &out); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// SaveHosts atomically writes <configDir>/hosts.yaml.
+func (s *Store) SaveHosts(hosts model.HostSet) error {
+	return writeYAML(s.HostsPath(), hosts)
 }
 
 func readYAML(path string, out any) error {

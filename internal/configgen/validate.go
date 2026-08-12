@@ -13,7 +13,7 @@ import (
 // Validate checks the model is renderable and internally consistent before any
 // Corefile is produced. It fails loudly so a bad edit is rejected at save time
 // rather than surfacing as an opaque CoreDNS parse error on reload.
-func Validate(s model.Settings, rs model.RecordSet) error {
+func Validate(s model.Settings, rs model.RecordSet, hs model.HostSet) error {
 	if err := validateListeners(s.Listeners); err != nil {
 		return err
 	}
@@ -44,7 +44,39 @@ func Validate(s model.Settings, rs model.RecordSet) error {
 	if err := validateLog(s.Log); err != nil {
 		return err
 	}
-	return validateRecords(rs, s.VLANs, ownedZones(s))
+	if err := validateRecords(rs, s.VLANs, ownedZones(s)); err != nil {
+		return err
+	}
+	return validateHosts(hs)
+}
+
+// validateHosts checks hosts.yaml: well-formed IP, non-empty hostname, and
+// dedup across hostname+aliases project-wide — two entries claiming the
+// same name is undefined/last-wins in hosts-file semantics and should be a
+// render-time error, not a runtime surprise (dev-docs/static-hosts.md).
+// Deliberately no owned-zone restriction (unlike validateRecords) — this
+// plugin answers any domain, not just BrambleGate's own zones.
+func validateHosts(hs model.HostSet) error {
+	seenNames := map[string]bool{}
+	for _, h := range hs.Hosts {
+		if net.ParseIP(h.IP) == nil {
+			return fmt.Errorf("hosts entry %q is not a valid IP", h.IP)
+		}
+		if strings.TrimSpace(h.Hostname) == "" {
+			return fmt.Errorf("hosts entry for %q is missing a hostname", h.IP)
+		}
+		for _, name := range h.Names() {
+			if strings.TrimSpace(name) == "" {
+				return fmt.Errorf("hosts entry for %q has an empty alias", h.IP)
+			}
+			n := model.NormalizedHostName(name)
+			if seenNames[n] {
+				return fmt.Errorf("duplicate hosts name %q (across hostname/aliases, project-wide)", name)
+			}
+			seenNames[n] = true
+		}
+	}
+	return nil
 }
 
 // validateLog checks the log plugin's class filter, if set, against the
