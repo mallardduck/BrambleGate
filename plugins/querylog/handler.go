@@ -76,6 +76,15 @@ func (q *QueryLog) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	if entry.Source == "" {
 		entry.Verdict, entry.Source = classifyFallback(rec.Rcode, entry.Latency, q.cacheLatencyThreshold())
 	}
+	// "none" is an explicit enum value for "the cache layer never saw this
+	// query" (e.g. localrecords/mdnsbridge answered directly, never calling
+	// Next) — distinct from vlancache's own "miss", and preferred over
+	// leaving Entry.CacheOutcome at its Go zero value "", which would show
+	// up as a bare "" key in ByCacheOutcome/JSON output with no indication
+	// it's a deliberate, meaningful bucket rather than missing data.
+	if entry.CacheOutcome == "" {
+		entry.CacheOutcome = "none"
+	}
 	if rec.Msg != nil {
 		entry.AuthenticatedData = rec.Msg.AuthenticatedData
 		if len(rec.Msg.Answer) > 0 {

@@ -129,15 +129,15 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Cache hit rate", pctLabel(data.Totals.ByVerdict["cached"]+data.Totals.ByVerdict["coalesced"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Cache hit rate", pctLabel(sourceGroupTotal(data.Totals.BySource, "cache", "vlancache"), data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Answered locally", pctLabel(data.Totals.ByVerdict["local"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Answered locally", pctLabel(sourceGroupTotal(data.Totals.BySource, "localrecords", "mdnsbridge"), data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = activityTile("Forwarded upstream", pctLabel(data.Totals.ByVerdict["forwarded"], data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = activityTile("Forwarded upstream", pctLabel(sourceGroupTotal(data.Totals.BySource, "forward"), data.Totals.Queries)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -827,27 +827,29 @@ func foldOther(counts []labelCount, max int) []labelCount {
 	return append(out, labelCount{Label: "Other", Count: other})
 }
 
-// nonEmptyCounts drops the "" key some rollups (e.g. ByCacheOutcome) carry
-// for queries no relevant plugin touched — irrelevant noise for a chart
-// specifically about that plugin's own activity, unlike Sources/VLAN/QType
-// charts where "" is itself a meaningful bucket (vlanBarLabel, sourceLabel).
+// nonEmptyCounts drops the "none" bucket ByCacheOutcome carries for queries
+// that never reached the cache layer at all (querylog's handler.go defaults
+// Entry.CacheOutcome to "none" rather than leaving it "") — irrelevant noise
+// for a chart specifically about vlancache's own activity, unlike
+// Sources/VLAN/QType charts where an empty Source/VLAN is itself a
+// meaningful bucket (vlanBarLabel, sourceLabel).
 func nonEmptyCounts(m map[string]int64) []labelCount {
 	all := sortedCounts(m)
 	out := make([]labelCount, 0, len(all))
 	for _, c := range all {
-		if c.Label != "" {
+		if c.Label != "none" {
 			out = append(out, c)
 		}
 	}
 	return out
 }
 
-// cacheActivityTotal sums every non-"" bucket — gates vlanCacheActivityCard,
-// since "" alone (nothing attributed) shouldn't render an empty chart.
+// cacheActivityTotal sums every non-"none" bucket — gates vlanCacheActivityCard,
+// since "none" alone (the cache layer saw nothing) shouldn't render an empty chart.
 func cacheActivityTotal(byOutcome map[string]int64) int64 {
 	var total int64
 	for k, v := range byOutcome {
-		if k != "" {
+		if k != "none" {
 			total += v
 		}
 	}
@@ -877,6 +879,22 @@ func vlanBarLabel(vlan string) string {
 		return "(none)"
 	}
 	return vlan
+}
+
+// sourceGroupTotal sums BySource across the given Source values — the top
+// tiles group by Source (which plugin actually handled the query), not
+// Verdict (the outcome), so a tile's percentage always reflects real query
+// volume: e.g. "Answered locally" counts everything localrecords/mdnsbridge
+// took ownership of, including an authoritative NXDOMAIN denial for an
+// owned zone, not just a successful answer (Verdict "local" alone
+// undercounts this). Grouping this way keeps the four top tiles summing to
+// Totals.Queries.
+func sourceGroupTotal(bySource map[string]int64, sources ...string) int64 {
+	var total int64
+	for _, s := range sources {
+		total += bySource[s]
+	}
+	return total
 }
 
 func pctLabel(part, total int64) string {

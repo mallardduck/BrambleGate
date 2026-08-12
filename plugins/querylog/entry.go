@@ -30,6 +30,13 @@ type Entry struct {
 	// but is still a "miss" here). Lets the dashboard show a full breakdown
 	// of vlancache's own activity without polluting the general Source
 	// breakdown with misses that are really forwards.
+	//
+	// QueryLog.ServeDNS defaults this to "none" for any query that never
+	// reached the cache layer at all (e.g. localrecords/mdnsbridge answered
+	// directly and never called Next) — a real, explicit enum value rather
+	// than leaving the Go zero value "" to stand in for it, since a raw ""
+	// key in the rollup/JSON output (querylog.Totals.ByCacheOutcome) reads
+	// as "unset/broken" rather than "deliberately not applicable."
 	CacheOutcome string
 
 	// Listener is the local address the query arrived on (w.LocalAddr()),

@@ -41,6 +41,11 @@ const (
 	maxFailTTL     = 5 * time.Minute
 
 	defaultCap = 10000
+
+	// prefetchThresholdFraction is how much of an entry's original TTL must
+	// remain, as a fraction, before a hit triggers a background prefetch
+	// refresh — see VlanCache.prefetch's doc comment.
+	prefetchThresholdFraction = 0.10
 )
 
 // VlanCache is a CoreDNS cache plugin. See doc.go for the design.
@@ -50,6 +55,23 @@ type VlanCache struct {
 	vlans   vlanmatch.Table
 	store   *store
 	failTTL time.Duration
+
+	// prefetch, when true, proactively refreshes an entry in the background
+	// on a hit once its remaining TTL drops below prefetchThresholdFraction
+	// of its original TTL — instead of waiting for a client to hit an
+	// expired entry and eat the upstream round trip. A deliberately simpler
+	// policy than the stock cache plugin's hit-count/duration-gated
+	// prefetch (plugin/cache's "prefetch AMOUNT DURATION PERCENTAGE%"): we
+	// refresh on every near-expiry hit rather than only after AMOUNT hits
+	// within DURATION. Good enough for a homelab's traffic volume, and much
+	// simpler than reproducing that windowed counter per cache key.
+	prefetch bool
+	// staleTTL, when > 0, lets a hit serve an entry up to staleTTL past its
+	// original expiry (immediately, with a background refresh kicked off —
+	// see refresh) instead of falling through to a synchronous upstream
+	// call. 0 disables stale serving entirely (the pre-existing behavior:
+	// an expired entry is a miss).
+	staleTTL time.Duration
 
 	// sf coalesces concurrent misses sharing a key into one upstream call —
 	// see fetch. Without this, a burst of clients asking an identical
@@ -77,25 +99,27 @@ func (c *VlanCache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	cd := r.CheckingDisabled
 	ad := r.AuthenticatedData
 
-	scopedKey := hashScoped(qname, qtype, do, cd)
-	if e, ok := c.store.getScoped(scopedKey, ip, now); ok {
-		attribute(ctx, "cached")
-		attributeCache(ctx, "hit")
-		return c.reply(w, r, e, now, do, ad)
-	}
-
 	bucket, ok := c.vlans.Lookup(ip)
 	if !ok {
 		bucket = globalBucket
 	}
+	scopedKey := hashScoped(qname, qtype, do, cd)
 	directKey := hashDirect(bucket, qname, qtype, do, cd)
-	if e, ok := c.store.getDirect(directKey, now); ok {
+	bucketKey := strconv.FormatUint(directKey, 36)
+	refreshKeys := hitKeys{bucketKey: bucketKey, directKey: directKey, scopedKey: scopedKey, ip: ip, qname: qname, qtype: qtype, do: do, cd: cd}
+
+	if e, fresh, ok := c.store.getScoped(scopedKey, ip, now, c.staleTTL); ok {
 		attribute(ctx, "cached")
-		attributeCache(ctx, "hit")
+		c.onHit(ctx, w, e, fresh, now, refreshKeys)
 		return c.reply(w, r, e, now, do, ad)
 	}
 
-	bucketKey := strconv.FormatUint(directKey, 36)
+	if e, fresh, ok := c.store.getDirect(directKey, now, c.staleTTL); ok {
+		attribute(ctx, "cached")
+		c.onHit(ctx, w, e, fresh, now, refreshKeys)
+		return c.reply(w, r, e, now, do, ad)
+	}
+
 	fr, leader, err := c.fetch(ctx, w, bucketKey, directKey, scopedKey, ip, r, now)
 	if err != nil {
 		return dns.RcodeServerFailure, err
@@ -161,6 +185,86 @@ func attributeCache(ctx context.Context, outcome string) {
 	if e := querylog.FromContext(ctx); e != nil {
 		e.CacheOutcome = outcome
 	}
+}
+
+// hitKeys bundles everything a background refresh (see refresh) needs to
+// redo the original lookup/fetch/store cycle for the query that produced a
+// cache hit — computed once per ServeDNS call regardless of whether a
+// refresh actually ends up firing.
+type hitKeys struct {
+	bucketKey            string
+	directKey, scopedKey uint64
+	ip                   net.IP
+	qname                string
+	qtype                uint16
+	do, cd               bool
+}
+
+// onHit handles the two ways a store hit can call for background work,
+// alongside the synchronous reply ServeDNS always sends from e itself
+// (entry.toMsg already clamps a stale entry's TTL to 0 — see its doc
+// comment — so the client-visible answer is correct either way):
+//
+//   - fresh but within prefetchThresholdFraction of expiry: refresh now so
+//     the *next* hit doesn't have to pay for a synchronous upstream call.
+//   - already past its original TTL (only reachable when c.staleTTL > 0,
+//     since store.getDirect/getScoped otherwise wouldn't return ok=true):
+//     refresh now, unconditionally — every stale hit needs a refresh.
+func (c *VlanCache) onHit(ctx context.Context, w dns.ResponseWriter, e *entry, fresh bool, now time.Time, k hitKeys) {
+	if !fresh {
+		attributeCache(ctx, "stale")
+		c.refresh(w, k)
+		return
+	}
+	attributeCache(ctx, "hit")
+	if c.prefetch && nearExpiry(e, now) {
+		c.refresh(w, k)
+	}
+}
+
+// nearExpiry reports whether e has less than prefetchThresholdFraction of
+// its original TTL remaining.
+func nearExpiry(e *entry, now time.Time) bool {
+	if e.origTTL <= 0 {
+		return false
+	}
+	return float64(e.remaining(now))/float64(e.origTTL) <= prefetchThresholdFraction
+}
+
+// refresh re-runs the fetch that originally populated this cache entry, in
+// the background — used for both prefetch (entry still valid, but close to
+// expiry) and stale serving (entry already expired, client got the stale
+// answer immediately and shouldn't wait on this). Shares c.sf/c.fetch with
+// the synchronous miss path, so a refresh racing a real client miss for the
+// same key coalesces into one upstream call rather than two.
+//
+// Deliberately not attributed to querylog: this isn't a client's query, and
+// the triggering client's own *Entry was already (or is about to be)
+// recorded by the time this runs — reusing ctx here would risk mutating an
+// Entry after querylog's ServeDNS has already read it. Deliberately not
+// tied to ctx's lifetime either, for the same reason: this outlives the
+// request that triggered it, so a fresh context.Background() is used
+// instead — see fetch's use of ctx for what a refresh's upstream call
+// actually needs it for (nothing BrambleGate-specific; only forward/rewrite
+// read the context, and neither depends on the original request's ctx
+// surviving past ServeDNS returning).
+//
+// A refresh spawned just before an engine.Reload() swaps in a new CoreDNS
+// instance can outlive the Next chain it's calling into (e.g. forward's
+// upstream connections torn down mid-flight); the error is swallowed like
+// any other failed refresh (see fetch's cacheable() gate — a failure just
+// leaves the existing entry in place for next time), so this is wasted work
+// on reload, not a correctness bug.
+func (c *VlanCache) refresh(w dns.ResponseWriter, k hitKeys) {
+	go func() {
+		req := new(dns.Msg)
+		req.SetQuestion(k.qname, k.qtype)
+		req.CheckingDisabled = k.cd
+		if k.do {
+			req.SetEdns0(4096, true)
+		}
+		_, _, _ = c.fetch(context.Background(), w, k.bucketKey, k.directKey, k.scopedKey, k.ip, req, c.nowFunc())
+	}()
 }
 
 // fetchResult is a singleflight-shared upstream response, annotated with

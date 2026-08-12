@@ -113,6 +113,9 @@ func TestServeDNS_SelfAttributedAnswer_KeepsDownstreamSourceVerdict(t *testing.T
 	if e.Latency != time.Millisecond {
 		t.Errorf("Latency = %v, want 1ms", e.Latency)
 	}
+	if e.CacheOutcome != "none" {
+		t.Errorf("CacheOutcome = %q, want \"none\" (localrecords answered directly, never reaching a cache-layer plugin)", e.CacheOutcome)
+	}
 }
 
 func TestServeDNS_CapturesListenerAndProto(t *testing.T) {

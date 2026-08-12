@@ -16,7 +16,6 @@ import (
 	// not remove this import, it isn't dead.
 	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/bufsize"
-	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/errors"
 	_ "github.com/coredns/coredns/plugin/forward"
 	_ "github.com/coredns/coredns/plugin/health"
@@ -89,12 +88,15 @@ func init() {
 		"chaos",
 		"loadbalance",
 		"tsig",
-		// BrambleGate custom plugins run BEFORE cache: localrecords answers are
-		// per-VLAN (split-horizon) and must never be globally cached — the cache
-		// is not keyed by client subnet, so caching them would serve one VLAN's
-		// answer to another. mdnsbridge answers change with device liveness, so it
-		// also shouldn't be cached. Out-of-zone queries fall through past cache to
-		// forward as usual.
+		// BrambleGate custom plugins run BEFORE vlancache: localrecords answers
+		// are per-VLAN (split-horizon) and must never be globally cached — the
+		// stock cache plugin isn't keyed by client subnet, so caching them would
+		// serve one VLAN's answer to another (this is exactly why vlancache
+		// exists at all — see plugins/vlancache/doc.go — and why configgen's
+		// writeCache never emits the stock plugin any more, only vlancache).
+		// mdnsbridge answers change with device liveness, so they also
+		// shouldn't be cached. Out-of-zone queries fall through past vlancache
+		// to forward as usual.
 		//
 		// mdnsbridge runs BEFORE localrecords: localrecords is the authoritative
 		// home.arpa NXDOMAIN emitter (no fallthrough on miss, to avoid leaking
@@ -103,15 +105,6 @@ func init() {
 		// through to localrecords (docs/plugins.md).
 		"mdnsbridge",
 		"localrecords",
-		"cache",
-		// vlancache is a from-scratch replacement for cache, not yet wired
-		// into configgen's rendering (writeCache still only ever emits
-		// "cache"). It keys entries by the requester's VLAN by default and
-		// by an upstream-echoed RFC 7871 SCOPE prefix when available, so it
-		// can safely run even when ecs_enabled is on — see
-		// plugins/vlancache/doc.go. Declared here so it's usable the moment
-		// configgen switches over; until then it simply can't appear in a
-		// rendered Corefile.
 		"vlancache",
 		"rewrite",
 		"acl",

@@ -438,8 +438,8 @@ func writeQueryLog(blk *corefile.Block, s model.Settings) {
 	})
 }
 
-// writeCache renders the cache directive — the stock cache plugin when ECS is
-// off, or plugins/vlancache when ECS is on.
+// writeCache renders the cache directive — always plugins/vlancache, never
+// the stock cache plugin.
 //
 // The stock cache plugin has no concept of client subnet — it keys purely on
 // qname/qtype/qclass (plugin/cache) — so with ecs_enabled on it would cache
@@ -449,25 +449,28 @@ func writeQueryLog(blk *corefile.Block, s model.Settings) {
 // own cache-bypass ordering above). vlancache exists precisely to be safe
 // here: it keys by the requester's VLAN by default, and by an
 // upstream-echoed RFC 7871 SCOPE prefix when available (plugins/vlancache/
-// doc.go).
+// doc.go) — and stays correct with ECS off too (the direct/VLAN-bucket tier
+// alone is exactly the stock plugin's own keying, just partitioned by VLAN
+// bucket instead of shared globally).
 //
-// This split is a staged rollout, not the end state: vlancache doesn't yet
-// implement prefetch/serve_stale, so s.Cache's tuning only applies on the
-// ECS-off/stock-cache path for now. Once vlancache grows those, this can
-// collapse to always emitting vlancache.
+// This used to be a staged rollout gated on ecs_enabled, because vlancache
+// didn't yet implement prefetch/serve_stale and s.Cache's tuning only
+// applied on the stock-cache path. Now that vlancache has both (see
+// VlanCache.prefetch/staleTTL), there is no longer a reason to ever emit the
+// stock plugin, so this collapsed to always vlancache. A second, independent
+// motivation: stock cache never self-attributes to querylog at all — every
+// "Source: cache" in the dashboard was actually classifyFallback's latency
+// guess, not a verified hit, unlike vlancache's real self-attribution. With
+// stock cache gone, that ambiguity is gone too.
 func writeCache(blk *corefile.Block, s model.Settings) {
-	if s.UpstreamDNS.ECS {
+	c := s.Cache
+	if c.ServeStaleDisabled && c.PrefetchDisabled {
 		blk.Directive("vlancache")
 		return
 	}
-	c := s.Cache
-	if c.ServeStaleDisabled && c.PrefetchDisabled {
-		blk.Directive("cache")
-		return
-	}
-	blk.SubBlock("cache", func(inner *corefile.Block) {
-		inner.DirectiveIf(!c.PrefetchDisabled, "prefetch 10 1m 10%%")
-		inner.DirectiveIf(!c.ServeStaleDisabled, "serve_stale 1h immediate")
+	blk.SubBlock("vlancache", func(inner *corefile.Block) {
+		inner.DirectiveIf(!c.PrefetchDisabled, "prefetch")
+		inner.DirectiveIf(!c.ServeStaleDisabled, "serve_stale 1h")
 	})
 }
 

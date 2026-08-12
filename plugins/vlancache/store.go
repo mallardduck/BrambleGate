@@ -40,23 +40,36 @@ func newStore(capacity int) *store {
 	}
 }
 
-func (s *store) getDirect(key uint64, now time.Time) (*entry, bool) {
-	e, ok := s.direct.Get(key)
-	if !ok || e.remaining(now) <= 0 {
-		return nil, false
+// getDirect returns the entry for key, if any within its TTL or, when
+// staleTTL > 0, within staleTTL past expiry. fresh reports which case
+// applied — callers use it to decide between a normal hit and a
+// serve-stale-and-refresh-in-background response (see handler.go).
+func (s *store) getDirect(key uint64, now time.Time, staleTTL time.Duration) (e *entry, fresh, ok bool) {
+	e, ok = s.direct.Get(key)
+	if !ok {
+		return nil, false, false
 	}
-	return e, true
+	rem := e.remaining(now)
+	if rem > 0 {
+		return e, true, true
+	}
+	if staleTTL > 0 && -rem <= staleTTL {
+		return e, false, true
+	}
+	return nil, false, false
 }
 
 func (s *store) setDirect(key uint64, e *entry) {
 	s.direct.Add(key, e)
 }
 
-// getScoped returns the most specific (longest-prefix) non-expired scoped
-// entry under key that contains ip, if any.
-func (s *store) getScoped(key uint64, ip net.IP, now time.Time) (*entry, bool) {
+// getScoped returns the most specific (longest-prefix) scoped entry under
+// key that contains ip, if any — preferring a still-fresh entry over a
+// stale one outright, and the longest prefix within whichever freshness
+// class wins, matching getDirect's fresh/stale distinction.
+func (s *store) getScoped(key uint64, ip net.IP, now time.Time, staleTTL time.Duration) (e *entry, fresh, ok bool) {
 	if ip == nil {
-		return nil, false
+		return nil, false, false
 	}
 	s.mu.RLock()
 	entries := s.scoped[key]
@@ -64,22 +77,25 @@ func (s *store) getScoped(key uint64, ip net.IP, now time.Time) (*entry, bool) {
 
 	var best *scopedEntry
 	bestLen := -1
+	bestFresh := false
 	for _, se := range entries {
-		if se.e.remaining(now) <= 0 {
-			continue
+		rem := se.e.remaining(now)
+		entryFresh := rem > 0
+		if !entryFresh && (staleTTL <= 0 || -rem > staleTTL) {
+			continue // expired beyond the stale grace window (or stale serving is off)
 		}
 		if !se.prefix.Contains(ip) {
 			continue
 		}
 		l, _ := se.prefix.Mask.Size()
-		if l > bestLen {
-			best, bestLen = se, l
+		if best == nil || (entryFresh && !bestFresh) || (entryFresh == bestFresh && l > bestLen) {
+			best, bestLen, bestFresh = se, l, entryFresh
 		}
 	}
 	if best == nil {
-		return nil, false
+		return nil, false, false
 	}
-	return best.e, true
+	return best.e, bestFresh, true
 }
 
 // setScoped stores e under prefix, replacing any existing entry for the same

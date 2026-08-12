@@ -26,9 +26,10 @@ type Totals struct {
 	ByVLAN    map[string]int64 `json:"by_vlan"`
 	ByQType   map[uint16]int64 `json:"by_qtype"`
 	// ByCacheOutcome mirrors Entry.CacheOutcome — see its doc comment.
-	// Empty-string entries (queries no cache plugin attributed) are counted
-	// like every other rollup here; callers rendering this as a chart should
-	// skip the "" key the same way they'd skip any other zero-signal bucket.
+	// "none" entries (queries the cache layer never saw) are counted like
+	// every other rollup here; callers rendering this as a chart should
+	// skip the "none" key the same way they'd skip any other zero-signal
+	// bucket (dashboard_stats.templ's nonEmptyCounts).
 	ByCacheOutcome map[string]int64 `json:"by_cache_outcome"`
 }
 

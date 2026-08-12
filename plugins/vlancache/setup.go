@@ -28,7 +28,19 @@ func init() {
 //	vlancache {
 //	    capacity 10000
 //	    servfail 5s
+//	    prefetch
+//	    serve_stale 1h
 //	}
+//
+// prefetch/serve_stale are the settings-driven knobs configgen.writeCache
+// translates from model.Settings.Cache (PrefetchDisabled/ServeStaleDisabled)
+// — see VlanCache.prefetch/staleTTL's doc comments for what each actually
+// does. Deliberately simpler than the stock cache plugin's own
+// "prefetch AMOUNT DURATION PERCENTAGE%" syntax: no amount/duration
+// hit-count gate, just an on/off switch (prefetchThresholdFraction is a
+// fixed internal constant, not user-tunable), and serve_stale takes a bare
+// duration with no "immediate"/"verify" mode selector — this plugin only
+// ever behaves like stock cache's "immediate" mode.
 //
 // Bare "vlancache" uses the plugin's own defaults for both. vlans is read
 // from vlanmatch.Current() at parse time, matching localrecords' own
@@ -82,6 +94,23 @@ func parse(c *caddy.Controller) (*VlanCache, error) {
 					return nil, c.Err("vlancache: servfail ttl must be between 0 and 5m (RFC 2308)")
 				}
 				vc.failTTL = d
+			case "prefetch":
+				if c.NextArg() {
+					return nil, c.ArgErr() // bare toggle, takes no argument
+				}
+				vc.prefetch = true
+			case "serve_stale":
+				if !c.NextArg() {
+					return nil, c.ArgErr()
+				}
+				d, err := time.ParseDuration(c.Val())
+				if err != nil {
+					return nil, err
+				}
+				if d <= 0 {
+					return nil, c.Err("vlancache: serve_stale duration must be positive")
+				}
+				vc.staleTTL = d
 			default:
 				return nil, c.Errf("vlancache: unknown property %q", c.Val())
 			}

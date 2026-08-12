@@ -37,6 +37,47 @@ func TestParseRejectsServfailOverRFC2308Cap(t *testing.T) {
 	}
 }
 
+func TestParsePrefetchAndServeStale(t *testing.T) {
+	corefile := "vlancache {\n\tprefetch\n\tserve_stale 1h\n}"
+	vc, err := parse(caddy.NewTestController("dns", corefile))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !vc.prefetch {
+		t.Fatal("want prefetch enabled")
+	}
+	if vc.staleTTL != time.Hour {
+		t.Fatalf("want staleTTL 1h, got %s", vc.staleTTL)
+	}
+}
+
+func TestParseBareDirectiveDisablesPrefetchAndServeStale(t *testing.T) {
+	vc, err := parse(caddy.NewTestController("dns", "vlancache"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if vc.prefetch {
+		t.Fatal("want prefetch disabled by default")
+	}
+	if vc.staleTTL != 0 {
+		t.Fatalf("want staleTTL 0 (disabled) by default, got %s", vc.staleTTL)
+	}
+}
+
+func TestParseRejectsPrefetchWithArgument(t *testing.T) {
+	corefile := "vlancache {\n\tprefetch 10\n}"
+	if _, err := parse(caddy.NewTestController("dns", corefile)); err == nil {
+		t.Fatal("expected an error: prefetch is a bare toggle, not a tunable")
+	}
+}
+
+func TestParseRejectsNonPositiveServeStale(t *testing.T) {
+	corefile := "vlancache {\n\tserve_stale 0s\n}"
+	if _, err := parse(caddy.NewTestController("dns", corefile)); err == nil {
+		t.Fatal("expected an error for a non-positive serve_stale duration")
+	}
+}
+
 func TestParseRejectsInvalidCapacity(t *testing.T) {
 	corefile := "vlancache {\n\tcapacity 0\n}"
 	if _, err := parse(caddy.NewTestController("dns", corefile)); err == nil {
