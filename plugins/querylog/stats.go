@@ -20,16 +20,16 @@ const (
 // capped at 65536) — deliberately unlike qname/client-IP, which are NOT
 // tracked here; see Log.TopDomains/TopClients for why those are SQL-only.
 type Totals struct {
-	Queries   int64
-	ByVerdict map[string]int64
-	BySource  map[string]int64
-	ByVLAN    map[string]int64
-	ByQType   map[uint16]int64
+	Queries   int64            `json:"queries"`
+	ByVerdict map[string]int64 `json:"by_verdict"`
+	BySource  map[string]int64 `json:"by_source"`
+	ByVLAN    map[string]int64 `json:"by_vlan"`
+	ByQType   map[uint16]int64 `json:"by_qtype"`
 	// ByCacheOutcome mirrors Entry.CacheOutcome — see its doc comment.
 	// Empty-string entries (queries no cache plugin attributed) are counted
 	// like every other rollup here; callers rendering this as a chart should
 	// skip the "" key the same way they'd skip any other zero-signal bucket.
-	ByCacheOutcome map[string]int64
+	ByCacheOutcome map[string]int64 `json:"by_cache_outcome"`
 }
 
 // Bucket is one point in a query-volume time series (Log.RecentSeries/Series).
