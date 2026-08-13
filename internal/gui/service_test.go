@@ -12,6 +12,7 @@ import (
 
 	"github.com/mallardduck/BrambleGate/internal/configgen"
 	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/gatewaydetect"
 	"github.com/mallardduck/BrambleGate/internal/store"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
@@ -34,6 +35,15 @@ func stubVLANCandidates(t *testing.T, cands []selfip.Candidate) {
 	orig := detectVLANCandidates
 	detectVLANCandidates = func(existing []model.VLAN) []selfip.Candidate { return cands }
 	t.Cleanup(func() { detectVLANCandidates = orig })
+}
+
+// stubGateways replaces detectGateways for the duration of a test — same
+// save/restore pattern as stubSelfIPs.
+func stubGateways(t *testing.T, res gatewaydetect.Result) {
+	t.Helper()
+	orig := detectGateways
+	detectGateways = func(vlans []model.VLAN) gatewaydetect.Result { return res }
+	t.Cleanup(func() { detectGateways = orig })
 }
 
 // stubReloader records the last Corefile and can be made to fail.
@@ -615,6 +625,48 @@ func TestAddHostRefreshesClientNamesHostsIndex(t *testing.T) {
 	name, source := svc.clientNames.Resolve("192.168.10.47")
 	if name != "nas.home.arpa" || source != "hosts" {
 		t.Fatalf("got %q/%q, want nas.home.arpa/hosts after AddHost refreshed the tier-0 index", name, source)
+	}
+}
+
+func TestClientNamesConfigDefaultsToAutoDetectedGateways(t *testing.T) {
+	svc, _, _ := newService(t)
+	stubGateways(t, gatewaydetect.Result{
+		PerVLAN: map[string]string{"trusted": "192.168.10.1"},
+		Primary: "192.168.10.1",
+	})
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.VLANs = []model.VLAN{{Name: "trusted", CIDRs: []string{"192.168.10.0/24"}}}
+
+	cfg := svc.clientNamesConfig(settings, model.HostSet{})
+	if _, ok := cfg.Resolvers["trusted"]; !ok {
+		t.Fatalf("expected an auto-detected PTR resolver for VLAN trusted (no ptr_upstream set), got %+v", cfg.Resolvers)
+	}
+	if cfg.UnmatchedResolver == nil {
+		t.Fatal("expected UnmatchedResolver to be populated from gatewaydetect.Result.Primary")
+	}
+}
+
+func TestClientNamesConfigExplicitOverrideWinsOverAutoDetect(t *testing.T) {
+	svc, _, _ := newService(t)
+	stubGateways(t, gatewaydetect.Result{PerVLAN: map[string]string{"trusted": "192.168.10.1"}})
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.VLANs = []model.VLAN{{Name: "trusted", CIDRs: []string{"192.168.10.0/24"}}}
+	settings.ClientNames.PTRUpstream = "10.0.0.53:53"
+
+	cfg := svc.clientNamesConfig(settings, model.HostSet{})
+	if _, ok := cfg.Resolvers["trusted"]; !ok {
+		t.Fatal("expected the explicit ptr_upstream override applied to VLAN trusted")
+	}
+	if cfg.UnmatchedResolver == nil {
+		t.Fatal("expected the explicit ptr_upstream override to also populate UnmatchedResolver")
 	}
 }
 

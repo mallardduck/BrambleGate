@@ -8,8 +8,12 @@
 // Three tiers, in priority order: a static hosts.yaml entry (tier 0, read
 // live off an injected index), a live address match against mdnsbridge's
 // discovery table (tier 1, also read live, never cached), and a cached PTR
-// query against an optional configured upstream (tier 2, the only tier that
-// costs a real network round trip and so the only one actually cached).
+// query against a per-VLAN target (tier 2, the only tier that costs a real
+// network round trip and so the only one actually cached) — either an
+// explicit client_names.ptr_upstream override, or (by default) each VLAN's
+// own auto-detected gateway router (internal/gatewaydetect), so PTR "just
+// works" the way Pi-hole's client-name resolution does without the user
+// having to hand-configure a reverse-DNS server.
 package clientnames
 
 import (
@@ -75,13 +79,15 @@ func (t *Table) SetConfig(cfg Config) {
 	t.cfg = cfg
 }
 
-// Observe records a client IP as seen. On first sight it queues a tier-2
-// (PTR) resolution attempt — but only if tier 0/1 didn't already resolve it
-// live, since PTR is "fallback for client IPs tier 1 didn't match"
-// (dev-docs/client-names.md). Never blocks: the queue send is non-blocking
-// and PTR resolution itself happens on Run's background worker, off the
-// caller's goroutine (typically querylog's request path).
-func (t *Table) Observe(ip string) {
+// Observe records a client IP (and the VLAN its source address matched, ""
+// if none — mirrors querylog.ClientInfo.VLAN) as seen. On first sight it
+// queues a tier-2 (PTR) resolution attempt against that VLAN's resolver —
+// but only if tier 0/1 didn't already resolve it live, since PTR is
+// "fallback for client IPs tier 1 didn't match" (dev-docs/client-names.md).
+// Never blocks: the queue send is non-blocking and PTR resolution itself
+// happens on Run's background worker, off the caller's goroutine (typically
+// querylog's request path).
+func (t *Table) Observe(ip, vlan string) {
 	if ip == "" {
 		return
 	}
@@ -89,14 +95,18 @@ func (t *Table) Observe(ip string) {
 	t.mu.Lock()
 	e, existed := t.entries[ip]
 	if !existed {
-		t.entries[ip] = &Entry{IP: ip, LastSeen: now}
+		t.entries[ip] = &Entry{IP: ip, VLAN: vlan, LastSeen: now}
 	} else {
 		e.LastSeen = now
+		e.VLAN = vlan // keep it fresh in case the same IP re-appears in a different VLAN
 	}
-	resolver := t.cfg.Resolver
+	cfg := t.cfg
 	t.mu.Unlock()
 
-	if existed || resolver == nil {
+	if existed {
+		return
+	}
+	if resolverFor(cfg, vlan) == nil {
 		return
 	}
 	if _, src := t.resolveLive(ip); src != SourceNone {
@@ -214,12 +224,19 @@ func (t *Table) Run(ctx context.Context) {
 	}
 }
 
-// attemptPTR performs one tier-2 lookup and, on success, caches it onto the
-// existing Entry (a no-op if the IP was evicted/never observed).
+// attemptPTR performs one tier-2 lookup, against the resolver for the
+// entry's own VLAN, and on success caches it onto the existing Entry (a
+// no-op if the IP was evicted/never observed, or if that VLAN has no PTR
+// resolver configured).
 func (t *Table) attemptPTR(ip string) {
 	t.mu.Lock()
-	resolver := t.cfg.Resolver
+	e, ok := t.entries[ip]
+	cfg := t.cfg
 	t.mu.Unlock()
+	if !ok {
+		return
+	}
+	resolver := resolverFor(cfg, e.VLAN)
 	if resolver == nil {
 		return
 	}
@@ -246,13 +263,12 @@ func (t *Table) attemptPTR(ip string) {
 // re-check).
 func (t *Table) Sweep() int {
 	t.mu.Lock()
-	resolver := t.cfg.Resolver
 	mode := t.cfg.RefreshHostnames
 	if mode == "" {
 		mode = "ipv4_only"
 	}
 	var ips []string
-	if resolver != nil && mode != "none" {
+	if mode != "none" {
 		for ip, e := range t.entries {
 			if e.Source != SourcePTR {
 				continue

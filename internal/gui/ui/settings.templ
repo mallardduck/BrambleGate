@@ -347,6 +347,37 @@ templ Settings(data SettingsData) {
 			}
 		</div>
 
+		<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+			<h2 class="text-sm font-semibold mb-3 flex items-center">
+				Client name resolution
+				@helpTooltip("Answers \"who is 192.168.10.47\" in the Query Log and /api/clients: a Hosts entry (see the Hosts page) wins first, then a live mDNS discovery match, then a PTR lookup against each VLAN's own router (auto-detected — see PTR upstream override below). No DHCP tier — BrambleGate isn't a DHCP server. Takes effect immediately — no restart needed.")
+			</h2>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="client_names_enabled" checked?={ data.Settings.ClientNames.Enabled } onchange={ toggleHiddenByChecked("client_names_fields") }/>
+				Enabled
+			</label>
+			<div id="client_names_fields" class="mt-3 pl-0.5 flex flex-wrap gap-3 items-end" hidden?={ !data.Settings.ClientNames.Enabled }>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						PTR upstream override
+						@helpTooltip("By default the PTR tier auto-detects each VLAN's own gateway router and queries it directly — no configuration needed, same as most of what Pi-hole does out of the box. Set this only to override that with one specific host:port for every VLAN (e.g. if auto-detection guesses wrong, or you want reverse lookups sent somewhere else entirely). Leave blank to use auto-detection.")
+					</span>
+					<input name="client_names_ptr_upstream" value={ data.Settings.ClientNames.PTRUpstream } placeholder="auto-detected — override if needed" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm min-w-[240px]"/>
+				</label>
+				<label class="flex flex-col gap-1 text-sm">
+					<span class="text-bramble-muted text-xs flex items-center">
+						Refresh cached PTR names
+						@helpTooltip("Governs only the hourly re-check of already-resolved PTR results (mDNS/Hosts are always live and need no refresh). IPv4 only (default): re-check IPv4 entries hourly, skip IPv6 (addresses rotate too fast for a re-poll to be worth it). All: re-check both families. Never: resolve once, never re-check.")
+					</span>
+					<select name="client_names_refresh_hostnames" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm">
+						@refreshHostnamesOption("ipv4_only", "IPv4 only (default)", data.Settings.ClientNames.RefreshHostnames)
+						@refreshHostnamesOption("all", "All", data.Settings.ClientNames.RefreshHostnames)
+						@refreshHostnamesOption("none", "Never", data.Settings.ClientNames.RefreshHostnames)
+					</select>
+				</label>
+			</div>
+		</div>
+
 		<div class="mt-4">
 			<button type="submit" class="px-4 py-2 rounded border border-bramble-primary text-bramble-primary text-sm font-semibold hover:bg-bramble-primary/10">
 				Save settings
@@ -682,6 +713,25 @@ templ vlanRow(v model.VLAN) {
 			</button>
 		</span>
 	</div>
+}
+
+// normalizeRefreshMode treats model.ClientNames.RefreshHostnames's unset ""
+// as its documented default "ipv4_only" — used only to preselect the right
+// <option>; configgen's own validation already accepts "" as a synonym for
+// "ipv4_only", so this doesn't change what gets saved.
+func normalizeRefreshMode(current string) string {
+	if current == "" {
+		return "ipv4_only"
+	}
+	return current
+}
+
+templ refreshHostnamesOption(value, label, current string) {
+	if value == normalizeRefreshMode(current) {
+		<option value={ value } selected>{ label }</option>
+	} else {
+		<option value={ value }>{ label }</option>
+	}
 }
 
 templ mdnsServiceTypesModeOption(value, label string, types []string) {

@@ -536,6 +536,55 @@ func TestSettingsSave_QueryLog(t *testing.T) {
 	}
 }
 
+func TestSettingsSave_ClientNames(t *testing.T) {
+	svc, st, _ := newService(t)
+	h := NewServer(svc, ":0").Handler
+
+	base := func(extra url.Values) url.Values {
+		form := url.Values{
+			"upstream_address": {"192.168.10.5:53"}, "upstream_protocol": {"plain"},
+			"plain_enabled": {"on"}, "plain_port": {"53"},
+			"acme_renew_before_days": {"30"},
+		}
+		for k, v := range extra {
+			form[k] = v
+		}
+		return form
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(url.Values{
+		"client_names_enabled":           {"on"},
+		"client_names_ptr_upstream":      {"192.168.10.1:53"},
+		"client_names_refresh_hostnames": {"all"},
+	})))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (client names enabled) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err := st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.ClientNames.Enabled || settings.ClientNames.PTRUpstream != "192.168.10.1:53" || settings.ClientNames.RefreshHostnames != "all" {
+		t.Fatalf("unexpected client_names after save: %+v", settings.ClientNames)
+	}
+
+	// Unchecking clears it back to disabled (and the now-hidden fields are
+	// cleared too, same as ACME's self-signed-fallback field).
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings", base(nil)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save (client names cleared) status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	settings, err = st.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.ClientNames.Enabled {
+		t.Fatalf("expected client names disabled after unchecking, got: %+v", settings.ClientNames)
+	}
+}
+
 func TestSettingsSave_DoH3Listener(t *testing.T) {
 	svc, st, _ := newService(t)
 	h := NewServer(svc, ":0").Handler

@@ -14,11 +14,31 @@ type Config struct {
 	// MDNS is the tier-1 lookup: mdnsbridge's live discovery table, matched by
 	// address. nil when mDNS discovery is disabled.
 	MDNS *mdnsbridge.Table
-	// Resolver is the tier-2 lookup (PTR). nil disables the PTR tier — Table
-	// then runs hosts+mDNS-only, per client_names.ptr_upstream being unset.
-	Resolver Resolver
+	// Resolvers is the tier-2 (PTR) target per VLAN name — keyed the same as
+	// model.VLAN.Name. Either every VLAN's entry points at the one explicit
+	// client_names.ptr_upstream override, or (when that's unset) each VLAN's
+	// own auto-detected gateway (internal/gatewaydetect), so a client in
+	// "trusted" and a client in "guest" can resolve PTR against their own
+	// VLAN's router rather than one that likely can't see them
+	// (dev-docs/client-names.md). A VLAN with no entry has the PTR tier off.
+	Resolvers map[string]Resolver
+	// UnmatchedResolver is the tier-2 target for a client whose source IP
+	// matched no declared VLAN — only set when client_names.ptr_upstream is
+	// an explicit override, or gatewaydetect found a Primary gateway with no
+	// VLAN configured at all (e.g. a single flat home network).
+	UnmatchedResolver Resolver
 	// RefreshHostnames governs the tier-2 hourly re-sweep of already-cached
 	// PTR entries: "ipv4_only" (default), "all", or "none". Mirrors Pi-hole's
 	// REFRESH_HOSTNAMES.
 	RefreshHostnames string
+}
+
+// resolverFor picks cfg's PTR target for a client in vlan (""=unmatched) —
+// a free function, not a Table method, so it's usable without a lock and
+// trivially unit testable on its own.
+func resolverFor(cfg Config, vlan string) Resolver {
+	if vlan == "" {
+		return cfg.UnmatchedResolver
+	}
+	return cfg.Resolvers[vlan]
 }

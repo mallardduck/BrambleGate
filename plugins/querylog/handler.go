@@ -101,7 +101,7 @@ func (q *QueryLog) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	q.Ring.Push(*entry)
 	q.Store.Record(*entry)
 	globalStats.observe(*entry)
-	observeClient(entry.Client.IP)
+	observeClient(entry.Client.IP, entry.Client.VLAN)
 
 	return rcode, err
 }

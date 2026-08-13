@@ -17,6 +17,7 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/acme"
 	"github.com/mallardduck/BrambleGate/internal/configgen"
 	"github.com/mallardduck/BrambleGate/internal/configgen/selfip"
+	"github.com/mallardduck/BrambleGate/internal/gatewaydetect"
 	"github.com/mallardduck/BrambleGate/internal/mdnscfg"
 	"github.com/mallardduck/BrambleGate/internal/store"
 	"github.com/mallardduck/BrambleGate/internal/vlancfg"
@@ -109,6 +110,12 @@ var detectSelfIPs = selfip.DetectLive
 // declared VLAN, for the Settings page's "detected networks" suggestions.
 // Same never-cached, overridable-for-tests treatment as detectSelfIPs.
 var detectVLANCandidates = selfip.CandidatesLive
+
+// detectGateways guesses each VLAN's gateway router IP, for the
+// clientnames PTR tier's default target when client_names.ptr_upstream
+// isn't set (dev-docs/client-names.md). Same never-cached,
+// overridable-for-tests treatment as detectSelfIPs.
+var detectGateways = gatewaydetect.DetectLive
 
 // NewService wires the GUI application layer. ctx bounds the lifetime of the
 // mDNS browse goroutine (started/stopped independently of engine reloads as
@@ -217,20 +224,43 @@ func (s *Service) reconcileQueryLogStore(settings model.Settings) {
 // single choke point StartClientNames/refreshClientNames/reconcileClientNames
 // all go through so the Table's live tier-0/tier-1 sources never drift from
 // what SaveSettings/AddHost et al. actually persisted.
+//
+// PTR targets default to each VLAN's auto-detected gateway router
+// (detectGateways), not upstream_dns — the general ad-block resolver
+// usually has no idea what's on the LAN, but the router almost always
+// both knows local reverse names and doubles as the LAN's DNS server,
+// the same assumption Pi-hole's own client-name resolution leans on.
+// client_names.ptr_upstream, when set, is an explicit override that wins
+// for every VLAN instead (dev-docs/client-names.md).
 func (s *Service) clientNamesConfig(settings model.Settings, hs model.HostSet) clientnames.Config {
-	var resolver clientnames.Resolver
+	resolvers := map[string]clientnames.Resolver{}
+	var unmatched clientnames.Resolver
 	if settings.ClientNames.PTRUpstream != "" {
-		resolver = clientnames.NewPTRResolver(settings.ClientNames.PTRUpstream)
+		r := clientnames.NewPTRResolver(settings.ClientNames.PTRUpstream)
+		unmatched = r
+		for _, v := range settings.VLANs {
+			resolvers[v.Name] = r
+		}
+	} else {
+		gw := detectGateways(settings.VLANs)
+		for name, ip := range gw.PerVLAN {
+			resolvers[name] = clientnames.NewPTRResolver(ip + ":53")
+		}
+		if gw.Primary != "" {
+			unmatched = clientnames.NewPTRResolver(gw.Primary + ":53")
+		}
 	}
+
 	idx := make(map[string]string, len(hs.Hosts))
 	for _, h := range hs.Hosts {
 		idx[h.IP] = h.Hostname
 	}
 	return clientnames.Config{
-		HostsIndex:       idx,
-		MDNS:             s.mdns,
-		Resolver:         resolver,
-		RefreshHostnames: settings.ClientNames.RefreshHostnames,
+		HostsIndex:        idx,
+		MDNS:              s.mdns,
+		Resolvers:         resolvers,
+		UnmatchedResolver: unmatched,
+		RefreshHostnames:  settings.ClientNames.RefreshHostnames,
 	}
 }
 

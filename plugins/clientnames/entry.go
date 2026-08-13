@@ -24,7 +24,12 @@ const (
 // answer — Table.Resolve/Snapshot prefer the live hosts/mDNS tiers over
 // whatever's cached here (see Table.resolve).
 type Entry struct {
-	IP         string    `json:"ip"`
+	IP string `json:"ip"`
+	// VLAN is "" when the client's address matched no configured VLAN
+	// (mirrors querylog.ClientInfo.VLAN) — also which PTR resolver
+	// (Config.Resolvers vs UnmatchedResolver) a re-sweep uses for this
+	// entry.
+	VLAN       string    `json:"vlan,omitempty"`
 	Hostname   string    `json:"hostname,omitempty"`
 	Source     Source    `json:"source,omitempty"`
 	LastSeen   time.Time `json:"last_seen"`

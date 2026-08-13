@@ -78,10 +78,10 @@ func TestResolve_NoneWhenUnresolved(t *testing.T) {
 func TestObserve_SkipsPTRWhenTier0Resolves(t *testing.T) {
 	resolver := &fakeResolver{hostnames: map[string]string{}}
 	tbl := NewTable(Config{
-		HostsIndex: map[string]string{"192.168.1.5": "nas.home.arpa"},
-		Resolver:   resolver,
+		HostsIndex:        map[string]string{"192.168.1.5": "nas.home.arpa"},
+		UnmatchedResolver: resolver,
 	})
-	tbl.Observe("192.168.1.5")
+	tbl.Observe("192.168.1.5", "")
 	// No async work should have been queued at all — give the (nonexistent)
 	// worker a moment to prove nothing arrives.
 	time.Sleep(20 * time.Millisecond)
@@ -92,13 +92,13 @@ func TestObserve_SkipsPTRWhenTier0Resolves(t *testing.T) {
 
 func TestObserve_QueuesAndResolvesPTR(t *testing.T) {
 	resolver := &fakeResolver{hostnames: map[string]string{"10.0.0.5": "laptop"}}
-	tbl := NewTable(Config{Resolver: resolver, RefreshHostnames: "ipv4_only"})
+	tbl := NewTable(Config{UnmatchedResolver: resolver, RefreshHostnames: "ipv4_only"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go tbl.Run(ctx)
 
-	tbl.Observe("10.0.0.5")
+	tbl.Observe("10.0.0.5", "")
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -111,16 +111,74 @@ func TestObserve_QueuesAndResolvesPTR(t *testing.T) {
 	t.Fatal("PTR tier never resolved 10.0.0.5")
 }
 
+func TestObserve_NoResolverForClientsVLANSkipsPTR(t *testing.T) {
+	// A resolver exists for "trusted" but this client is on "guest" — no
+	// UnmatchedResolver fallback, so PTR must stay off for it.
+	trusted := &fakeResolver{hostnames: map[string]string{"192.168.20.5": "should-not-be-queried"}}
+	tbl := NewTable(Config{Resolvers: map[string]Resolver{"trusted": trusted}})
+
+	tbl.Observe("192.168.20.5", "guest")
+	time.Sleep(20 * time.Millisecond)
+	if trusted.callCount() != 0 {
+		t.Fatalf("trusted VLAN's resolver called %d times, want 0 (client is on guest, no resolver configured for it)", trusted.callCount())
+	}
+}
+
+func TestObserve_PerVLANResolverSelection(t *testing.T) {
+	trusted := &fakeResolver{hostnames: map[string]string{"192.168.10.5": "trusted-client"}}
+	guest := &fakeResolver{hostnames: map[string]string{"192.168.20.5": "guest-client"}}
+	tbl := NewTable(Config{Resolvers: map[string]Resolver{"trusted": trusted, "guest": guest}})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tbl.Run(ctx)
+
+	tbl.Observe("192.168.10.5", "trusted")
+	tbl.Observe("192.168.20.5", "guest")
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		n1, s1 := tbl.Resolve("192.168.10.5")
+		n2, s2 := tbl.Resolve("192.168.20.5")
+		if s1 == string(SourcePTR) && n1 == "trusted-client" && s2 == string(SourcePTR) && n2 == "guest-client" {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("expected each client resolved against its own VLAN's resolver")
+}
+
+func TestObserve_UnmatchedResolverUsedWhenNoVLAN(t *testing.T) {
+	unmatched := &fakeResolver{hostnames: map[string]string{"192.168.99.5": "flat-network-client"}}
+	tbl := NewTable(Config{UnmatchedResolver: unmatched})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tbl.Run(ctx)
+
+	tbl.Observe("192.168.99.5", "")
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		name, source := tbl.Resolve("192.168.99.5")
+		if source == string(SourcePTR) && name == "flat-network-client" {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("expected the unmatched-VLAN client to resolve via UnmatchedResolver")
+}
+
 func TestSweep_RefreshModes(t *testing.T) {
 	resolver := &fakeResolver{hostnames: map[string]string{
 		"10.0.0.1": "v4-client",
 		"::1":      "v6-client",
 	}}
-	tbl := NewTable(Config{Resolver: resolver})
+	tbl := NewTable(Config{UnmatchedResolver: resolver})
 	now := time.Now()
 	tbl.now = func() time.Time { return now }
 
-	// Seed both entries as already PTR-resolved.
+	// Seed both entries as already PTR-resolved, no VLAN (uses UnmatchedResolver).
 	tbl.entries["10.0.0.1"] = &Entry{IP: "10.0.0.1", Hostname: "v4-client", Source: SourcePTR}
 	tbl.entries["::1"] = &Entry{IP: "::1", Hostname: "v6-client", Source: SourcePTR}
 
@@ -142,9 +200,9 @@ func TestSweep_RefreshModes(t *testing.T) {
 
 func TestSnapshotSorted(t *testing.T) {
 	tbl := NewTable(Config{})
-	tbl.Observe("10.0.0.9")
-	tbl.Observe("10.0.0.2")
-	tbl.Observe("10.0.0.5")
+	tbl.Observe("10.0.0.9", "")
+	tbl.Observe("10.0.0.2", "")
+	tbl.Observe("10.0.0.5", "")
 
 	got := tbl.Snapshot()
 	if len(got) != 3 {

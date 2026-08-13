@@ -684,6 +684,15 @@ func parseSettingsForm(r *http.Request, s *model.Settings) error {
 	}
 	s.MDNS.Suffix = strings.TrimSpace(r.FormValue("mdns_suffix"))
 	s.MDNS.Advertise.Enabled = r.FormValue("mdns_advertise_enabled") != ""
+
+	s.ClientNames.Enabled = r.FormValue("client_names_enabled") != ""
+	s.ClientNames.PTRUpstream = strings.TrimSpace(r.FormValue("client_names_ptr_upstream"))
+	switch v := r.FormValue("client_names_refresh_hostnames"); v {
+	case "ipv4_only", "all", "none":
+		s.ClientNames.RefreshHostnames = v
+	default:
+		s.ClientNames.RefreshHostnames = ""
+	}
 	return nil
 }
 
