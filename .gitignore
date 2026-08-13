@@ -2,7 +2,7 @@
 /out/
 /dist/
 *.exe
-bramblegate
+/bramblegate
 
 # Downloaded Tailwind standalone CLI (cmd/gentailwind fetches it on demand)
 /bin/
