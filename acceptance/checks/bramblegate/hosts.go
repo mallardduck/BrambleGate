@@ -21,7 +21,7 @@ type Hosts struct {
 	Entry config.HostsCheck
 }
 
-func (c Hosts) Name() string        { return fmt.Sprintf("hosts/%s", c.Entry.Name) }
+func (c Hosts) Name() string        { return "hosts/" + c.Entry.Name }
 func (c Hosts) Tier() checks.Tier   { return checks.TierNetwork }
 func (c Hosts) Scope() checks.Scope { return checks.ScopeBrambleGate }
 
@@ -35,7 +35,7 @@ func (c Hosts) Run(_ context.Context, cfg *config.Config) checks.Result {
 	}
 	got := dnsutil.AAnswers(resp)
 	if dnsutil.Contains(got, c.Entry.ExpectIP) {
-		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Pass, Detail: fmt.Sprintf("got %s", c.Entry.ExpectIP)}
+		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Pass, Detail: "got " + c.Entry.ExpectIP}
 	}
 	return checks.Result{
 		Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail,

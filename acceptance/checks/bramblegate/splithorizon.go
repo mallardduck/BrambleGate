@@ -27,7 +27,7 @@ type SplitHorizon struct {
 	VLAN config.VLAN
 }
 
-func (c SplitHorizon) Name() string        { return fmt.Sprintf("splithorizon/%s", c.VLAN.Name) }
+func (c SplitHorizon) Name() string        { return "splithorizon/" + c.VLAN.Name }
 func (c SplitHorizon) Tier() checks.Tier   { return checks.TierLocal }
 func (c SplitHorizon) Scope() checks.Scope { return checks.ScopeBrambleGate }
 
@@ -56,7 +56,7 @@ func (c SplitHorizon) Run(_ context.Context, cfg *config.Config) checks.Result {
 
 	got := dnsutil.AAnswers(resp)
 	if dnsutil.Contains(got, c.VLAN.ExpectValue) {
-		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Pass, Detail: fmt.Sprintf("got %s", c.VLAN.ExpectValue)}
+		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Pass, Detail: "got " + c.VLAN.ExpectValue}
 	}
 	return checks.Result{
 		Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail,

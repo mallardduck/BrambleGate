@@ -45,7 +45,7 @@ func (c AuthoritativeAnswerConformance) Run(_ context.Context, cfg *config.Confi
 			Detail: fmt.Sprintf("NXDOMAIN for %s but AA bit not set — not answering authoritatively for its own zone", name),
 		}
 	}
-	return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Pass, Detail: fmt.Sprintf("NXDOMAIN+AA for %s", name)}
+	return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Pass, Detail: "NXDOMAIN+AA for " + name}
 }
 
 // TCPFallback checks a truncated (TC-bit) UDP response is correctly

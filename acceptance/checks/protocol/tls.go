@@ -12,6 +12,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,22 +43,26 @@ var tlsListeners = []struct {
 	{443, "DoH"},
 }
 
-func (c TLSChainValidity) Run(_ context.Context, cfg *config.Config) checks.Result {
+func (c TLSChainValidity) Run(ctx context.Context, cfg *config.Config) checks.Result {
 	if cfg.Target.DNSAddr == "" || cfg.Domain == "" {
 		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Skip, Detail: "target.dns_addr or domain not set"}
 	}
 
 	var details []string
 	for _, l := range tlsListeners {
-		addr := net.JoinHostPort(cfg.Target.DNSAddr, fmt.Sprint(l.port))
-		dialer := &net.Dialer{Timeout: 5 * time.Second}
-		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Domain})
+		addr := net.JoinHostPort(cfg.Target.DNSAddr, strconv.Itoa(l.port))
+		dialer := &tls.Dialer{
+			NetDialer: &net.Dialer{Timeout: 5 * time.Second},
+			Config:    &tls.Config{ServerName: cfg.Domain},
+		}
+		rawConn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return checks.Result{
 				Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail,
 				Detail: fmt.Sprintf("%s (%s): %v", l.name, addr, err),
 			}
 		}
+		conn := rawConn.(*tls.Conn)
 		state := conn.ConnectionState()
 		conn.Close()
 		if len(state.PeerCertificates) == 0 {

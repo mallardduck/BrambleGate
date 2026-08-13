@@ -6,6 +6,7 @@ package dnsutil
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/miekg/dns"
@@ -21,7 +22,7 @@ func WithDefaultPort(addr string) string {
 	if _, _, err := net.SplitHostPort(addr); err == nil {
 		return addr
 	}
-	return net.JoinHostPort(addr, fmt.Sprint(DefaultPort))
+	return net.JoinHostPort(addr, strconv.Itoa(DefaultPort))
 }
 
 // Query issues a single UDP query for name/qtype against addr (host or

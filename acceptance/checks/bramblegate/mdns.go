@@ -42,7 +42,7 @@ func (c MDNSPromoted) Run(ctx context.Context, cfg *config.Config) checks.Result
 	}
 	dnsIPs := dnsutil.AAnswers(resp)
 	if len(dnsIPs) == 0 {
-		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail, Detail: fmt.Sprintf("%s did not resolve", cfg.MDNS.PromotedName)}
+		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail, Detail: cfg.MDNS.PromotedName + " did not resolve"}
 	}
 
 	var list mdnsListResponse
@@ -70,6 +70,6 @@ func (c MDNSPromoted) Run(ctx context.Context, cfg *config.Config) checks.Result
 	}
 	return checks.Result{
 		Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail,
-		Detail: fmt.Sprintf("%s not found in /api/mdns entries", cfg.MDNS.PromotedName),
+		Detail: cfg.MDNS.PromotedName + " not found in /api/mdns entries",
 	}
 }
