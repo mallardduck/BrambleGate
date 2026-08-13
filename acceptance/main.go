@@ -46,8 +46,9 @@ func newRunCmd(configPath *string) *cobra.Command {
 	var tier, scope string
 
 	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run acceptance checks against a live BrambleGate instance",
+		Use:          "run",
+		Short:        "Run acceptance checks against a live BrambleGate instance",
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(*configPath)
 			if err != nil {

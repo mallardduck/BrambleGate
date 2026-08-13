@@ -41,6 +41,10 @@ type VLAN struct {
 // Upstream is the real ad-block resolver BrambleGate forwards to (Scenario 4).
 type Upstream struct {
 	Address string `yaml:"address"`
+	// TestDomain is an external (not BrambleGate-owned) name to compare
+	// answers for between BrambleGate and Upstream directly — proves
+	// transparent forwarding, not any BrambleGate-specific behavior.
+	TestDomain string `yaml:"test_domain,omitempty"`
 }
 
 // MDNS names a previously-promoted record to confirm it still tracks live
