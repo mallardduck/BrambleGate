@@ -22,6 +22,7 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/vlancfg"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/pluginreg"
+	"github.com/mallardduck/BrambleGate/plugins/clientnames"
 
 	// plugins/hosts is registration-only (its init() is what reload's
 	// SetLoaded("hosts", ...) call below reports against) — blank-imported
@@ -58,6 +59,9 @@ type Service struct {
 	mdnsCfg    mdnsListenerConfig // services/ifaces the running goroutine was started with
 
 	advertiser mdnsAdvertiser // nil when self-advertisement (mdns.advertise.enabled) is off
+
+	clientNames *clientnames.Table // nil when client_names.enabled is off
+	cnCancel    context.CancelFunc // non-nil while clientNames' resolve/sweep worker is running
 
 	mu sync.Mutex // serializes read-modify-write of the config files
 }
@@ -206,6 +210,96 @@ func (s *Service) reconcileQueryLogStore(settings model.Settings) {
 	if err := querylog.ReconcileStore(configgen.QueryLogStoreConfig(settings.QueryLog, s.configDir)); err != nil {
 		s.log.Error("querylog store reconcile failed", "err", err)
 	}
+}
+
+// clientNamesConfig builds a clientnames.Config from the current settings +
+// hosts.yaml + whatever mDNS table (if any) is currently running — the
+// single choke point StartClientNames/refreshClientNames/reconcileClientNames
+// all go through so the Table's live tier-0/tier-1 sources never drift from
+// what SaveSettings/AddHost et al. actually persisted.
+func (s *Service) clientNamesConfig(settings model.Settings, hs model.HostSet) clientnames.Config {
+	var resolver clientnames.Resolver
+	if settings.ClientNames.PTRUpstream != "" {
+		resolver = clientnames.NewPTRResolver(settings.ClientNames.PTRUpstream)
+	}
+	idx := make(map[string]string, len(hs.Hosts))
+	for _, h := range hs.Hosts {
+		idx[h.IP] = h.Hostname
+	}
+	return clientnames.Config{
+		HostsIndex:       idx,
+		MDNS:             s.mdns,
+		Resolver:         resolver,
+		RefreshHostnames: settings.ClientNames.RefreshHostnames,
+	}
+}
+
+// StartClientNames creates the client-name Table, starts its background
+// resolve/sweep worker bound to the Service's ctx, and registers it as
+// querylog's passive client-IP observer (dev-docs/client-names.md). Used both
+// at process startup (when client_names.enabled is already true) and by
+// reconcileClientNames on a later settings change.
+func (s *Service) StartClientNames(settings model.Settings, hs model.HostSet) {
+	tbl := clientnames.NewTable(s.clientNamesConfig(settings, hs))
+	ctx, cancel := context.WithCancel(s.baseCtx)
+	s.cnCancel = cancel
+	s.clientNames = tbl
+	go tbl.Run(ctx)
+	querylog.SetClientObserver(tbl.Observe)
+	pluginreg.SetLoaded("clientnames", true, "")
+}
+
+// StopClientNames cancels the resolve/sweep worker (if running), unregisters
+// the querylog observer, and drops the Table.
+func (s *Service) StopClientNames() {
+	if s.cnCancel != nil {
+		s.cnCancel()
+		s.cnCancel = nil
+	}
+	if s.clientNames != nil {
+		querylog.SetClientObserver(nil)
+		s.clientNames = nil
+	}
+	pluginreg.SetLoaded("clientnames", false, "disabled in settings")
+}
+
+// refreshClientNames pushes the latest hosts/mDNS/PTR config into the
+// already-running Table — called after any hosts.yaml change (applyHosts)
+// so tier 0 never serves a stale IP->name mapping. A no-op when client names
+// are disabled.
+func (s *Service) refreshClientNames(settings model.Settings, hs model.HostSet) {
+	if s.clientNames != nil {
+		s.clientNames.SetConfig(s.clientNamesConfig(settings, hs))
+	}
+}
+
+// reconcileClientNames starts/stops/reconfigures client-name resolution to
+// match the just-saved settings, called at the end of every SaveSettings —
+// same shape as reconcileAdvertise, and deliberately run after
+// mdnsPostReload so s.mdns already reflects any mDNS enable/disable from the
+// same save.
+func (s *Service) reconcileClientNames(settings model.Settings, hs model.HostSet) {
+	switch {
+	case !settings.ClientNames.Enabled:
+		s.StopClientNames()
+	case s.clientNames == nil:
+		s.StartClientNames(settings, hs)
+	default:
+		s.refreshClientNames(settings, hs)
+		pluginreg.SetLoaded("clientnames", true, "")
+	}
+}
+
+// ErrClientNamesDisabled is returned by the /api/clients endpoint when
+// client name resolution is off.
+var ErrClientNamesDisabled = ValidationError{errors.New("client name resolution is disabled (set client_names.enabled: true)")}
+
+// Clients returns the current client-name cache for the GUI/API.
+func (s *Service) Clients() ([]clientnames.Entry, error) {
+	if s.clientNames == nil {
+		return nil, ErrClientNamesDisabled
+	}
+	return s.clientNames.Snapshot(), nil
 }
 
 // ErrMDNSDisabled is returned by the mDNS endpoints when discovery is off.
@@ -360,6 +454,7 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	s.mdnsPostReload(settings, rs)
 	s.reconcileAdvertise(settings)
 	s.reconcileQueryLogStore(settings)
+	s.reconcileClientNames(settings, hs)
 	return reloadErr
 }
 
@@ -573,6 +668,7 @@ func (s *Service) applyHosts(settings model.Settings, hs model.HostSet) ([]strin
 	if err := s.store.SaveHosts(hs); err != nil {
 		return nil, err
 	}
+	s.refreshClientNames(settings, hs)
 	return rendered.Warnings, s.reload(rendered)
 }
 

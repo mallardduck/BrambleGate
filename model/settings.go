@@ -28,6 +28,29 @@ type Settings struct {
 	// QueryLog toggles the querylog plugin (dev-docs/query-log.md): an in-app,
 	// per-query log/stats surface. Off by default like MDNS/Observability.
 	QueryLog QueryLog `yaml:"querylog" json:"querylog"`
+	// ClientNames configures the clientnames component (dev-docs/client-names.md):
+	// "who is 192.168.10.47" resolution for the query log and /api/clients. Off
+	// by default like MDNS/Observability/QueryLog.
+	ClientNames ClientNames `yaml:"client_names" json:"client_names"`
+}
+
+// ClientNames configures the bramble-only clientnames component
+// (dev-docs/client-names.md). There is deliberately no DHCP tier — see that
+// doc's "Non-goals" — so resolution is hosts.yaml (tier 0) -> live mdnsbridge
+// match (tier 1) -> optional PTR query (tier 2).
+type ClientNames struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// PTRUpstream is the one narrow, deliberately-scoped conditional-forward
+	// this project needs: host:port of whatever on the LAN actually answers
+	// reverse (in-addr.arpa/ip6.arpa) queries for RFC1918/ULA space — typically
+	// the router, not upstream_dns (which usually has no idea what's on the
+	// LAN). Empty = the PTR tier is skipped; clientnames runs mDNS-only.
+	PTRUpstream string `yaml:"ptr_upstream,omitempty" json:"ptr_upstream,omitempty"`
+	// RefreshHostnames mirrors Pi-hole's REFRESH_HOSTNAMES and governs only the
+	// tier-2 (PTR) hourly re-sweep of already-cached entries: "ipv4_only"
+	// (default), "all", or "none". The mDNS tier is always live and never
+	// needs a re-sweep.
+	RefreshHostnames string `yaml:"refresh_hostnames,omitempty" json:"refresh_hostnames,omitempty"`
 }
 
 // QueryLog configures the querylog plugin (dev-docs/query-log.md).

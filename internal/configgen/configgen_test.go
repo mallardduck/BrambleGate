@@ -794,6 +794,30 @@ func TestValidateHostsRejectsDuplicateAcrossHostnameAndAlias(t *testing.T) {
 	}
 }
 
+func TestValidateClientNamesRejectsMalformedPTRUpstream(t *testing.T) {
+	s := baseSettings()
+	s.ClientNames = model.ClientNames{Enabled: true, PTRUpstream: "not-a-host-port"}
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
+		t.Fatal("expected a validation error for a malformed ptr_upstream")
+	}
+}
+
+func TestValidateClientNamesRejectsUnknownRefreshMode(t *testing.T) {
+	s := baseSettings()
+	s.ClientNames = model.ClientNames{Enabled: true, RefreshHostnames: "sometimes"}
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
+		t.Fatal("expected a validation error for an unknown refresh_hostnames mode")
+	}
+}
+
+func TestValidateClientNamesAcceptsValidConfig(t *testing.T) {
+	s := baseSettings()
+	s.ClientNames = model.ClientNames{Enabled: true, PTRUpstream: "192.168.10.1:53", RefreshHostnames: "all"}
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestValidateHostsAllowsNameOutsideOwnedZones(t *testing.T) {
 	// Unlike records.yaml, hosts.yaml is not restricted to home.arpa —
 	// dev-docs/static-hosts.md's "zone ." design.

@@ -15,6 +15,7 @@ import (
 	"github.com/mallardduck/BrambleGate/internal/store"
 	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
+	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
 // stubSelfIPs replaces detectSelfIPs for the duration of a test, then restores
@@ -557,6 +558,63 @@ func TestACMESelfRecordsReflectsFreshDetectionOnEachSave(t *testing.T) {
 	second, err := svc.ACMESelfRecords()
 	if err != nil || len(second) != 1 || second[0].Default != "192.168.10.99" {
 		t.Fatalf("expected fresh detection on 2nd save, got: %+v (err %v)", second, err)
+	}
+}
+
+func TestClientsDisabledWhenNotEnabled(t *testing.T) {
+	svc, _, _ := newService(t)
+	if _, err := svc.Clients(); !errors.Is(err, ErrClientNamesDisabled) {
+		t.Fatalf("expected ErrClientNamesDisabled, got %v", err)
+	}
+}
+
+func TestSaveSettingsStartsAndStopsClientNamesLive(t *testing.T) {
+	svc, _, _ := newService(t)
+	t.Cleanup(func() { querylog.SetClientObserver(nil) })
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.ClientNames.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if entries, err := svc.Clients(); err != nil {
+		t.Fatalf("Clients() after enable: %v", err)
+	} else if len(entries) != 0 {
+		t.Fatalf("expected an empty client cache right after enabling, got %+v", entries)
+	}
+
+	settings.ClientNames.Enabled = false
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+	if _, err := svc.Clients(); !errors.Is(err, ErrClientNamesDisabled) {
+		t.Fatalf("expected ErrClientNamesDisabled after disable, got %v", err)
+	}
+}
+
+func TestAddHostRefreshesClientNamesHostsIndex(t *testing.T) {
+	svc, _, _ := newService(t)
+	t.Cleanup(func() { querylog.SetClientObserver(nil) })
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.ClientNames.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+
+	if _, err := svc.AddHost(model.Host{IP: "192.168.10.47", Hostname: "nas.home.arpa"}); err != nil {
+		t.Fatalf("AddHost: %v", err)
+	}
+
+	name, source := svc.clientNames.Resolve("192.168.10.47")
+	if name != "nas.home.arpa" || source != "hosts" {
+		t.Fatalf("got %q/%q, want nas.home.arpa/hosts after AddHost refreshed the tier-0 index", name, source)
 	}
 }
 

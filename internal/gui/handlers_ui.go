@@ -874,16 +874,35 @@ func (h *handlers) queryLogGridData(p queryLogParams, settings model.Settings) u
 	all = filterQueryLogByListener(all, p.ListenerFilter, settings.Listeners)
 	page, totalPages, pageEntries := paginateQueryLog(all, p.Page, queryLogPageSize)
 	return ui.QueryLogGridData{
-		Entries:        pageEntries,
-		Total:          len(all),
-		Page:           page,
-		TotalPages:     totalPages,
-		Interval:       p.Interval,
-		Filter:         p.Filter,
-		ListenerFilter: p.ListenerFilter,
-		Listeners:      settings.Listeners,
-		VLANs:          settings.VLANs,
+		Entries:         pageEntries,
+		Total:           len(all),
+		Page:            page,
+		TotalPages:      totalPages,
+		Interval:        p.Interval,
+		Filter:          p.Filter,
+		ListenerFilter:  p.ListenerFilter,
+		Listeners:       settings.Listeners,
+		VLANs:           settings.VLANs,
+		ClientHostnames: h.clientHostnames(),
 	}
+}
+
+// clientHostnames builds the IP->hostname map the query log joins onto each
+// row at render time (ui.QueryLogGridData.ClientHostnames). Returns nil when
+// client_names.enabled is off (Service.Clients then errors) rather than
+// treating that as a page-rendering failure.
+func (h *handlers) clientHostnames() map[string]string {
+	clients, err := h.svc.Clients()
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(clients))
+	for _, c := range clients {
+		if c.Hostname != "" {
+			out[c.IP] = c.Hostname
+		}
+	}
+	return out
 }
 
 // filterQueryLogByListener narrows entries to those whose listener maps to

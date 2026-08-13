@@ -47,7 +47,35 @@ func Validate(s model.Settings, rs model.RecordSet, hs model.HostSet) error {
 	if err := validateRecords(rs, s.VLANs, ownedZones(s)); err != nil {
 		return err
 	}
+	if err := validateClientNames(s.ClientNames); err != nil {
+		return err
+	}
 	return validateHosts(hs)
+}
+
+// validateClientNames checks the client_names block: ptr_upstream, if set,
+// must be host:port (dev-docs/client-names.md's PTR upstream is the one
+// narrow conditional-forward this project allows), and refresh_hostnames
+// must be one of the three documented modes.
+func validateClientNames(c model.ClientNames) error {
+	if c.PTRUpstream != "" {
+		host, port, err := net.SplitHostPort(c.PTRUpstream)
+		if err != nil {
+			return fmt.Errorf("client_names.ptr_upstream %q must be host:port: %w", c.PTRUpstream, err)
+		}
+		if host == "" {
+			return fmt.Errorf("client_names.ptr_upstream %q is missing a host", c.PTRUpstream)
+		}
+		if _, err := strconv.Atoi(port); err != nil {
+			return fmt.Errorf("client_names.ptr_upstream %q has a non-numeric port", c.PTRUpstream)
+		}
+	}
+	switch c.RefreshHostnames {
+	case "", "ipv4_only", "all", "none":
+	default:
+		return fmt.Errorf("client_names.refresh_hostnames %q must be ipv4_only, all, or none", c.RefreshHostnames)
+	}
+	return nil
 }
 
 // validateHosts checks hosts.yaml: well-formed IP, non-empty hostname, and

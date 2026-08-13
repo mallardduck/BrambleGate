@@ -232,6 +232,9 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 			log.Error("mdns advertise disabled (startup error)", "err", err)
 		}
 	}
+	if settings.ClientNames.Enabled {
+		svc.StartClientNames(settings, hosts)
+	}
 	srv := gui.NewServer(svc, guiAddr)
 	go func() {
 		log.Info("web GUI up", "addr", guiAddr)
@@ -273,7 +276,8 @@ func run(log *slog.Logger, configDir, guiAddr string) error {
 	<-ctx.Done()
 	log.Info("shutdown signal received, stopping GUI and engine")
 
-	svc.StopAdvertise() // best-effort goodbye packets for anything self-advertised
+	svc.StopAdvertise()   // best-effort goodbye packets for anything self-advertised
+	svc.StopClientNames() // stop the resolve/sweep worker and unregister querylog's observer
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

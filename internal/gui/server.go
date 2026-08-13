@@ -42,6 +42,8 @@ func NewServer(svc *Service, addr string) *http.Server {
 		r.Post("/mdns/{name}/publish", h.publishMDNS)
 		r.Post("/mdns/{name}/unpublish", h.unpublishMDNS)
 		r.Post("/mdns/{name}/promote", h.promoteMDNS)
+
+		r.Get("/clients", h.listClients)
 	})
 
 	// Server-rendered dashboard (internal/gui/ui): full pages on a plain GET,
@@ -233,6 +235,16 @@ func (h *handlers) unpublishMDNS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// listClients serves GET /api/clients — mirrors listMDNS/listPlugins.
+func (h *handlers) listClients(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.svc.Clients()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"clients": entries})
 }
 
 func (h *handlers) promoteMDNS(w http.ResponseWriter, r *http.Request) {

@@ -37,6 +37,12 @@ type QueryLogGridData struct {
 	ListenerFilter string
 	Listeners      model.Listeners // for mapping Entry.Listener's port to a friendly transport label
 	VLANs          []model.VLAN    // for the VLAN filter dropdown's options
+	// ClientHostnames joins a resolved name onto each row's Client.IP at
+	// render time only — never baked into the historical ring entry itself,
+	// since an IP can get reassigned to a different device and baking the
+	// name in would show a stale name against old log rows
+	// (dev-docs/client-names.md). Empty/nil when client_names.enabled is off.
+	ClientHostnames map[string]string
 }
 
 // queryLogQTypeOptions is a curated subset of query types worth filtering
@@ -160,7 +166,7 @@ templ queryLogTbody(data QueryLogGridData) {
 		hx-target="#querylog-grid"
 		hx-swap="outerHTML"
 	>
-		@queryLogRows(data.Entries, data.Listeners)
+		@queryLogRows(data.Entries, data.Listeners, data.ClientHostnames)
 	</tbody>
 }
 
@@ -187,9 +193,9 @@ func queryLogPollTrigger(interval string, page int) string {
 // queryLogRows renders just the table body's rows — used both for the
 // initial page render and, as the base of QueryLogGrid below, for the
 // auto-refresh/filter/pagination fragment.
-templ queryLogRows(entries []querylog.Entry, listeners model.Listeners) {
+templ queryLogRows(entries []querylog.Entry, listeners model.Listeners, hostnames map[string]string) {
 	for _, e := range entries {
-		@queryLogRow(e, listeners)
+		@queryLogRow(e, listeners, hostnames[e.Client.IP])
 	}
 	if len(entries) == 0 {
 		<tr>
@@ -249,10 +255,13 @@ templ queryLogPaginationInner(data QueryLogGridData) {
 	</button>
 }
 
-templ queryLogRow(e querylog.Entry, listeners model.Listeners) {
+templ queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) {
 	<tr class="border-b border-bramble-border last:border-0">
 		<td class="px-3 py-2 font-mono text-xs whitespace-nowrap">{ e.Timestamp.Format("15:04:05.000") }</td>
 		<td class="px-3 py-2">
+			if hostname != "" {
+				<p class="text-xs">{ hostname }</p>
+			}
 			<p class="font-mono text-xs">{ e.Client.IP }</p>
 			if e.Client.VLAN != "" {
 				<p class="text-xs text-bramble-muted">{ e.Client.VLAN }</p>
