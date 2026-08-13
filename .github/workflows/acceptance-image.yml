@@ -1,0 +1,53 @@
+name: Acceptance image
+
+# Dev tooling, not a product release: no GitHub release, no version tag, no
+# goreleaser — just a container image on every change to acceptance/, tagged
+# with the date it was built (CalVer) plus the commit it came from, so a tag
+# is still traceable back to a specific commit without needing a git tag.
+# No separate build/test gate here: ci.yml already runs on every push to
+# main regardless of path, and the Docker build below fails closed anyway
+# if `go build` inside it fails.
+on:
+  push:
+    branches: [main]
+    paths: ['acceptance/**']
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/mallardduck/bramblegate/uat
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # CalVer + short SHA: unique per build without needing a git tag, and
+      # still traceable back to the exact commit.
+      - name: Compute image tag
+        id: tag
+        run: echo "value=$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: acceptance
+          file: acceptance/Dockerfile
+          push: ${{ github.event_name != 'workflow_dispatch' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.value }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
