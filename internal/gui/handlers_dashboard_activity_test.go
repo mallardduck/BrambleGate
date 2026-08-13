@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mallardduck/BrambleGate/internal/gui/ui"
+	"github.com/mallardduck/BrambleGate/model"
 	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
@@ -136,6 +137,59 @@ func TestDashboardActivity_WithStore_ShowsTopDomains(t *testing.T) {
 	}
 	if strings.Contains(body, "Enable Query Log persistence") {
 		t.Fatalf("did not expect the persistence note once Store is configured, got: %s", body)
+	}
+}
+
+// TestDashboardActivity_TopClientsShowsResolvedHostname: the Top Clients
+// card joins client_names' resolved hostname onto each row, same as the
+// Query Log page's own ClientHostnames join (queryLogGridData) — mirrors
+// TestAddHostRefreshesClientNamesHostsIndex's setup (service_test.go) for a
+// deterministic hosts.yaml (tier-0) resolution with no live PTR lookup.
+// Records into the Store and confirms the flush (via waitForStoreRows)
+// before doing the ClientNames SaveSettings/AddHost calls, same order as
+// TestDashboardActivity_WithStore_ShowsTopDomains — SetTuning's shortened
+// flush interval only takes effect on the Store's *own* next tick
+// (store.go's run loop resyncs the ticker after each flush, not
+// immediately), so any SaveSettings call between opening the Store and
+// recording gives the flush goroutine time to start its ticker at the
+// default 2s interval first, and a 10ms wait afterward would then miss the
+// flush entirely.
+func TestDashboardActivity_TopClientsShowsResolvedHostname(t *testing.T) {
+	svc, _, _ := newService(t)
+	t.Cleanup(func() { querylog.SetClientObserver(nil) })
+	enableQueryLog(t, svc)
+
+	store := querylog.CurrentStore()
+	if store == nil {
+		t.Fatal("expected enableQueryLog to have opened a Store")
+	}
+	store.SetTuning(0, 0, 10*time.Millisecond)
+	store.Record(querylog.Entry{QName: "nas.home.arpa.", Client: querylog.ClientInfo{IP: "10.0.0.5", VLAN: "trusted"}, Timestamp: time.Now()})
+	waitForStoreRows(t, store)
+
+	settings, err := svc.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.ClientNames.Enabled = true
+	if err := svc.SaveSettings(settings); err != nil {
+		t.Fatalf("enable client_names: %v", err)
+	}
+	if _, err := svc.AddHost(model.Host{IP: "10.0.0.5", Hostname: "nas.home.arpa"}); err != nil {
+		t.Fatalf("AddHost: %v", err)
+	}
+
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "nas.home.arpa") {
+		t.Fatalf("expected the resolved hostname in the Top Clients card, got: %s", body)
+	}
+	if !strings.Contains(body, "10.0.0.5") {
+		t.Fatalf("expected the client IP still shown alongside the hostname, got: %s", body)
 	}
 }
 

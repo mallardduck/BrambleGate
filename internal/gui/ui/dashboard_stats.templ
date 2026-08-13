@@ -29,6 +29,13 @@ type DashboardActivityData struct {
 	// Client Activity chart — Store-backed like TopDomains/TopClients, so
 	// only populated (and only rendered) when StoreConfigured.
 	ClientActivity querylog.ClientActivitySeries
+	// ClientHostnames joins a resolved name onto each Top Clients row's
+	// ClientIP at render time only — mirrors ui.QueryLogGridData's own
+	// ClientHostnames (querylog.templ) and is built the same way
+	// (handlers_ui.go's clientHostnames helper): nil when client_names.enabled
+	// is off, so an IP with no entry here just renders without a name rather
+	// than as an error.
+	ClientHostnames map[string]string
 }
 
 // DashboardExtraHead is the Dashboard page's extra <head> content (see
@@ -253,6 +260,9 @@ templ topClientsCard(data DashboardActivityData) {
 					for _, c := range data.TopClients {
 						<tr class="border-b border-bramble-border last:border-0">
 							<td class="px-2 py-1.5">
+								if hostname := data.ClientHostnames[c.ClientIP]; hostname != "" {
+									<p class="text-xs">{ hostname }</p>
+								}
 								<p class="font-mono text-xs">{ c.ClientIP }</p>
 								if c.VLAN != "" {
 									<p class="text-xs text-bramble-muted">{ c.VLAN }</p>

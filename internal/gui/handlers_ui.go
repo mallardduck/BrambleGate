@@ -99,7 +99,7 @@ func (h *handlers) dashboardPage(w http.ResponseWriter, r *http.Request) {
 	}
 	var extraHead templ.Component
 	if settings.QueryLog.Enabled {
-		data.Activity = dashboardActivityData(r)
+		data.Activity = h.dashboardActivityData(r)
 		extraHead = ui.DashboardExtraHead()
 	}
 	render(w, r, "Dashboard", ui.PathDashboard, ui.Dashboard(data), extraHead)
@@ -119,7 +119,7 @@ func (h *handlers) dashboardActivityFragment(w http.ResponseWriter, r *http.Requ
 		_ = ui.Dashboard(ui.DashboardData{Settings: settings}).Render(r.Context(), w)
 		return
 	}
-	_ = ui.DashboardActivity(dashboardActivityData(r)).Render(r.Context(), w)
+	_ = ui.DashboardActivity(h.dashboardActivityData(r)).Render(r.Context(), w)
 }
 
 // queryLogStatsResponse is /api/querylog/stats's JSON shape: Totals plus the
@@ -151,7 +151,7 @@ func (h *handlers) queryLogStats(w http.ResponseWriter, r *http.Request) {
 // HTML fragment used before. Shares dashboardActivityData with the HTML
 // shell/initial chart render so all three paths agree on one dataset.
 func (h *handlers) dashboardCharts(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, ui.DashboardChartsPayload(dashboardActivityData(r)))
+	writeJSON(w, http.StatusOK, ui.DashboardChartsPayload(h.dashboardActivityData(r)))
 }
 
 // dashboardActivityData reads querylog.CurrentLog() for the Dashboard's
@@ -160,8 +160,10 @@ func (h *handlers) dashboardCharts(w http.ResponseWriter, r *http.Request) {
 // log.go) — a failed TopDomains lookup means TopClients would fail the same
 // way, so StoreConfigured is set from the first and TopClients is only
 // attempted when it succeeded, rather than treating the two as independent
-// failures.
-func dashboardActivityData(r *http.Request) ui.DashboardActivityData {
+// failures. A method (not a free function) so it can reuse h.clientHostnames()
+// — the same IP->hostname join the Query Log page uses (queryLogGridData) —
+// for the Top Clients table.
+func (h *handlers) dashboardActivityData(r *http.Request) ui.DashboardActivityData {
 	log := querylog.CurrentLog()
 	data := ui.DashboardActivityData{
 		Totals: log.Totals(),
@@ -174,6 +176,7 @@ func dashboardActivityData(r *http.Request) ui.DashboardActivityData {
 	data.StoreConfigured = true
 	data.TopDomains = top
 	data.TopClients, _ = log.TopClients(r.Context(), dashboardStatsWindow, dashboardTopN)
+	data.ClientHostnames = h.clientHostnames()
 	now := time.Now()
 	data.ClientActivity, _ = log.ClientActivity(r.Context(), now.Add(-dashboardStatsWindow), now, dashboardClientActivityBucket, dashboardClientActivityTopN)
 	return data
