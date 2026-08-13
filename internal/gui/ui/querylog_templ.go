@@ -98,7 +98,7 @@ func QueryLog(data QueryLogData) templ.Component {
 			var templ_7745c5c3_Var2 templ.SafeURL
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(PathSettings))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 61, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 61, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -158,7 +158,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(data.Page))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 72, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 72, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -183,7 +183,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Filter.QName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 77, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 77, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -213,7 +213,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Filter.Client)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 82, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 82, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -267,7 +267,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 89, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 89, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -290,7 +290,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(v.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 89, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 89, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -340,7 +340,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(l)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 98, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 98, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -363,7 +363,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(l)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 98, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 98, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -413,7 +413,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(t)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 107, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 107, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -436,7 +436,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(t)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 107, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 107, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -459,7 +459,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 115, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 115, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -482,7 +482,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(opt.label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 115, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 115, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -500,7 +500,7 @@ func queryLogFilters(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d of %d", len(data.Entries), data.Total))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 119, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 119, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -605,7 +605,7 @@ func queryLogTbody(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathQueryLog + "/grid")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 163, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 163, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 		if templ_7745c5c3_Err != nil {
@@ -618,7 +618,7 @@ func queryLogTbody(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(queryLogPollTrigger(data.Interval, data.Page))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 164, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 164, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -737,7 +737,7 @@ func QueryLogGrid(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d of %d", len(data.Entries), data.Total))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 214, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 214, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -867,7 +867,7 @@ func queryLogPaginationInner(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathQueryLog + "/grid")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 234, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 234, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
@@ -880,7 +880,7 @@ func queryLogPaginationInner(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf(`{"page":%d}`, data.Page-1))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 235, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 235, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -893,7 +893,7 @@ func queryLogPaginationInner(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("Page %d of %d", data.Page, data.TotalPages))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 243, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 243, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
@@ -916,7 +916,7 @@ func queryLogPaginationInner(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathQueryLog + "/grid")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 247, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 247, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -929,7 +929,7 @@ func queryLogPaginationInner(data QueryLogGridData) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf(`{"page":%d}`, data.Page+1))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 248, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 248, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
@@ -971,7 +971,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(e.Timestamp.Format("15:04:05.000"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 260, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 260, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 		if templ_7745c5c3_Err != nil {
@@ -989,7 +989,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(hostname)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 263, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 263, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -1007,7 +1007,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(e.Client.IP)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 265, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 265, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -1025,7 +1025,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(e.Client.VLAN)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 267, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 267, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
@@ -1043,7 +1043,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.Listener + " (" + e.Proto + ")")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 270, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 270, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
@@ -1056,7 +1056,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(ListenerLabel(e.Listener, listeners))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 270, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 270, Col: 132}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -1069,7 +1069,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(e.QName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 272, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 272, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -1082,7 +1082,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(dns.TypeToString[e.QType])
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 273, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 273, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -1095,7 +1095,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(outcomeLabel(e.Source, e.Verdict))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 276, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 276, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -1108,7 +1108,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(dns.RcodeToString[e.Rcode])
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 277, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 277, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
@@ -1122,7 +1122,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(e.AnswerType)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 281, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 281, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 			if templ_7745c5c3_Err != nil {
@@ -1156,7 +1156,7 @@ func queryLogRow(e querylog.Entry, listeners model.Listeners, hostname string) t
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(e.Latency.String())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/ui/querylog.templ`, Line: 293, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `querylog.templ`, Line: 293, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
