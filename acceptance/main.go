@@ -19,6 +19,7 @@ import (
 
 	"github.com/mallardduck/BrambleGate/acceptance/checks"
 	"github.com/mallardduck/BrambleGate/acceptance/config"
+	"github.com/mallardduck/BrambleGate/acceptance/discover"
 )
 
 func main() {
@@ -54,13 +55,20 @@ func newRunCmd(configPath *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			ctx := context.Background()
+			state, err := discover.Fetch(ctx, cfg.Target.APIBase)
+			if err != nil {
+				return fmt.Errorf("could not discover live server state — is BrambleGate reachable at target.api_base? %w", err)
+			}
+			cfg.Discovered = state
+
 			all := Registry(cfg)
 			selected := FilterTier(all, checks.Tier(tier))
 			selected = FilterScope(selected, checks.Scope(scope))
 
 			results := make([]checks.Result, 0, len(selected))
 			for _, c := range selected {
-				results = append(results, c.Run(context.Background(), cfg))
+				results = append(results, c.Run(ctx, cfg))
 			}
 
 			WriteTable(os.Stdout, results)
@@ -80,7 +88,9 @@ func newRunCmd(configPath *string) *cobra.Command {
 }
 
 func newListCmd(configPath *string) *cobra.Command {
-	return &cobra.Command{
+	var online bool
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List checks the current config would run, without running them",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -88,10 +98,19 @@ func newListCmd(configPath *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if online {
+				state, err := discover.Fetch(context.Background(), cfg.Target.APIBase)
+				if err != nil {
+					return fmt.Errorf("could not discover live server state — is BrambleGate reachable at target.api_base? %w", err)
+				}
+				cfg.Discovered = state
+			}
 			for _, c := range Registry(cfg) {
 				fmt.Printf("%s\t[%s/%s]\n", c.Name(), c.Scope(), c.Tier())
 			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&online, "online", false, "fetch live server state to show the exact concrete check list, instead of discovery placeholders")
+	return cmd
 }

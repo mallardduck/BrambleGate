@@ -52,7 +52,8 @@ second machine, anything that needs a human looking at a phone's UI.
 ```sh
 cp acceptance.example.yaml acceptance.yaml   # fill in your real network
 go run . list                                 # see what would run, and its scope/tier
-go run . run                                  # run everything
+go run . list --online                        # same, but with real discovered counts
+go run . run                                  # run everything (always needs a live target)
 go run . run --scope protocol                 # just DNS-standards conformance
 go run . run --scope bramblegate --tier network
 ```
@@ -60,11 +61,37 @@ go run . run --scope bramblegate --tier network
 Output is a markdown table shaped like `testing-guide.md`'s results-log
 tables, so a run's output can be pasted straight into that doc.
 
+## Config vs. discovery
+
+`acceptance.yaml` only declares what genuinely can't be derived from a
+running instance: `target` (how to reach it), `domain` (the zone under
+test), and true test *expectations* — a VLAN's expected split-horizon
+answer, an external `upstream.test_domain` to compare against. Everything
+else that used to be hand-duplicated config (VLAN names, the upstream
+resolver address, `hosts.yaml` entries, mdns-linked `records.yaml` entries)
+is instead fetched live from the instance's own read-only `/api/*` at
+startup (`discover/discover.go`) — see `GET /api/settings`, `GET
+/api/hosts`, `GET /api/records`.
+
+`run` always fetches discovery — it needs it to build real checks, and
+fails fast if `target.api_base` is unreachable. `list` is the offline-first
+dry-run: by default it shows one placeholder line per discovery-scaled
+category (`hosts/*`, `mdns/*`) without hitting the network; pass `--online`
+to fetch for real and see the exact concrete check list instead.
+
+A declared `vlans[].name` that doesn't match any VLAN discovery finds on
+`/api/settings` fails as config drift, rather than silently querying a VLAN
+name the server doesn't actually have.
+
 ## Adding a check
 
 1. Implement `checks.Check` (`Name`/`Tier`/`Scope`/`Run`) — in
    `checks/protocol/` if it's true of any spec-compliant DNS server, or
    `checks/bramblegate/` if it depends on this instance's configured content.
 2. Register it in `registry.go`'s `Registry` — one entry per config-driven
-   instance (e.g. one `SplitHorizon` per `cfg.VLANs` entry) if it scales with
-   config, or a single static entry otherwise.
+   instance (e.g. one `SplitHorizon` per `cfg.VLANs` entry) if it scales
+   with hand-declared config, one entry per `cfg.Discovered` item (e.g.
+   `Hosts` per `cfg.Discovered.Hosts` entry) if it scales with live server
+   state — pair it with a placeholder `Check` (see `HostsDiscovery`,
+   `MDNSDiscovery`) so `list` without `--online` still shows the category —
+   or a single static entry otherwise.

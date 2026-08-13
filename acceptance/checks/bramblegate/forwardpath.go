@@ -26,15 +26,15 @@ func (c ForwardPath) Tier() checks.Tier   { return checks.TierNetwork }
 func (c ForwardPath) Scope() checks.Scope { return checks.ScopeBrambleGate }
 
 func (c ForwardPath) Run(_ context.Context, cfg *config.Config) checks.Result {
-	if cfg.Upstream.Address == "" || cfg.Upstream.TestDomain == "" {
-		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Skip, Detail: "upstream.address or upstream.test_domain not set"}
+	if cfg.Discovered == nil || cfg.Discovered.UpstreamAddress == "" || cfg.Upstream.TestDomain == "" {
+		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Skip, Detail: "discovered upstream address or upstream.test_domain not set"}
 	}
 
 	viaBramble, err := dnsutil.Query(cfg.Target.DNSAddr, cfg.Upstream.TestDomain, dns.TypeA)
 	if err != nil {
 		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail, Detail: "via BrambleGate: " + err.Error()}
 	}
-	viaUpstream, err := dnsutil.Query(cfg.Upstream.Address, cfg.Upstream.TestDomain, dns.TypeA)
+	viaUpstream, err := dnsutil.Query(cfg.Discovered.UpstreamAddress, cfg.Upstream.TestDomain, dns.TypeA)
 	if err != nil {
 		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail, Detail: "direct to upstream: " + err.Error()}
 	}

@@ -1,4 +1,11 @@
 # Copy to acceptance.yaml and fill in your real network. See README.md.
+#
+# Only genuinely undiscoverable info lives here: how to reach the instance
+# under test, the zone under test, and true test expectations (a VLAN's
+# expected split-horizon answer, an external comparison domain). VLAN
+# identity, the upstream resolver address, hosts.yaml entries, and
+# mdns-linked records are discovered live from the instance's own /api/*
+# (see ../discover/discover.go) rather than duplicated here.
 
 target:
   api_base: https://192.168.1.164:8443
@@ -13,15 +20,7 @@ vlans:
     expect_nxdomain: true
 
 upstream:
-  address: 192.168.1.169
   test_domain: example.com
-
-mdns:
-  promoted_name: printer.home.arpa
-
-hosts_overrides:
-  - name: nas.example.org
-    expect_ip: 192.168.1.50
 
 mobile:
   enabled: false

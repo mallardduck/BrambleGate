@@ -14,8 +14,18 @@ import (
 
 	"github.com/mallardduck/BrambleGate/acceptance/checks"
 	"github.com/mallardduck/BrambleGate/acceptance/config"
+	"github.com/mallardduck/BrambleGate/acceptance/discover"
 	"github.com/mallardduck/BrambleGate/acceptance/dnsutil"
 )
+
+func containsVLAN(vlans []discover.VLAN, name string) bool {
+	for _, v := range vlans {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
 
 // SplitHorizon checks one VLAN's override for config.Domain resolves as
 // expected (roadmap.md Scenario 2 / docs/local-records.md). Local-tier: only
@@ -37,6 +47,12 @@ func (c SplitHorizon) Run(_ context.Context, cfg *config.Config) checks.Result {
 	}
 	if c.VLAN.ExpectValue == "" && !c.VLAN.ExpectNXDOMAIN {
 		return checks.Result{Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Skip, Detail: "vlan has no expect_value/expect_nxdomain configured"}
+	}
+	if cfg.Discovered != nil && !containsVLAN(cfg.Discovered.VLANs, c.VLAN.Name) {
+		return checks.Result{
+			Check: c.Name(), Tier: c.Tier(), Scope: c.Scope(), Status: checks.Fail,
+			Detail: fmt.Sprintf("declared VLAN %q not found in live /api/settings — config drift", c.VLAN.Name),
+		}
 	}
 
 	resp, err := dnsutil.Query(cfg.Target.DNSAddr, cfg.Domain, dns.TypeA)

@@ -9,17 +9,22 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/mallardduck/BrambleGate/acceptance/discover"
 )
 
 // Config is the acceptance.yaml shape. See acceptance.example.yaml.
 type Config struct {
-	Target   Target       `yaml:"target"`
-	Domain   string       `yaml:"domain"`
-	VLANs    []VLAN       `yaml:"vlans"`
-	Upstream Upstream     `yaml:"upstream"`
-	MDNS     MDNS         `yaml:"mdns"`
-	Hosts    []HostsCheck `yaml:"hosts_overrides"`
-	Mobile   Mobile       `yaml:"mobile"`
+	Target   Target   `yaml:"target"`
+	Domain   string   `yaml:"domain"`
+	VLANs    []VLAN   `yaml:"vlans"`
+	Upstream Upstream `yaml:"upstream"`
+	Mobile   Mobile   `yaml:"mobile"`
+
+	// Discovered is live server state fetched via discover.Fetch — never
+	// parsed from YAML. Set by main.go before the registry is built: nil
+	// under `list` without --online, always populated under `run`.
+	Discovered *discover.State `yaml:"-"`
 }
 
 // Target is the BrambleGate instance under test.
@@ -39,24 +44,14 @@ type VLAN struct {
 }
 
 // Upstream is the real ad-block resolver BrambleGate forwards to (Scenario 4).
+// Address is not declared here — it's discovered from GET /api/settings
+// (config.Discovered.UpstreamAddress) since it exactly duplicates
+// model.Settings.UpstreamDNS.Address otherwise.
 type Upstream struct {
-	Address string `yaml:"address"`
 	// TestDomain is an external (not BrambleGate-owned) name to compare
 	// answers for between BrambleGate and Upstream directly — proves
 	// transparent forwarding, not any BrambleGate-specific behavior.
 	TestDomain string `yaml:"test_domain,omitempty"`
-}
-
-// MDNS names a previously-promoted record to confirm it still tracks live
-// mDNS state (Scenario 3, network-observable half only).
-type MDNS struct {
-	PromotedName string `yaml:"promoted_name"`
-}
-
-// HostsCheck is one hosts.yaml override expectation (Phase 8).
-type HostsCheck struct {
-	Name     string `yaml:"name"`
-	ExpectIP string `yaml:"expect_ip"`
 }
 
 // Mobile gates the ADB-based tier (deferred; see mobile/adb.go). Off by default.

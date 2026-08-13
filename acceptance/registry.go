@@ -28,11 +28,24 @@ func Registry(cfg *config.Config) []checks.Check {
 		all = append(all, bramblegate.SplitHorizon{VLAN: v})
 	}
 	all = append(all, bramblegate.ForwardPath{})
-	for _, h := range cfg.Hosts {
-		all = append(all, bramblegate.Hosts{Entry: h})
-	}
 	all = append(all, bramblegate.ClientNames{})
-	all = append(all, bramblegate.MDNSPromoted{})
+
+	// Hosts and MDNSPromoted scale with live-discovered server state
+	// (GET /api/hosts, GET /api/records) rather than acceptance.yaml, so
+	// their exact count is only known once cfg.Discovered is populated
+	// (always true under `run`; only true under `list --online`). Without
+	// it, a single placeholder stands in for the whole category.
+	if cfg.Discovered != nil {
+		for _, h := range cfg.Discovered.Hosts {
+			all = append(all, bramblegate.Hosts{Entry: h})
+		}
+		for _, r := range cfg.Discovered.MDNSRecords {
+			all = append(all, bramblegate.MDNSPromoted{Record: r})
+		}
+	} else {
+		all = append(all, bramblegate.HostsDiscovery{})
+		all = append(all, bramblegate.MDNSDiscovery{})
+	}
 
 	if cfg.Mobile.Enabled {
 		all = append(all, mobile.PrivateDNSMode{})
