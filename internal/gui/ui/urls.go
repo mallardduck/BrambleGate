@@ -18,6 +18,9 @@ const (
 	// fragment (dev-docs/query-log.md's Phase 7d) — not nested under
 	// PathDashboard ("/") since that's the root path itself.
 	PathDashboardActivity = "/dashboard/activity"
+	// PathSettingsRestart is the Settings page's Admin actions "Restart DNS
+	// engine" button target.
+	PathSettingsRestart = PathSettings + "/restart"
 )
 
 // AppVersion is the running server version, set from internal/version by

@@ -488,6 +488,33 @@ func (s *Service) SaveSettings(settings model.Settings) error {
 	return reloadErr
 }
 
+// RestartEngine re-renders the current on-disk settings/records/hosts and
+// forces a fresh in-process engine reload, without changing any persisted
+// state. Backs the Settings page's "Restart DNS engine" admin action — a way
+// to force-apply the on-disk config (e.g. after it drifted from what's
+// actually running) without having to touch a field and re-save.
+func (s *Service) RestartEngine() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.store.LoadSettings()
+	if err != nil {
+		return err
+	}
+	rs, err := s.store.LoadRecords()
+	if err != nil {
+		return err
+	}
+	hs, err := s.store.LoadHosts()
+	if err != nil {
+		return err
+	}
+	rendered, err := s.render(settings, rs, hs)
+	if err != nil {
+		return err
+	}
+	return s.reload(rendered)
+}
+
 // mdnsPreReload creates and injects the discovery table when mDNS is being
 // turned on, so the about-to-run reload's Corefile parse finds it. It does not
 // start the browse goroutine — that happens in mdnsPostReload, once the reload

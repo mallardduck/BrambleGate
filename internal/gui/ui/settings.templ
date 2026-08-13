@@ -447,6 +447,25 @@ templ Settings(data SettingsData) {
 			</div>
 		}
 	</div>
+
+	<div class="mt-6 rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4">
+		<h2 class="text-sm font-semibold mb-3 flex items-center">
+			Admin actions
+			@helpTooltip("Operational actions on the running server, separate from the config fields above — nothing here changes settings.yaml.")
+		</h2>
+		<div class="flex flex-wrap gap-3 items-center">
+			<button
+				hx-post={ PathSettingsRestart }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-confirm="Restart the DNS engine? Listeners will briefly drop and re-accept connections."
+				type="button"
+				class="px-3 py-1.5 rounded border border-bramble-border text-sm hover:bg-bramble-bg-card2"
+			>
+				Restart DNS engine
+			</button>
+		</div>
+	</div>
 }
 
 templ vlanCandidateRow(c selfip.Candidate) {

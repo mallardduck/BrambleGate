@@ -504,6 +504,17 @@ func (h *handlers) settingsSave(w http.ResponseWriter, r *http.Request) {
 	h.renderSettings(w, r, nil, "")
 }
 
+// settingsRestart forces a fresh in-process engine reload from the current
+// on-disk config (Service.RestartEngine) — the Settings page's "Restart DNS
+// engine" admin action.
+func (h *handlers) settingsRestart(w http.ResponseWriter, r *http.Request) {
+	errMsg := ""
+	if err := h.svc.RestartEngine(); err != nil {
+		errMsg = err.Error()
+	}
+	h.renderSettings(w, r, nil, errMsg)
+}
+
 func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.Settings()
 	if err != nil {
