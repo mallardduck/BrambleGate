@@ -1,0 +1,26 @@
+# Copy to acceptance.yaml and fill in your real network. See README.md.
+
+target:
+  api_base: https://192.168.1.164:8443
+  dns_addr: 192.168.1.164
+
+domain: dns.example.com
+
+vlans:
+  - name: trusted
+    expect_value: 192.168.1.164
+  - name: guest
+    expect_nxdomain: true
+
+upstream:
+  address: 192.168.1.169
+
+mdns:
+  promoted_name: printer.home.arpa
+
+hosts_overrides:
+  - name: nas.example.org
+    expect_ip: 192.168.1.50
+
+mobile:
+  enabled: false
