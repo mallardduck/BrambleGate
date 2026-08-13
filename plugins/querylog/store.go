@@ -66,6 +66,17 @@ type Store struct {
 	write   chan Entry
 	dropped atomic.Int64
 
+	// retune wakes run's select loop immediately when SetTuning changes
+	// flushInterval, so a shortened interval takes effect right away
+	// instead of waiting for the *old* interval's already-scheduled tick
+	// (flushTicker.Reset was previously only called from inside the
+	// flushTicker.C case, i.e. once per old-interval tick — a settings
+	// change from, say, 5m down to 2s wouldn't actually speed up until the
+	// next 5m tick fired). Buffered 1 and only ever sent to non-blockingly:
+	// a pending signal already covers any SetTuning call that hasn't been
+	// picked up yet, so coalescing extra sends is correct, not lossy.
+	retune chan struct{}
+
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -133,6 +144,7 @@ func OpenStore(cfg StoreConfig) (*Store, error) {
 		db:     db,
 		path:   cfg.Path,
 		write:  make(chan Entry, storeWriteBufferSize),
+		retune: make(chan struct{}, 1),
 		cancel: cancel,
 		done:   make(chan struct{}),
 	}
@@ -144,7 +156,9 @@ func OpenStore(cfg StoreConfig) (*Store, error) {
 // SetTuning updates retention/row-cap/flush-interval in place, without
 // reopening the database or disrupting buffered-but-unflushed entries —
 // callable at any time from any goroutine. Zero/negative values reset the
-// corresponding field to its default.
+// corresponding field to its default. A changed flush interval takes effect
+// immediately (run's select loop is woken via s.retune), not on whatever
+// tick the *previous* interval already had scheduled.
 func (s *Store) SetTuning(retentionDays, maxRows int, flushInterval time.Duration) {
 	if retentionDays <= 0 {
 		retentionDays = defaultRetentionDays
@@ -158,6 +172,10 @@ func (s *Store) SetTuning(retentionDays, maxRows int, flushInterval time.Duratio
 	s.retentionDays.Store(int64(retentionDays))
 	s.maxRows.Store(int64(maxRows))
 	s.flushInterval.Store(int64(flushInterval))
+	select {
+	case s.retune <- struct{}{}:
+	default: // a retune is already pending; run will pick up this call's value too
+	}
 }
 
 // Path returns the database file path Store was opened with.
@@ -228,8 +246,12 @@ func (s *Store) run(ctx context.Context) {
 			}
 		case <-flushTicker.C:
 			flush(ctx)
-			// FlushInterval is tunable at runtime (SetTuning) — resync the
-			// ticker in case it changed since it was last read.
+			flushTicker.Reset(s.currentFlushInterval())
+		case <-s.retune:
+			// SetTuning changed flushInterval — resync the ticker right
+			// away rather than waiting for the currently-scheduled tick
+			// (which is still running on whatever interval was in effect
+			// when it was last armed).
 			flushTicker.Reset(s.currentFlushInterval())
 		case <-pruneTicker.C:
 			s.prune(ctx)

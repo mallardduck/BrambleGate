@@ -145,27 +145,14 @@ func TestDashboardActivity_WithStore_ShowsTopDomains(t *testing.T) {
 // Query Log page's own ClientHostnames join (queryLogGridData) — mirrors
 // TestAddHostRefreshesClientNamesHostsIndex's setup (service_test.go) for a
 // deterministic hosts.yaml (tier-0) resolution with no live PTR lookup.
-// Records into the Store and confirms the flush (via waitForStoreRows)
-// before doing the ClientNames SaveSettings/AddHost calls, same order as
-// TestDashboardActivity_WithStore_ShowsTopDomains — SetTuning's shortened
-// flush interval only takes effect on the Store's *own* next tick
-// (store.go's run loop resyncs the ticker after each flush, not
-// immediately), so any SaveSettings call between opening the Store and
-// recording gives the flush goroutine time to start its ticker at the
-// default 2s interval first, and a 10ms wait afterward would then miss the
-// flush entirely.
+// Enables ClientNames (a second SaveSettings) before recording/shrinking the
+// Store's flush interval — safe now that SetTuning resyncs the flush ticker
+// immediately (plugins/querylog/store.go's retune channel) instead of
+// waiting for whatever interval was already ticking.
 func TestDashboardActivity_TopClientsShowsResolvedHostname(t *testing.T) {
 	svc, _, _ := newService(t)
 	t.Cleanup(func() { querylog.SetClientObserver(nil) })
 	enableQueryLog(t, svc)
-
-	store := querylog.CurrentStore()
-	if store == nil {
-		t.Fatal("expected enableQueryLog to have opened a Store")
-	}
-	store.SetTuning(0, 0, 10*time.Millisecond)
-	store.Record(querylog.Entry{QName: "nas.home.arpa.", Client: querylog.ClientInfo{IP: "10.0.0.5", VLAN: "trusted"}, Timestamp: time.Now()})
-	waitForStoreRows(t, store)
 
 	settings, err := svc.Settings()
 	if err != nil {
@@ -178,6 +165,14 @@ func TestDashboardActivity_TopClientsShowsResolvedHostname(t *testing.T) {
 	if _, err := svc.AddHost(model.Host{IP: "10.0.0.5", Hostname: "nas.home.arpa"}); err != nil {
 		t.Fatalf("AddHost: %v", err)
 	}
+
+	store := querylog.CurrentStore()
+	if store == nil {
+		t.Fatal("expected enableQueryLog to have opened a Store")
+	}
+	store.SetTuning(0, 0, 10*time.Millisecond)
+	store.Record(querylog.Entry{QName: "nas.home.arpa.", Client: querylog.ClientInfo{IP: "10.0.0.5", VLAN: "trusted"}, Timestamp: time.Now()})
+	waitForStoreRows(t, store)
 
 	h := NewServer(svc, ":0").Handler
 

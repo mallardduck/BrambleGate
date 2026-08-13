@@ -78,6 +78,20 @@ func TestStore_Record_FlushesAsynchronously(t *testing.T) {
 	waitForRowCount(t, s, 2)
 }
 
+// TestStore_SetTuning_FlushIntervalTakesEffectImmediately: a long initial
+// flush interval that would never fire on its own within this test's
+// timeout — only passes if SetTuning's shortened interval wakes run's
+// select loop right away (store.go's s.retune channel) instead of waiting
+// for the *original* interval's already-scheduled tick to fire first.
+func TestStore_SetTuning_FlushIntervalTakesEffectImmediately(t *testing.T) {
+	s := openTestStore(t, StoreConfig{FlushInterval: time.Hour})
+
+	s.Record(Entry{QName: "a.home.arpa.", Timestamp: time.Now()})
+	s.SetTuning(0, 0, 10*time.Millisecond)
+
+	waitForRowCount(t, s, 1)
+}
+
 func TestStore_Close_FlushesBufferedEntries(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "querylog.db")
 	// A long flush interval that would never fire before Close, so this
