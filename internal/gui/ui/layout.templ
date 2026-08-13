@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/mallardduck/BrambleGate/internal/version"
+
 // Base is the root document: nav + content slot + footer. Used for full-page
 // (non-htmx) requests; htmx fragment requests render just the inner
 // templ.Component and skip this wrapper (see internal/gui/handlers_ui.go).
@@ -112,6 +114,7 @@ templ themeBtn(theme, label string) {
 
 templ PageFooter() {
 	<footer class="border-t border-bramble-border px-6 py-2 text-xs text-bramble-muted text-center">
-		BrambleGate <span class="text-bramble-primary">{ AppVersion }</span>
+		<a href={ templ.SafeURL(version.DocsURL) } target="_blank" rel="noopener noreferrer" class="hover:text-bramble-primary transition-colors">BrambleGate</a>
+		<a href={ templ.SafeURL(version.ReleaseURL()) } target="_blank" rel="noopener noreferrer" class="text-bramble-primary hover:underline">{ AppVersion }</a>
 	</footer>
 }
