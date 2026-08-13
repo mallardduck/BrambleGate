@@ -143,6 +143,17 @@ func (h *handlers) queryLogStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// dashboardCharts serves the Dashboard's chart poller (ui.DashboardCharts'
+// #chart-poller, dev-docs/chartjs.md) — the UI-facing counterpart to
+// queryLogStats above: this one *is* what charts.js's ChartManager fetches
+// every 60s to update all 5 chart instances in place via chart.update(),
+// rather than the destroy/recreate-per-poll model DashboardActivity's own
+// HTML fragment used before. Shares dashboardActivityData with the HTML
+// shell/initial chart render so all three paths agree on one dataset.
+func (h *handlers) dashboardCharts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, ui.DashboardChartsPayload(dashboardActivityData(r)))
+}
+
 // dashboardActivityData reads querylog.CurrentLog() for the Dashboard's
 // Activity section. TopDomains/TopClients share one underlying
 // "is Store configured" check (Log.TopDomains/TopClients, plugins/querylog/

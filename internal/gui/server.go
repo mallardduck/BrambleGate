@@ -37,6 +37,7 @@ func NewServer(svc *Service, addr string) *http.Server {
 		r.Get("/plugins", h.listPlugins)
 
 		r.Get("/querylog/stats", h.queryLogStats)
+		r.Get("/dashboard/charts", h.dashboardCharts)
 
 		r.Get("/mdns", h.listMDNS)
 		r.Post("/mdns/{name}/publish", h.publishMDNS)

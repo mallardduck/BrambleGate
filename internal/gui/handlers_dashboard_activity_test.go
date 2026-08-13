@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mallardduck/BrambleGate/internal/gui/ui"
 	"github.com/mallardduck/BrambleGate/plugins/querylog"
 )
 
@@ -62,6 +63,17 @@ func TestDashboardActivity_EnabledLoadsChartJS(t *testing.T) {
 	}
 	if !strings.Contains(body, "chart.umd.min.js") || !strings.Contains(body, "charts.js") {
 		t.Fatalf("expected Chart.js + charts.js to load once Query Log is enabled, got: %s", body)
+	}
+	if !strings.Contains(body, `id="chart-poller"`) {
+		t.Fatalf("expected the chart poller element once Query Log is enabled, got: %s", body)
+	}
+	for _, id := range []string{"chart-series", "chart-sources", "chart-qtypes", "chart-cache-activity"} {
+		if !strings.Contains(body, `id="`+id+`"`) {
+			t.Fatalf("expected canvas %q once Query Log is enabled, got: %s", id, body)
+		}
+	}
+	if strings.Contains(body, "data-payload") {
+		t.Fatalf("did not expect canvases to carry data-payload attributes (chart data now comes from /api/dashboard/charts), got: %s", body)
 	}
 }
 
@@ -179,6 +191,78 @@ func TestQueryLogStats_ReturnsTotalsJSON(t *testing.T) {
 	var got querylog.Totals
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("response body isn't valid querylog.Totals JSON: %v (body: %s)", err, rec.Body.String())
+	}
+}
+
+// TestDashboardCharts_ReturnsChartsJSON: /api/dashboard/charts is what
+// charts.js's ChartManager actually polls (unlike /api/querylog/stats,
+// which is debug-only) — asserts it returns the full DashboardChartsResponse
+// shape with real data once queries have been recorded.
+func TestDashboardCharts_ReturnsChartsJSON(t *testing.T) {
+	svc, _, _ := newService(t)
+	enableQueryLog(t, svc)
+	store := querylog.CurrentStore()
+	if store == nil {
+		t.Fatal("expected enableQueryLog to have opened a Store")
+	}
+	store.SetTuning(0, 0, 10*time.Millisecond)
+	store.Record(querylog.Entry{QName: "nas.home.arpa.", Client: querylog.ClientInfo{IP: "10.0.0.5", VLAN: "trusted"}, Timestamp: time.Now()})
+	waitForStoreRows(t, store)
+
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/dashboard/charts", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+	var got ui.DashboardChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response body isn't valid DashboardChartsResponse JSON: %v (body: %s)", err, rec.Body.String())
+	}
+	if len(got.Series.Labels) == 0 {
+		t.Fatalf("expected non-empty Series labels, got: %+v", got.Series)
+	}
+	if len(got.ClientActivity.Series) == 0 {
+		t.Fatalf("expected non-empty ClientActivity series once Store is configured, got: %+v", got.ClientActivity)
+	}
+}
+
+// TestDashboardCharts_EmptyDataUsesEmptyArraysNotNull: a fresh instance (or
+// one where vlancache just hasn't seen any traffic yet) has empty
+// ByCacheOutcome/BySource/ByQType maps — countsPayload must still marshal
+// their chartPayload as `"labels":[]`/`"values":[]`, not `null`, since
+// charts.js's applyDoughnut calls payload.labels.map(...) unconditionally
+// and a null there throws (this was the actual bug: the Cache activity
+// card errored whenever vlancache had produced zero entries).
+func TestDashboardCharts_EmptyDataUsesEmptyArraysNotNull(t *testing.T) {
+	svc, _, _ := newService(t)
+	enableQueryLog(t, svc) // no queries recorded — Totals/ByCacheOutcome etc. all empty
+	h := NewServer(svc, ":0").Handler
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/dashboard/charts", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "null") {
+		t.Fatalf("expected empty chart fields to marshal as [] not null, got: %s", body)
+	}
+	var got ui.DashboardChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response body isn't valid DashboardChartsResponse JSON: %v (body: %s)", err, body)
+	}
+	if got.CacheActivity.Labels == nil || got.CacheActivity.Values == nil {
+		t.Fatalf("expected CacheActivity Labels/Values to be non-nil empty slices, got: %+v", got.CacheActivity)
+	}
+	if got.Sources.Labels == nil || got.QTypes.Labels == nil {
+		t.Fatalf("expected Sources/QTypes Labels to be non-nil empty slices, got sources=%+v qtypes=%+v", got.Sources, got.QTypes)
 	}
 }
 

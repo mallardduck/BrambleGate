@@ -9,7 +9,6 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -73,13 +72,17 @@ func DashboardExtraHead() templ.Component {
 	})
 }
 
-// DashboardActivity is both the Dashboard page's initial Activity section
-// and the response for its own 60s poll (dev-docs/query-log.md: "slower
+// DashboardActivityTop is the Activity section's header + tiles — the
+// primary target of the section's 60s poll (dev-docs/query-log.md: "slower
 // poll than the live log, seconds-to-minutes, summary data not a live
-// feed") — a full outerHTML self-replace, same shape as Query Log's grid
-// fragment (querylog.templ), so re-fetched chart data always ships with a
-// fresh set of canvases for charts.js's htmx:afterSwap hook to pick up.
-func DashboardActivity(data DashboardActivityData) templ.Component {
+// feed"), a full outerHTML self-replace same as Query Log's grid fragment
+// (querylog.templ). Kept deliberately small (no VLAN breakdown/tables, no
+// canvases) so it can sit directly above DashboardCharts on the page —
+// DashboardActivityBottom carries the rest of the non-chart content, kept
+// visually *below* the charts (the original layout) even though it isn't
+// contiguous with this element once DashboardCharts sits between them; see
+// DashboardActivityBottom's own doc comment for how it still stays live.
+func DashboardActivityTop(data DashboardActivityData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -107,7 +110,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(PathDashboardActivity)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 51, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 54, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -121,7 +124,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</h2><div class=\"grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</h2><div class=\"grid grid-cols-2 sm:grid-cols-4 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -141,58 +144,46 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3\">Queries — last 24h</h3><div class=\"h-48 relative\"><canvas id=\"chart-series\" data-chart=\"timeseries\" data-payload=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(seriesPayload(data.Series))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 65, Col: 95}
+		return nil
+	})
+}
+
+// DashboardActivityBottom is the VLAN breakdown + Top domains/clients
+// tables — visually below DashboardCharts (the original layout), but still
+// driven by DashboardActivityTop's 60s poll: htmx's hx-swap-oob lets one
+// poll response update two non-contiguous DOM locations, so
+// dashboardActivityFragment (handlers_ui.go) returns
+// DashboardActivityTop as the primary outerHTML target and this element,
+// marked hx-swap-oob, gets swapped into its own spot below the charts.
+// hx-swap-oob is a no-op on the static markup emitted for the initial page
+// load (it only takes effect when htmx processes a request's response) —
+// oob semantics only apply on the poll fragment.
+func DashboardActivityBottom(data DashboardActivityData) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"></canvas></div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var4 == nil {
+			templ_7745c5c3_Var4 = templ.NopComponent
 		}
-		templ_7745c5c3_Err = clientActivityCard(data).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4\"><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Sources</h3><div class=\"h-48 relative\"><canvas id=\"chart-sources\" data-chart=\"doughnut\" data-payload=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(countsPayload(foldOther(sortedCounts(data.Totals.BySource), 6), sourceLabel))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 73, Col: 145}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"></canvas></div></div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Query types</h3><div class=\"h-48 relative\"><canvas id=\"chart-qtypes\" data-chart=\"doughnut\" data-payload=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(qtypeCountsPayload(data.Totals.ByQType))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 79, Col: 107}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"></canvas></div></div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = vlanCacheActivityCard(data.Totals.ByCacheOutcome).Render(ctx, templ_7745c5c3_Buffer)
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div id=\"dashboard-activity-bottom\" class=\"mb-8\" hx-swap-oob=\"true\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -200,7 +191,7 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -212,7 +203,105 @@ func DashboardActivity(data DashboardActivityData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// DashboardActivity renders both halves of the Activity section back to
+// back with no charts in between — used by dashboardActivityFragment
+// (handlers_ui.go), the 60s poll endpoint, whose response needs to carry
+// both the primary swap target (DashboardActivityTop) and the
+// out-of-band-swapped remainder (DashboardActivityBottom) in one payload.
+// The full page (ui.Dashboard) instead calls the two halves separately with
+// DashboardCharts wedged between them, to get the original tiles -> charts
+// -> VLAN/tables visual order.
+func DashboardActivity(data DashboardActivityData) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = DashboardActivityTop(data).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = DashboardActivityBottom(data).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// DashboardCharts is the Dashboard's chart canvases — rendered exactly once
+// as part of the page/fragment that first shows the Activity section (never
+// re-rendered by DashboardActivityTop's own 60s outerHTML poll, which would
+// tear down and recreate every Chart.js instance). Each canvas is created
+// empty by charts.js on load and kept alive for the page's lifetime; data
+// arrives via #chart-poller's own JSON poll of /api/dashboard/charts
+// (DashboardChartsPayload) and is applied in place with chart.update(),
+// which is what gives Chart.js's animated transitions rather than a cold
+// redraw. The "Cache activity" card is always shown once Query Log is on
+// (no more data-driven appear/disappear per vlancache activity) — a fixed
+// set of cards, like Pi-hole's dashboard, since a card that only sometimes
+// exists has nowhere to live once canvases stop being recreated per poll.
+func DashboardCharts(data DashboardActivityData) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var6 == nil {
+			templ_7745c5c3_Var6 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div id=\"dashboard-charts\"><div id=\"chart-poller\" hx-get=\"/api/dashboard/charts\" hx-trigger=\"load, every 60s\" hx-swap=\"none\"></div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3\">Queries — last 24h</h3><div class=\"h-48 relative\"><canvas id=\"chart-series\" data-chart=\"timeseries\"></canvas></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = clientActivityCard(data).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4\"><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Sources</h3><div class=\"h-48 relative\"><canvas id=\"chart-sources\" data-chart=\"doughnut\"></canvas></div></div><div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Query types</h3><div class=\"h-48 relative\"><canvas id=\"chart-qtypes\" data-chart=\"doughnut\"></canvas></div></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = vlanCacheActivityCard().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -251,7 +340,7 @@ func dashboardActivityDisabled() templ.Component {
 		var templ_7745c5c3_Var8 templ.SafeURL
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(PathSettings))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 99, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 148, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -293,7 +382,7 @@ func activityTile(label, value string) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 106, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 155, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -306,7 +395,7 @@ func activityTile(label, value string) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 107, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 156, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -389,7 +478,7 @@ func vlanBar(lc labelCount, total int64) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(vlanBarLabel(lc.Label))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 126, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 175, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -402,7 +491,7 @@ func vlanBar(lc labelCount, total int64) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("width:%.1f%%", barPct(lc.Count, total)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 128, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 177, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -415,7 +504,7 @@ func vlanBar(lc labelCount, total int64) templ.Component {
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", lc.Count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 130, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 179, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -436,9 +525,9 @@ func vlanBar(lc labelCount, total int64) templ.Component {
 // doc comment explains why: Source is meant to answer "did this come from
 // cache," and a miss didn't). This card instead answers "what has vlancache
 // itself seen," including the misses the Sources chart intentionally
-// excludes. Hidden entirely when nothing has populated it yet (no ECS/
-// vlancache traffic, or Query Log just started).
-func vlanCacheActivityCard(byOutcome map[string]int64) templ.Component {
+// excludes. Always shown once Query Log is on (see DashboardCharts' doc
+// comment) — draws an empty chart until vlancache produces its first entry.
+func vlanCacheActivityCard() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -459,32 +548,17 @@ func vlanCacheActivityCard(byOutcome map[string]int64) templ.Component {
 			templ_7745c5c3_Var17 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		if cacheActivityTotal(byOutcome) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3 flex items-center\">Cache activity")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = helpTooltip("vlancache's own outcome breakdown: answered from cache, deduped against an in-flight identical request (coalesced), or a genuine miss that went to the network. Independent of the Sources chart, which only counts a query as \"vlancache\" when it actually came from the cache.").Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</h3><div class=\"h-48 relative\"><canvas id=\"chart-cache-activity\" data-chart=\"doughnut\" data-payload=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var18 string
-			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(countsPayload(nonEmptyCounts(byOutcome), cacheOutcomeLabel))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 151, Col: 134}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"></canvas></div></div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3 flex items-center\">Cache activity")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = helpTooltip("vlancache's own outcome breakdown: answered from cache, deduped against an in-flight identical request (coalesced), or a genuine miss that went to the network. Independent of the Sources chart, which only counts a query as \"vlancache\" when it actually came from the cache.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</h3><div class=\"h-48 relative\"><canvas id=\"chart-cache-activity\" data-chart=\"doughnut\"></canvas></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
 		}
 		return nil
 	})
@@ -510,12 +584,12 @@ func clientActivityCard(data DashboardActivityData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3\">Client activity — last 24h</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4 mb-4\"><h3 class=\"text-sm font-semibold mb-3\">Client activity — last 24h</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -525,25 +599,12 @@ func clientActivityCard(data DashboardActivityData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"h-48 relative\"><canvas id=\"chart-client-activity\" data-chart=\"stackedbar\" data-payload=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var20 string
-			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(clientActivityPayload(data.ClientActivity))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 168, Col: 120}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\"></canvas></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"h-48 relative\"><canvas id=\"chart-client-activity\" data-chart=\"stackedbar\"></canvas></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -567,12 +628,12 @@ func topDomainsCard(data DashboardActivityData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var21 == nil {
-			templ_7745c5c3_Var21 = templ.NopComponent
+		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var19 == nil {
+			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Top domains (24h)</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Top domains (24h)</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -582,53 +643,53 @@ func topDomainsCard(data DashboardActivityData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else if len(data.TopDomains) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<p class=\"text-bramble-muted text-sm\">No queries yet.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p class=\"text-bramble-muted text-sm\">No queries yet.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<table class=\"w-full text-sm\"><tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<table class=\"w-full text-sm\"><tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, d := range data.TopDomains {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<tr class=\"border-b border-bramble-border last:border-0\"><td class=\"px-2 py-1.5 font-mono text-xs break-all\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<tr class=\"border-b border-bramble-border last:border-0\"><td class=\"px-2 py-1.5 font-mono text-xs break-all\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var22 string
-				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(d.QName)
+				var templ_7745c5c3_Var20 string
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(d.QName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 186, Col: 68}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 233, Col: 68}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</td><td class=\"px-2 py-1.5 text-right text-xs tabular-nums text-bramble-muted\">")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var23 string
-				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.Count))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 187, Col: 110}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</td><td class=\"px-2 py-1.5 text-right text-xs tabular-nums text-bramble-muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</td></tr>")
+				var templ_7745c5c3_Var21 string
+				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.Count))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 234, Col: 110}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</tbody></table>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</tbody></table>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -652,12 +713,12 @@ func topClientsCard(data DashboardActivityData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var24 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var24 == nil {
-			templ_7745c5c3_Var24 = templ.NopComponent
+		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var22 == nil {
+			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Top clients (24h)</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div class=\"rounded border border-bramble-border bg-bramble-bg-card shadow-sm p-4\"><h3 class=\"text-sm font-semibold mb-3\">Top clients (24h)</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -667,76 +728,76 @@ func topClientsCard(data DashboardActivityData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else if len(data.TopClients) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<p class=\"text-bramble-muted text-sm\">No queries yet.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<p class=\"text-bramble-muted text-sm\">No queries yet.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<table class=\"w-full text-sm\"><tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<table class=\"w-full text-sm\"><tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, c := range data.TopClients {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<tr class=\"border-b border-bramble-border last:border-0\"><td class=\"px-2 py-1.5\"><p class=\"font-mono text-xs\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<tr class=\"border-b border-bramble-border last:border-0\"><td class=\"px-2 py-1.5\"><p class=\"font-mono text-xs\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var23 string
+				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(c.ClientIP)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 256, Col: 49}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if c.VLAN != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<p class=\"text-xs text-bramble-muted\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var24 string
+					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(c.VLAN)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 258, Col: 55}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</p>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</td><td class=\"px-2 py-1.5 text-right text-xs tabular-nums text-bramble-muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var25 string
-				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(c.ClientIP)
+				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", c.Count))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 209, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 261, Col: 110}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if c.VLAN != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<p class=\"text-xs text-bramble-muted\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var26 string
-					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(c.VLAN)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 211, Col: 55}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</p>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</td><td class=\"px-2 py-1.5 text-right text-xs tabular-nums text-bramble-muted\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var27 string
-				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", c.Count))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 214, Col: 110}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</tbody></table>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</tbody></table>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -760,25 +821,25 @@ func statsStoreDisabledNote() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var28 == nil {
-			templ_7745c5c3_Var28 = templ.NopComponent
+		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var26 == nil {
+			templ_7745c5c3_Var26 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<p class=\"text-bramble-muted text-sm\">Enable Query Log persistence in <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<p class=\"text-bramble-muted text-sm\">Enable Query Log persistence in <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var29 templ.SafeURL
-		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(PathSettings))
+		var templ_7745c5c3_Var27 templ.SafeURL
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(PathSettings))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 225, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard_stats.templ`, Line: 272, Col: 71}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" class=\"text-bramble-primary hover:underline\">Settings</a> to see this.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" class=\"text-bramble-primary hover:underline\">Settings</a> to see this.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -844,18 +905,6 @@ func nonEmptyCounts(m map[string]int64) []labelCount {
 	return out
 }
 
-// cacheActivityTotal sums every non-"none" bucket — gates vlanCacheActivityCard,
-// since "none" alone (the cache layer saw nothing) shouldn't render an empty chart.
-func cacheActivityTotal(byOutcome map[string]int64) int64 {
-	var total int64
-	for k, v := range byOutcome {
-		if k != "none" {
-			total += v
-		}
-	}
-	return total
-}
-
 // cacheOutcomeLabel maps Entry.CacheOutcome's raw values to display text for
 // the "Cache activity" chart.
 func cacheOutcomeLabel(outcome string) string {
@@ -911,18 +960,19 @@ func barPct(count, total int64) float64 {
 	return 100 * float64(count) / float64(total)
 }
 
-// chartPayload is the JSON shape charts.js expects in a canvas's
-// data-payload attribute — plain data only, no color/config (see
-// static/js/charts.js's module doc comment for why that split exists).
+// chartPayload is one chart's data in /api/dashboard/charts' JSON response —
+// plain data only, no color/config (see static/js/charts.js's module doc
+// comment for why that split exists: color/shape decisions live in JS,
+// recomputed from this data on every poll).
 type chartPayload struct {
 	Labels []string `json:"labels"`
 	Values []int64  `json:"values"`
 }
 
-// multiSeriesPayload is charts.js's stacked-bar payload shape: shared
-// bucket labels plus one named series per row (querylog.ClientActivityRow),
-// each holding a value per bucket — unlike chartPayload, whose single
-// Values slice pairs one value per label.
+// multiSeriesPayload is the stacked-bar chart's payload shape: shared bucket
+// labels plus one named series per row (querylog.ClientActivityRow), each
+// holding a value per bucket — unlike chartPayload, whose single Values
+// slice pairs one value per label.
 type multiSeriesPayload struct {
 	Labels []string      `json:"labels"`
 	Series []namedSeries `json:"series"`
@@ -933,7 +983,32 @@ type namedSeries struct {
 	Values []int64 `json:"values"`
 }
 
-func clientActivityPayload(ca querylog.ClientActivitySeries) string {
+// DashboardChartsResponse is /api/dashboard/charts' JSON shape — one field
+// per canvas in DashboardCharts, applied in place by charts.js's
+// ChartManager on every poll (dev-docs/chartjs.md).
+type DashboardChartsResponse struct {
+	Series         chartPayload       `json:"series"`
+	Sources        chartPayload       `json:"sources"`
+	QTypes         chartPayload       `json:"qtypes"`
+	CacheActivity  chartPayload       `json:"cacheActivity"`
+	ClientActivity multiSeriesPayload `json:"clientActivity"`
+}
+
+// DashboardChartsPayload builds /api/dashboard/charts' response from the
+// same DashboardActivityData the HTML shell (DashboardActivity) and initial
+// chart render (DashboardCharts) use — one source of truth for chart data,
+// reused by both the templ render path and this JSON path.
+func DashboardChartsPayload(data DashboardActivityData) DashboardChartsResponse {
+	return DashboardChartsResponse{
+		Series:         seriesPayload(data.Series),
+		Sources:        countsPayload(foldOther(sortedCounts(data.Totals.BySource), 6), sourceLabel),
+		QTypes:         qtypeCountsPayload(data.Totals.ByQType),
+		CacheActivity:  countsPayload(nonEmptyCounts(data.Totals.ByCacheOutcome), cacheOutcomeLabel),
+		ClientActivity: clientActivityPayload(data.ClientActivity),
+	}
+}
+
+func clientActivityPayload(ca querylog.ClientActivitySeries) multiSeriesPayload {
 	p := multiSeriesPayload{Labels: make([]string, len(ca.Buckets)), Series: make([]namedSeries, len(ca.Rows))}
 	for i, b := range ca.Buckets {
 		p.Labels[i] = b.Format("15:04")
@@ -941,7 +1016,7 @@ func clientActivityPayload(ca querylog.ClientActivitySeries) string {
 	for i, row := range ca.Rows {
 		p.Series[i] = namedSeries{Name: clientActivityRowLabel(row), Values: row.Counts}
 	}
-	return mustJSON(p)
+	return p
 }
 
 // clientActivityRowLabel mirrors vlanBarLabel's "(none)" convention for a
@@ -956,22 +1031,25 @@ func clientActivityRowLabel(row querylog.ClientActivityRow) string {
 	return fmt.Sprintf("%s (%s)", row.ClientIP, row.VLAN)
 }
 
-func seriesPayload(buckets []querylog.Bucket) string {
+func seriesPayload(buckets []querylog.Bucket) chartPayload {
 	p := chartPayload{Labels: make([]string, len(buckets)), Values: make([]int64, len(buckets))}
 	for i, b := range buckets {
 		p.Labels[i] = b.Start.Format("15:04")
 		p.Values[i] = b.Count
 	}
-	return mustJSON(p)
+	return p
 }
 
 // countsPayload renders counts as a chartPayload, optionally relabeling
 // each key (e.g. querylog's raw Source values -> sourceLabel's friendlier
 // text) — labelFn nil means "use the label as-is" (QType is already
 // relabeled to its RR type name before this is called, see
-// qtypeCountsPayload).
-func countsPayload(counts []labelCount, labelFn func(string) string) string {
-	p := chartPayload{}
+// qtypeCountsPayload). Starts from empty (not nil) slices: an empty counts
+// (e.g. no vlancache activity yet, or a fresh install with zero queries)
+// must still marshal as `"labels":[]`/`"values":[]`, not `null` — charts.js
+// calls .map() on these unconditionally.
+func countsPayload(counts []labelCount, labelFn func(string) string) chartPayload {
+	p := chartPayload{Labels: []string{}, Values: []int64{}}
 	for _, c := range counts {
 		lbl := c.Label
 		if labelFn != nil {
@@ -980,10 +1058,10 @@ func countsPayload(counts []labelCount, labelFn func(string) string) string {
 		p.Labels = append(p.Labels, lbl)
 		p.Values = append(p.Values, c.Count)
 	}
-	return mustJSON(p)
+	return p
 }
 
-func qtypeCountsPayload(byQType map[uint16]int64) string {
+func qtypeCountsPayload(byQType map[uint16]int64) chartPayload {
 	m := make(map[string]int64, len(byQType))
 	for k, v := range byQType {
 		name := dns.TypeToString[k]
@@ -993,14 +1071,6 @@ func qtypeCountsPayload(byQType map[uint16]int64) string {
 		m[name] += v
 	}
 	return countsPayload(foldOther(sortedCounts(m), 6), nil)
-}
-
-func mustJSON(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
 }
 
 var _ = templruntime.GeneratedTemplate

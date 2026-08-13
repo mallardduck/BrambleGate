@@ -49,7 +49,9 @@ templ Dashboard(data DashboardData) {
 		</div>
 	}
 	if data.Settings.QueryLog.Enabled {
-		@DashboardActivity(data.Activity)
+		@DashboardActivityTop(data.Activity)
+		@DashboardCharts(data.Activity)
+		@DashboardActivityBottom(data.Activity)
 	} else {
 		@dashboardActivityDisabled()
 	}
