@@ -21,6 +21,9 @@ const (
 	// PathSettingsRestart is the Settings page's Admin actions "Restart DNS
 	// engine" button target.
 	PathSettingsRestart = PathSettings + "/restart"
+
+	// PathSettingsFlushCache is the Admin actions "Clear DNS cache" POST target.
+	PathSettingsFlushCache = PathSettings + "/flush-cache"
 )
 
 // AppVersion is the running server version, set from internal/version by

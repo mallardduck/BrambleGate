@@ -464,6 +464,16 @@ templ Settings(data SettingsData) {
 			>
 				Restart DNS engine
 			</button>
+			<button
+				hx-post={ PathSettingsFlushCache }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-confirm="Clear the DNS cache? Clients will re-resolve names upstream on their next query."
+				type="button"
+				class="px-3 py-1.5 rounded border border-bramble-border text-sm hover:bg-bramble-bg-card2"
+			>
+				Clear DNS cache
+			</button>
 		</div>
 	</div>
 }

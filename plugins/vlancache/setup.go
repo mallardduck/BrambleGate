@@ -52,6 +52,9 @@ func setup(c *caddy.Controller) error {
 		pluginreg.SetLoaded("vlancache", false, "failed to start: "+err.Error())
 		return plugin.Error("vlancache", err)
 	}
+	register(vc)
+	c.OnShutdown(func() error { unregister(vc); return nil })
+	c.OnRestart(func() error { unregister(vc); return nil })
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		vc.Next = next
 		return vc

@@ -515,6 +515,13 @@ func (h *handlers) settingsRestart(w http.ResponseWriter, r *http.Request) {
 	h.renderSettings(w, r, nil, errMsg)
 }
 
+// settingsFlushCache empties the DNS cache — the Settings page's "Clear DNS
+// cache" admin action.
+func (h *handlers) settingsFlushCache(w http.ResponseWriter, r *http.Request) {
+	h.svc.FlushCache()
+	h.renderSettings(w, r, nil, "")
+}
+
 func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.Settings()
 	if err != nil {

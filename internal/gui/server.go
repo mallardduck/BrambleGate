@@ -64,6 +64,7 @@ func NewServer(svc *Service, addr string) *http.Server {
 	r.Get("/settings", h.settingsPage)
 	r.Post("/settings", h.settingsSave)
 	r.Post("/settings/restart", h.settingsRestart)
+	r.Post("/settings/flush-cache", h.settingsFlushCache)
 	r.Post("/settings/vlans", h.vlanAdd)
 	r.Get("/settings/vlans/{name}/edit", h.vlanEdit)
 	r.Put("/settings/vlans/{name}", h.vlanUpdate)

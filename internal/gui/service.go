@@ -33,6 +33,7 @@ import (
 	"github.com/mallardduck/BrambleGate/plugins/mdnsadvertise"
 	"github.com/mallardduck/BrambleGate/plugins/mdnsbridge"
 	"github.com/mallardduck/BrambleGate/plugins/querylog"
+	"github.com/mallardduck/BrambleGate/plugins/vlancache"
 	"github.com/mallardduck/BrambleGate/vlanmatch"
 )
 
@@ -514,6 +515,11 @@ func (s *Service) RestartEngine() error {
 	}
 	return s.reload(rendered)
 }
+
+// FlushCache empties the running DNS cache and returns how many entries were
+// dropped. Backs the Settings page's "Clear DNS cache" admin action; it does
+// not touch persisted state or reload the engine.
+func (s *Service) FlushCache() int { return vlancache.Flush() }
 
 // mdnsPreReload creates and injects the discovery table when mDNS is being
 // turned on, so the about-to-run reload's Corefile parse finds it. It does not

@@ -117,3 +117,22 @@ func (s *store) setScoped(key uint64, prefix *net.IPNet, e *entry) {
 	}
 	s.scoped[key] = append(entries, &scopedEntry{prefix: prefix, e: e})
 }
+
+// clear drops every entry from both tiers and returns how many were removed.
+// An in-flight background refresh may repopulate a key afterwards; that's
+// fine, the refreshed answer is fresh by definition.
+func (s *store) clear() int {
+	n := 0
+	s.direct.Walk(func(items map[uint64]*entry, k uint64) bool {
+		delete(items, k)
+		n++
+		return true
+	})
+	s.mu.Lock()
+	for k, entries := range s.scoped {
+		n += len(entries)
+		delete(s.scoped, k)
+	}
+	s.mu.Unlock()
+	return n
+}
