@@ -9,6 +9,10 @@ import (
 // entry is one cached DNS response, independent of how it was keyed (VLAN
 // bucket or RFC 7871 scope prefix — see store.go).
 type entry struct {
+	// qname is the canonical (lowercase, FQDN) question name this entry
+	// answers; lets FlushName find entries without reversing the key hash.
+	qname string
+
 	rcode              int
 	authenticatedData  bool
 	recursionAvailable bool
@@ -22,8 +26,9 @@ type entry struct {
 
 // newEntry snapshots m for caching. OPT records are hop-by-hop (RFC 6891)
 // and are never retained.
-func newEntry(m *dns.Msg, now time.Time, ttl time.Duration) *entry {
+func newEntry(qname string, m *dns.Msg, now time.Time, ttl time.Duration) *entry {
 	return &entry{
+		qname:              qname,
 		rcode:              m.Rcode,
 		authenticatedData:  m.AuthenticatedData,
 		recursionAvailable: m.RecursionAvailable,

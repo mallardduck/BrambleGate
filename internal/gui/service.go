@@ -521,6 +521,10 @@ func (s *Service) RestartEngine() error {
 // not touch persisted state or reload the engine.
 func (s *Service) FlushCache() int { return vlancache.Flush() }
 
+// FlushCacheName drops every cached entry for exactly name (all record types;
+// subdomains are separate names) and returns how many were dropped.
+func (s *Service) FlushCacheName(name string) int { return vlancache.FlushName(name) }
+
 // mdnsPreReload creates and injects the discovery table when mDNS is being
 // turned on, so the about-to-run reload's Corefile parse finds it. It does not
 // start the browse goroutine — that happens in mdnsPostReload, once the reload

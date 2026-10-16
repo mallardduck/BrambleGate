@@ -136,3 +136,35 @@ func (s *store) clear() int {
 	s.mu.Unlock()
 	return n
 }
+
+// clearName drops every entry (all qtypes, VLAN buckets, scopes, DO/CD
+// variants) whose question name is exactly qname, which must already be
+// canonical. Subdomains are not matched. Returns how many were removed.
+func (s *store) clearName(qname string) int {
+	n := 0
+	s.direct.Walk(func(items map[uint64]*entry, k uint64) bool {
+		if e := items[k]; e != nil && e.qname == qname {
+			delete(items, k)
+			n++
+		}
+		return true
+	})
+	s.mu.Lock()
+	for k, entries := range s.scoped {
+		kept := entries[:0]
+		for _, se := range entries {
+			if se.e.qname == qname {
+				n++
+				continue
+			}
+			kept = append(kept, se)
+		}
+		if len(kept) == 0 {
+			delete(s.scoped, k)
+		} else {
+			s.scoped[k] = kept
+		}
+	}
+	s.mu.Unlock()
+	return n
+}

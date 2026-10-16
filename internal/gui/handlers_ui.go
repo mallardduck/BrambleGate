@@ -522,6 +522,22 @@ func (h *handlers) settingsFlushCache(w http.ResponseWriter, r *http.Request) {
 	h.renderSettings(w, r, nil, "")
 }
 
+// settingsFlushCacheName clears every cached record type for one exact
+// domain (subdomains excluded).
+func (h *handlers) settingsFlushCacheName(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderSettings(w, r, nil, err.Error())
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		h.renderSettings(w, r, nil, "enter a domain name to clear")
+		return
+	}
+	h.svc.FlushCacheName(name)
+	h.renderSettings(w, r, nil, "")
+}
+
 func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.Settings()
 	if err != nil {

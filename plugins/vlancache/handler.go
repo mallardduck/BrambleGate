@@ -341,7 +341,7 @@ func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string,
 		fr := &fetchResult{msg: res}
 		if cacheable(res, mt) {
 			if duration := c.ttlFor(res, mt); duration > 0 {
-				e := newEntry(res, now, duration)
+				e := newEntry(dns.CanonicalName(r.Question[0].Name), res, now, duration)
 				// Failures aren't subnet-dependent, so even an upstream that
 				// happens to echo a scope on a SERVFAIL is stored/shared
 				// bucket-wide rather than narrowed.

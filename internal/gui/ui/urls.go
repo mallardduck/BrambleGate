@@ -24,6 +24,9 @@ const (
 
 	// PathSettingsFlushCache is the Admin actions "Clear DNS cache" POST target.
 	PathSettingsFlushCache = PathSettings + "/flush-cache"
+
+	// PathSettingsFlushCacheName clears one exact domain from the DNS cache.
+	PathSettingsFlushCacheName = PathSettings + "/flush-cache/name"
 )
 
 // AppVersion is the running server version, set from internal/version by

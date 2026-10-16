@@ -474,6 +474,13 @@ templ Settings(data SettingsData) {
 			>
 				Clear DNS cache
 			</button>
+			<form hx-post={ PathSettingsFlushCacheName } hx-target="#content" hx-swap="innerHTML" class="flex gap-2 items-center">
+				<input name="name" required placeholder="host.example.com" aria-label="Domain to clear from cache" class="px-2 py-1.5 rounded border border-bramble-border bg-bramble-bg-input text-sm"/>
+				<button type="submit" class="px-3 py-1.5 rounded border border-bramble-border text-sm hover:bg-bramble-bg-card2">
+					Clear domain
+				</button>
+				@helpTooltip("Drops cached answers of every record type for exactly this name. Subdomains are separate names and are not cleared.")
+			</form>
 		</div>
 	</div>
 }

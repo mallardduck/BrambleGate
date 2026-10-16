@@ -1,6 +1,11 @@
 package vlancache
 
-import "sync"
+import (
+	"strings"
+	"sync"
+
+	"github.com/miekg/dns"
+)
 
 // live tracks the VlanCache instances belonging to the currently running
 // engine, so admin actions (the GUI's "Clear DNS cache") can reach them
@@ -32,6 +37,20 @@ func Flush() int {
 	n := 0
 	for vc := range live {
 		n += vc.store.clear()
+	}
+	return n
+}
+
+// FlushName drops every cached entry for exactly name across all running
+// instances, for every record type. Subdomains are separate names and are
+// not affected. Returns the number of entries dropped.
+func FlushName(name string) int {
+	name = dns.CanonicalName(strings.TrimSpace(name))
+	liveMu.Lock()
+	defer liveMu.Unlock()
+	n := 0
+	for vc := range live {
+		n += vc.store.clearName(name)
 	}
 	return n
 }
