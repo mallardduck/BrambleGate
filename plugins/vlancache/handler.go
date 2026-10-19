@@ -313,6 +313,7 @@ func (fr *fetchResult) appliesTo(ip net.IP) bool {
 func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string, directKey, scopedKey uint64, ip net.IP, r *dns.Msg, now time.Time) (fr *fetchResult, leader bool, err error) {
 	v, err, _ := c.sf.Do(key, func() (any, error) {
 		leader = true
+		gen := c.store.generation()
 		cw := &captureWriter{ResponseWriter: w}
 		_, nextErr := plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, r)
 
@@ -341,15 +342,15 @@ func (c *VlanCache) fetch(ctx context.Context, w dns.ResponseWriter, key string,
 		fr := &fetchResult{msg: res}
 		if cacheable(res, mt) {
 			if duration := c.ttlFor(res, mt); duration > 0 {
-				e := newEntry(res, now, duration)
+				e := newEntry(dns.CanonicalName(r.Question[0].Name), res, now, duration)
 				// Failures aren't subnet-dependent, so even an upstream that
 				// happens to echo a scope on a SERVFAIL is stored/shared
 				// bucket-wide rather than narrowed.
 				if prefix := scopePrefix(res, ip); prefix != nil && mt != response.ServerError {
-					c.store.setScoped(scopedKey, prefix, e)
+					c.store.ifCurrent(gen, func() { c.store.setScoped(scopedKey, prefix, e) })
 					fr.prefix = prefix
 				} else {
-					c.store.setDirect(directKey, e)
+					c.store.ifCurrent(gen, func() { c.store.setDirect(directKey, e) })
 				}
 			}
 		}

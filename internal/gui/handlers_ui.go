@@ -45,9 +45,23 @@ func render(w http.ResponseWriter, r *http.Request, title, active string, page t
 // of which page it happened on.
 func renderError(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, errMsg string) {
 	if errMsg != "" {
-		page = templ.Join(page, ui.Toast(errMsg))
+		renderToasts(w, r, title, active, page, ui.Toast(ui.ToastError, errMsg))
+		return
 	}
 	render(w, r, title, active, page)
+}
+
+// renderToasts is render plus any number of out-of-band toasts — for the
+// handlers that report more than one thing at once (e.g. an error and a
+// warning), each at its own level.
+func renderToasts(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, toasts ...templ.Component) {
+	render(w, r, title, active, templ.Join(append([]templ.Component{page}, toasts...)...))
+}
+
+// renderNotice is renderError's non-error counterpart: render plus an
+// out-of-band toast at the given level, for confirming what a user action did.
+func renderNotice(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, level ui.ToastLevel, msg string) {
+	renderToasts(w, r, title, active, page, ui.Toast(level, msg))
 }
 
 // --- Dashboard ---------------------------------------------------------
@@ -414,9 +428,10 @@ func (h *handlers) renderHosts(w http.ResponseWriter, r *http.Request, editing *
 }
 
 // renderHostsWithWarnings is renderHosts plus configgen's non-fatal render
-// warnings (e.g. a hosts entry shadowing a records.yaml name) — surfaced the
-// same way as a form error (a toast), just not blocking the save that
-// triggered it (dev-docs/static-hosts.md's "precedence consequence" note).
+// warnings (e.g. a hosts entry shadowing a records.yaml name) — each surfaced
+// as its own warning-level toast beside any form error's error toast, not
+// blocking the save that triggered it (dev-docs/static-hosts.md's "precedence
+// consequence" note).
 func (h *handlers) renderHostsWithWarnings(w http.ResponseWriter, r *http.Request, editing *model.Host, formErr string, warnings []string) {
 	hs, err := h.svc.Hosts()
 	if err != nil {
@@ -424,16 +439,14 @@ func (h *handlers) renderHostsWithWarnings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	data := ui.HostsData{Hosts: hs, Editing: editing}
-	msg := formErr
-	if len(warnings) > 0 {
-		warnMsg := "Warning: " + strings.Join(warnings, "; ")
-		if msg == "" {
-			msg = warnMsg
-		} else {
-			msg += "; " + warnMsg
-		}
+	var toasts []templ.Component
+	if formErr != "" {
+		toasts = append(toasts, ui.Toast(ui.ToastError, formErr))
 	}
-	renderError(w, r, "Hosts", ui.PathHosts, ui.Hosts(data), msg)
+	for _, warning := range warnings {
+		toasts = append(toasts, ui.Toast(ui.ToastWarning, warning))
+	}
+	renderToasts(w, r, "Hosts", ui.PathHosts, ui.Hosts(data), toasts...)
 }
 
 // renderHostsAtIdentity re-renders the form in edit mode for hostname (the
@@ -513,6 +526,47 @@ func (h *handlers) settingsRestart(w http.ResponseWriter, r *http.Request) {
 		errMsg = err.Error()
 	}
 	h.renderSettings(w, r, nil, errMsg)
+}
+
+// settingsFlushCache empties the DNS cache — the Settings page's "Clear DNS
+// cache" admin action.
+func (h *handlers) settingsFlushCache(w http.ResponseWriter, r *http.Request) {
+	n := h.svc.FlushCache()
+	if n == 0 {
+		h.renderSettingsNotice(w, r, ui.ToastInfo, "DNS cache was already empty")
+		return
+	}
+	h.renderSettingsNotice(w, r, ui.ToastSuccess, "Cleared "+cachedEntries(n))
+}
+
+// settingsFlushCacheName clears every cached record type for one exact
+// domain (subdomains excluded).
+func (h *handlers) settingsFlushCacheName(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderSettings(w, r, nil, err.Error())
+		return
+	}
+	name, err := model.ParseDomainName(r.FormValue("name"))
+	if err != nil {
+		h.renderSettings(w, r, nil, err.Error())
+		return
+	}
+	n := h.svc.FlushCacheName(name)
+	shown := strings.TrimSuffix(name, ".")
+	if n == 0 {
+		h.renderSettingsNotice(w, r, ui.ToastInfo, "No cached entries for "+shown)
+		return
+	}
+	h.renderSettingsNotice(w, r, ui.ToastSuccess, "Cleared "+cachedEntries(n)+" for "+shown)
+}
+
+// cachedEntries phrases a dropped-entry count, e.g. "1 cached entry" /
+// "42 cached entries".
+func cachedEntries(n int) string {
+	if n == 1 {
+		return "1 cached entry"
+	}
+	return strconv.Itoa(n) + " cached entries"
 }
 
 func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
@@ -616,10 +670,30 @@ func (h *handlers) vlanRemove(w http.ResponseWriter, r *http.Request) {
 // settings. editing, when non-nil, pre-fills the Add-VLAN form for an
 // update instead of an add — mirrors renderRecords's editing param.
 func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, editing *model.VLAN, formErr string) {
+	page, ok := h.settingsView(w, editing)
+	if !ok {
+		return
+	}
+	renderError(w, r, "Settings", ui.PathSettings, page, formErr)
+}
+
+// renderSettingsNotice re-renders the settings page with a non-error toast —
+// the confirmation path for admin actions (cache clears) that succeed.
+func (h *handlers) renderSettingsNotice(w http.ResponseWriter, r *http.Request, level ui.ToastLevel, msg string) {
+	page, ok := h.settingsView(w, nil)
+	if !ok {
+		return
+	}
+	renderNotice(w, r, "Settings", ui.PathSettings, page, level, msg)
+}
+
+// settingsView builds the settings page component from current on-disk
+// settings, writing a 500 and returning false if they can't be loaded.
+func (h *handlers) settingsView(w http.ResponseWriter, editing *model.VLAN) (templ.Component, bool) {
 	settings, err := h.svc.Settings()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, false
 	}
 	// Non-fatal: the detected-networks panel is a nice-to-have, not core to
 	// the settings page loading.
@@ -630,7 +704,7 @@ func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, editin
 		Editing:            editing,
 		AdvertisedServices: mdnsadvertise.DesiredServices(settings),
 	}
-	renderError(w, r, "Settings", ui.PathSettings, ui.Settings(data), formErr)
+	return ui.Settings(data), true
 }
 
 func parseSettingsForm(r *http.Request, s *model.Settings) error {

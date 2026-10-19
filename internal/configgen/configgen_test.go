@@ -1160,3 +1160,76 @@ func TestValidateAcceptsRichOverrides(t *testing.T) {
 		t.Fatalf("rich overrides should validate: %v", err)
 	}
 }
+
+// Names are validated with model.ParseDomainName everywhere config accepts one,
+// so a malformed value fails at save time instead of silently matching nothing.
+var malformedDomainNames = []string{"https://foo.home.arpa/", "foo.home.arpa:53", "192.168.10.5", "foo bar.home.arpa", "foo..home.arpa", "*.home.arpa"}
+
+func TestValidateRecordsRejectsMalformedName(t *testing.T) {
+	for _, name := range malformedDomainNames {
+		t.Run(name, func(t *testing.T) {
+			rs := model.RecordSet{Records: []model.Record{{Name: name, Type: model.TypeA, Default: "192.168.10.20"}}}
+			if err := Validate(baseSettings(), rs, model.HostSet{}); err == nil {
+				t.Fatalf("expected a validation error for record name %q", name)
+			}
+		})
+	}
+}
+
+func TestValidateRecordsRejectsMalformedCNAMETarget(t *testing.T) {
+	for _, target := range malformedDomainNames {
+		t.Run(target, func(t *testing.T) {
+			rs := model.RecordSet{Records: []model.Record{{Name: "alias.home.arpa", Type: model.TypeCNAME, Default: target}}}
+			if err := Validate(baseSettings(), rs, model.HostSet{}); err == nil {
+				t.Fatalf("expected a validation error for CNAME target %q", target)
+			}
+		})
+	}
+}
+
+func TestValidateRecordsRejectsMalformedCNAMEOverrideTarget(t *testing.T) {
+	rs := model.RecordSet{Records: []model.Record{{
+		Name: "alias.home.arpa", Type: model.TypeCNAME, Default: "target.home.arpa",
+		VLANOverrides: []model.VLANOverride{{VLAN: "trusted", Value: "https://bad/"}},
+	}}}
+	if err := Validate(baseSettings(), rs, model.HostSet{}); err == nil {
+		t.Fatal("expected a validation error for a malformed CNAME override target")
+	}
+}
+
+func TestValidateHostsRejectsMalformedNames(t *testing.T) {
+	for _, name := range malformedDomainNames {
+		t.Run("hostname/"+name, func(t *testing.T) {
+			hs := model.HostSet{Hosts: []model.Host{{IP: "192.168.10.55", Hostname: name}}}
+			if err := Validate(baseSettings(), model.RecordSet{}, hs); err == nil {
+				t.Fatalf("expected a validation error for hostname %q", name)
+			}
+		})
+		t.Run("alias/"+name, func(t *testing.T) {
+			hs := model.HostSet{Hosts: []model.Host{{IP: "192.168.10.55", Hostname: "ok.example", Aliases: []string{name}}}}
+			if err := Validate(baseSettings(), model.RecordSet{}, hs); err == nil {
+				t.Fatalf("expected a validation error for alias %q", name)
+			}
+		})
+	}
+}
+
+func TestValidateACMERejectsMalformedDomain(t *testing.T) {
+	for _, name := range malformedDomainNames {
+		t.Run(name, func(t *testing.T) {
+			s := acmeEnabledSettings()
+			s.ACME.Domain = name
+			if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
+				t.Fatalf("expected a validation error for acme.domain %q", name)
+			}
+		})
+	}
+}
+
+func TestValidateMDNSRejectsMalformedSuffix(t *testing.T) {
+	s := baseSettings()
+	s.MDNS = model.MDNS{Enabled: true, Suffix: "bad name.home.arpa"}
+	if err := Validate(s, model.RecordSet{}, model.HostSet{}); err == nil {
+		t.Fatal("expected a validation error for a malformed mdns.suffix")
+	}
+}
