@@ -41,7 +41,7 @@ func TestToastLevels(t *testing.T) {
 }
 
 // The icon is optional: it defaults from the level, and WithToastIcon overrides
-// it without touching the level's colours.
+// it without touching the level's colors.
 func TestToastIcon(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -73,7 +73,7 @@ func TestToastIcon(t *testing.T) {
 	}
 }
 
-func TestToastIconOverrideKeepsLevelColours(t *testing.T) {
+func TestToastIconOverrideKeepsLevelColors(t *testing.T) {
 	var buf bytes.Buffer
 	toast := ui.Toast(ui.ToastSuccess, "msg", ui.WithToastIcon(ui.ToastIconAlertTriangle))
 	if err := toast.Render(t.Context(), &buf); err != nil {
@@ -81,11 +81,11 @@ func TestToastIconOverrideKeepsLevelColours(t *testing.T) {
 	}
 	out := buf.String()
 	if !strings.Contains(out, "border-bramble-success") || strings.Contains(out, "bramble-danger") {
-		t.Errorf("an icon override must not change the level's colours:\n%s", out)
+		t.Errorf("an icon override must not change the level's colors:\n%s", out)
 	}
 }
 
-// Colour follows the same shape as the icon: defaulted from the level,
+// Color follows the same shape as the icon: defaulted from the level,
 // overridable via WithToastColor, and independent of the icon.
 func TestToastColorOverride(t *testing.T) {
 	tests := []struct {
@@ -97,28 +97,28 @@ func TestToastColorOverride(t *testing.T) {
 		wantIcon  string
 	}{
 		{
-			name: "info recoloured as danger keeps the info icon", level: ui.ToastInfo,
+			name: "info recolored as danger keeps the info icon", level: ui.ToastInfo,
 			opts:      []ui.ToastOption{ui.WithToastColor(ui.ToastColorDanger)},
 			wantClass: []string{"border-bramble-danger", "text-bramble-danger"},
 			notClass:  []string{"bramble-primary", "bramble-success"},
 			wantIcon:  "info",
 		},
 		{
-			name: "error recoloured as success keeps the alert icon", level: ui.ToastError,
+			name: "error recolored as success keeps the alert icon", level: ui.ToastError,
 			opts:      []ui.ToastOption{ui.WithToastColor(ui.ToastColorSuccess)},
 			wantClass: []string{"border-bramble-success", "text-bramble-success"},
 			notClass:  []string{"bramble-danger"},
 			wantIcon:  "alert-triangle",
 		},
 		{
-			name: "info recoloured as warning keeps the info icon", level: ui.ToastInfo,
+			name: "info recolored as warning keeps the info icon", level: ui.ToastInfo,
 			opts:      []ui.ToastOption{ui.WithToastColor(ui.ToastColorWarning)},
 			wantClass: []string{"border-bramble-warning", "text-bramble-warning"},
 			notClass:  []string{"bramble-primary", "bramble-danger"},
 			wantIcon:  "info",
 		},
 		{
-			name: "colour and icon override together", level: ui.ToastSuccess,
+			name: "color and icon override together", level: ui.ToastSuccess,
 			opts:      []ui.ToastOption{ui.WithToastColor(ui.ToastColorPrimary), ui.WithToastIcon(ui.ToastIconInfo)},
 			wantClass: []string{"border-bramble-primary", "text-bramble-primary"},
 			notClass:  []string{"bramble-danger", "bramble-success"},
