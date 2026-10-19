@@ -519,11 +519,19 @@ func (s *Service) RestartEngine() error {
 // FlushCache empties the running DNS cache and returns how many entries were
 // dropped. Backs the Settings page's "Clear DNS cache" admin action; it does
 // not touch persisted state or reload the engine.
-func (s *Service) FlushCache() int { return vlancache.Flush() }
+func (s *Service) FlushCache() int { return flushCache() }
 
 // FlushCacheName drops every cached entry for exactly name (all record types;
 // subdomains are separate names) and returns how many were dropped.
-func (s *Service) FlushCacheName(name string) int { return vlancache.FlushName(name) }
+func (s *Service) FlushCacheName(name string) int { return flushCacheName(name) }
+
+// flushCache/flushCacheName are the process-wide vlancache flushes behind
+// FlushCache/FlushCacheName. Overridable for tests, which have no live cache
+// to hold entries (same pattern as detectSelfIPs above).
+var (
+	flushCache     = vlancache.Flush
+	flushCacheName = vlancache.FlushName
+)
 
 // mdnsPreReload creates and injects the discovery table when mDNS is being
 // turned on, so the about-to-run reload's Corefile parse finds it. It does not

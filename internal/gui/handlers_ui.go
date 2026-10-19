@@ -50,6 +50,12 @@ func renderError(w http.ResponseWriter, r *http.Request, title, active string, p
 	render(w, r, title, active, page)
 }
 
+// renderNotice is renderError's non-error counterpart: render plus an
+// out-of-band toast at the given level, for confirming what a user action did.
+func renderNotice(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, level ui.ToastLevel, msg string) {
+	render(w, r, title, active, templ.Join(page, ui.Toast(level, msg)))
+}
+
 // --- Dashboard ---------------------------------------------------------
 
 // dashboardStatsWindow/dashboardTopN are the Activity section's fixed
@@ -518,8 +524,12 @@ func (h *handlers) settingsRestart(w http.ResponseWriter, r *http.Request) {
 // settingsFlushCache empties the DNS cache — the Settings page's "Clear DNS
 // cache" admin action.
 func (h *handlers) settingsFlushCache(w http.ResponseWriter, r *http.Request) {
-	h.svc.FlushCache()
-	h.renderSettings(w, r, nil, "")
+	n := h.svc.FlushCache()
+	if n == 0 {
+		h.renderSettingsNotice(w, r, ui.ToastInfo, "DNS cache was already empty")
+		return
+	}
+	h.renderSettingsNotice(w, r, ui.ToastSuccess, "Cleared "+cachedEntries(n))
 }
 
 // settingsFlushCacheName clears every cached record type for one exact
@@ -534,8 +544,22 @@ func (h *handlers) settingsFlushCacheName(w http.ResponseWriter, r *http.Request
 		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
-	h.svc.FlushCacheName(name)
-	h.renderSettings(w, r, nil, "")
+	n := h.svc.FlushCacheName(name)
+	shown := strings.TrimSuffix(name, ".")
+	if n == 0 {
+		h.renderSettingsNotice(w, r, ui.ToastInfo, "No cached entries for "+shown)
+		return
+	}
+	h.renderSettingsNotice(w, r, ui.ToastSuccess, "Cleared "+cachedEntries(n)+" for "+shown)
+}
+
+// cachedEntries phrases a dropped-entry count, e.g. "1 cached entry" /
+// "42 cached entries".
+func cachedEntries(n int) string {
+	if n == 1 {
+		return "1 cached entry"
+	}
+	return strconv.Itoa(n) + " cached entries"
 }
 
 func (h *handlers) vlanAdd(w http.ResponseWriter, r *http.Request) {
@@ -639,10 +663,30 @@ func (h *handlers) vlanRemove(w http.ResponseWriter, r *http.Request) {
 // settings. editing, when non-nil, pre-fills the Add-VLAN form for an
 // update instead of an add — mirrors renderRecords's editing param.
 func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, editing *model.VLAN, formErr string) {
+	page, ok := h.settingsView(w, editing)
+	if !ok {
+		return
+	}
+	renderError(w, r, "Settings", ui.PathSettings, page, formErr)
+}
+
+// renderSettingsNotice re-renders the settings page with a non-error toast —
+// the confirmation path for admin actions (cache clears) that succeed.
+func (h *handlers) renderSettingsNotice(w http.ResponseWriter, r *http.Request, level ui.ToastLevel, msg string) {
+	page, ok := h.settingsView(w, nil)
+	if !ok {
+		return
+	}
+	renderNotice(w, r, "Settings", ui.PathSettings, page, level, msg)
+}
+
+// settingsView builds the settings page component from current on-disk
+// settings, writing a 500 and returning false if they can't be loaded.
+func (h *handlers) settingsView(w http.ResponseWriter, editing *model.VLAN) (templ.Component, bool) {
 	settings, err := h.svc.Settings()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, false
 	}
 	// Non-fatal: the detected-networks panel is a nice-to-have, not core to
 	// the settings page loading.
@@ -653,7 +697,7 @@ func (h *handlers) renderSettings(w http.ResponseWriter, r *http.Request, editin
 		Editing:            editing,
 		AdvertisedServices: mdnsadvertise.DesiredServices(settings),
 	}
-	renderError(w, r, "Settings", ui.PathSettings, ui.Settings(data), formErr)
+	return ui.Settings(data), true
 }
 
 func parseSettingsForm(r *http.Request, s *model.Settings) error {
