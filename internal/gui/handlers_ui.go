@@ -529,9 +529,9 @@ func (h *handlers) settingsFlushCacheName(w http.ResponseWriter, r *http.Request
 		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
-	name := strings.TrimSpace(r.FormValue("name"))
-	if name == "" {
-		h.renderSettings(w, r, nil, "enter a domain name to clear")
+	name, err := model.ParseDomainName(r.FormValue("name"))
+	if err != nil {
+		h.renderSettings(w, r, nil, err.Error())
 		return
 	}
 	h.svc.FlushCacheName(name)
