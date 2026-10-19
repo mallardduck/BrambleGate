@@ -17,6 +17,7 @@ const (
 	ToastError   ToastLevel = "error"
 	ToastSuccess ToastLevel = "success"
 	ToastInfo    ToastLevel = "info"
+	ToastWarning ToastLevel = "warning"
 )
 
 // ToastIcon names a toast icon. The icon components themselves are unexported
@@ -36,6 +37,7 @@ const (
 	ToastColorDanger  ToastColor = "danger"
 	ToastColorSuccess ToastColor = "success"
 	ToastColorPrimary ToastColor = "primary"
+	ToastColorWarning ToastColor = "warning"
 )
 
 // ToastOption overrides a toast's level-derived presentation.
@@ -65,6 +67,8 @@ func resolveToast(level ToastLevel, opts []ToastOption) toastConfig {
 		c = toastConfig{icon: ToastIconCheck, color: ToastColorSuccess}
 	case ToastInfo:
 		c = toastConfig{icon: ToastIconInfo, color: ToastColorPrimary}
+	case ToastWarning:
+		c = toastConfig{icon: ToastIconAlertTriangle, color: ToastColorWarning}
 	default:
 		c = toastConfig{icon: ToastIconAlertTriangle, color: ToastColorDanger}
 	}
@@ -82,6 +86,8 @@ func toastColorClasses(color ToastColor) string {
 		return "border-bramble-success text-bramble-success"
 	case ToastColorPrimary:
 		return "border-bramble-primary text-bramble-primary"
+	case ToastColorWarning:
+		return "border-bramble-warning text-bramble-warning"
 	default:
 		return "border-bramble-danger text-bramble-danger"
 	}
@@ -174,7 +180,7 @@ func Toast(level ToastLevel, message string, opts ...ToastOption) templ.Componen
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(level))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 110, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 116, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -200,7 +206,7 @@ func Toast(level ToastLevel, message string, opts ...ToastOption) templ.Componen
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(cfg.icon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 113, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 119, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -221,7 +227,7 @@ func Toast(level ToastLevel, message string, opts ...ToastOption) templ.Componen
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 116, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 122, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {

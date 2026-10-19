@@ -38,6 +38,7 @@
   --color-bramble-primary-dark:#7D5411;
   --color-bramble-danger:      #A3312A;
   --color-bramble-success:     #2E6B3F;
+  --color-bramble-warning:     #9A6700;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -53,6 +54,7 @@
     --color-bramble-primary-dark: #C28D41;
     --color-bramble-danger:       #E0645C;
     --color-bramble-success:      #6FBF86;
+    --color-bramble-warning:      #E3B341;
   }
 }
 
@@ -68,6 +70,7 @@
   --color-bramble-primary-dark: #C28D41;
   --color-bramble-danger:       #E0645C;
   --color-bramble-success:      #6FBF86;
+  --color-bramble-warning:      #E3B341;
 }
 
 body {

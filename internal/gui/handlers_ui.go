@@ -45,15 +45,23 @@ func render(w http.ResponseWriter, r *http.Request, title, active string, page t
 // of which page it happened on.
 func renderError(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, errMsg string) {
 	if errMsg != "" {
-		page = templ.Join(page, ui.Toast(ui.ToastError, errMsg))
+		renderToasts(w, r, title, active, page, ui.Toast(ui.ToastError, errMsg))
+		return
 	}
 	render(w, r, title, active, page)
+}
+
+// renderToasts is render plus any number of out-of-band toasts — for the
+// handlers that report more than one thing at once (e.g. an error and a
+// warning), each at its own level.
+func renderToasts(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, toasts ...templ.Component) {
+	render(w, r, title, active, templ.Join(append([]templ.Component{page}, toasts...)...))
 }
 
 // renderNotice is renderError's non-error counterpart: render plus an
 // out-of-band toast at the given level, for confirming what a user action did.
 func renderNotice(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, level ui.ToastLevel, msg string) {
-	render(w, r, title, active, templ.Join(page, ui.Toast(level, msg)))
+	renderToasts(w, r, title, active, page, ui.Toast(level, msg))
 }
 
 // --- Dashboard ---------------------------------------------------------
@@ -420,9 +428,10 @@ func (h *handlers) renderHosts(w http.ResponseWriter, r *http.Request, editing *
 }
 
 // renderHostsWithWarnings is renderHosts plus configgen's non-fatal render
-// warnings (e.g. a hosts entry shadowing a records.yaml name) — surfaced the
-// same way as a form error (a toast), just not blocking the save that
-// triggered it (dev-docs/static-hosts.md's "precedence consequence" note).
+// warnings (e.g. a hosts entry shadowing a records.yaml name) — each surfaced
+// as its own warning-level toast beside any form error's error toast, not
+// blocking the save that triggered it (dev-docs/static-hosts.md's "precedence
+// consequence" note).
 func (h *handlers) renderHostsWithWarnings(w http.ResponseWriter, r *http.Request, editing *model.Host, formErr string, warnings []string) {
 	hs, err := h.svc.Hosts()
 	if err != nil {
@@ -430,16 +439,14 @@ func (h *handlers) renderHostsWithWarnings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	data := ui.HostsData{Hosts: hs, Editing: editing}
-	msg := formErr
-	if len(warnings) > 0 {
-		warnMsg := "Warning: " + strings.Join(warnings, "; ")
-		if msg == "" {
-			msg = warnMsg
-		} else {
-			msg += "; " + warnMsg
-		}
+	var toasts []templ.Component
+	if formErr != "" {
+		toasts = append(toasts, ui.Toast(ui.ToastError, formErr))
 	}
-	renderError(w, r, "Hosts", ui.PathHosts, ui.Hosts(data), msg)
+	for _, warning := range warnings {
+		toasts = append(toasts, ui.Toast(ui.ToastWarning, warning))
+	}
+	renderToasts(w, r, "Hosts", ui.PathHosts, ui.Hosts(data), toasts...)
 }
 
 // renderHostsAtIdentity re-renders the form in edit mode for hostname (the

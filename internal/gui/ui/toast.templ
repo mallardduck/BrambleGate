@@ -9,6 +9,7 @@ const (
 	ToastError   ToastLevel = "error"
 	ToastSuccess ToastLevel = "success"
 	ToastInfo    ToastLevel = "info"
+	ToastWarning ToastLevel = "warning"
 )
 
 // ToastIcon names a toast icon. The icon components themselves are unexported
@@ -28,6 +29,7 @@ const (
 	ToastColorDanger  ToastColor = "danger"
 	ToastColorSuccess ToastColor = "success"
 	ToastColorPrimary ToastColor = "primary"
+	ToastColorWarning ToastColor = "warning"
 )
 
 // ToastOption overrides a toast's level-derived presentation.
@@ -57,6 +59,8 @@ func resolveToast(level ToastLevel, opts []ToastOption) toastConfig {
 		c = toastConfig{icon: ToastIconCheck, color: ToastColorSuccess}
 	case ToastInfo:
 		c = toastConfig{icon: ToastIconInfo, color: ToastColorPrimary}
+	case ToastWarning:
+		c = toastConfig{icon: ToastIconAlertTriangle, color: ToastColorWarning}
 	default:
 		c = toastConfig{icon: ToastIconAlertTriangle, color: ToastColorDanger}
 	}
@@ -74,6 +78,8 @@ func toastColorClasses(color ToastColor) string {
 		return "border-bramble-success text-bramble-success"
 	case ToastColorPrimary:
 		return "border-bramble-primary text-bramble-primary"
+	case ToastColorWarning:
+		return "border-bramble-warning text-bramble-warning"
 	default:
 		return "border-bramble-danger text-bramble-danger"
 	}
