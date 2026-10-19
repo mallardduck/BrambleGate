@@ -8,11 +8,86 @@ package ui
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-// Toast renders a single dismissible error notification as an out-of-band
-// swap: htmx inserts it into #toast-container (see layout.templ) regardless
-// of the response's primary hx-target, so any handler can flash one
-// alongside its normal fragment — see render/renderError in handlers_ui.go.
-func Toast(message string) templ.Component {
+// ToastLevel is a toast's meaning. It drives the default icon and colour and is
+// emitted as data-toast-level; WithToastIcon/WithToastColor only change how the
+// toast looks, never what it says it is.
+type ToastLevel string
+
+const (
+	ToastError   ToastLevel = "error"
+	ToastSuccess ToastLevel = "success"
+	ToastInfo    ToastLevel = "info"
+)
+
+// ToastIcon names a toast icon. The icon components themselves are unexported
+// (icons.templ), so callers in internal/gui pick one by name.
+type ToastIcon string
+
+const (
+	ToastIconAlertTriangle ToastIcon = "alert-triangle"
+	ToastIconCheck         ToastIcon = "check"
+	ToastIconInfo          ToastIcon = "info"
+)
+
+// ToastColor names one of the theme's accent tokens (static-src/input.css).
+type ToastColor string
+
+const (
+	ToastColorDanger  ToastColor = "danger"
+	ToastColorSuccess ToastColor = "success"
+	ToastColorPrimary ToastColor = "primary"
+)
+
+// ToastOption overrides a toast's level-derived presentation.
+type ToastOption func(*toastConfig)
+
+// WithToastIcon replaces the level's default icon.
+func WithToastIcon(icon ToastIcon) ToastOption {
+	return func(c *toastConfig) { c.icon = icon }
+}
+
+// WithToastColor replaces the level's default colour.
+func WithToastColor(color ToastColor) ToastOption {
+	return func(c *toastConfig) { c.color = color }
+}
+
+type toastConfig struct {
+	icon  ToastIcon
+	color ToastColor
+}
+
+// resolveToast fills a toast's icon and colour from its level, then applies any
+// overrides on top.
+func resolveToast(level ToastLevel, opts []ToastOption) toastConfig {
+	var c toastConfig
+	switch level {
+	case ToastSuccess:
+		c = toastConfig{icon: ToastIconCheck, color: ToastColorSuccess}
+	case ToastInfo:
+		c = toastConfig{icon: ToastIconInfo, color: ToastColorPrimary}
+	default:
+		c = toastConfig{icon: ToastIconAlertTriangle, color: ToastColorDanger}
+	}
+	for _, opt := range opts {
+		opt(&c)
+	}
+	return c
+}
+
+// toastColorClasses returns whole class strings, never built by concatenation:
+// Tailwind only emits classes it finds as literals in the source.
+func toastColorClasses(color ToastColor) string {
+	switch color {
+	case ToastColorSuccess:
+		return "border-bramble-success text-bramble-success"
+	case ToastColorPrimary:
+		return "border-bramble-primary text-bramble-primary"
+	default:
+		return "border-bramble-danger text-bramble-danger"
+	}
+}
+
+func toastIcon(icon ToastIcon, class string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -33,28 +108,126 @@ func Toast(message string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div hx-swap-oob=\"afterbegin:#toast-container\"><div data-toast class=\"pointer-events-auto flex items-start gap-2 rounded border border-bramble-danger bg-bramble-bg-card2 px-3 py-2 text-sm text-bramble-danger shadow-lg max-w-sm transition-opacity duration-200\">")
+		switch icon {
+		case ToastIconCheck:
+			templ_7745c5c3_Err = iconCheckCircle(class).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		case ToastIconInfo:
+			templ_7745c5c3_Err = iconInfo(class).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		default:
+			templ_7745c5c3_Err = iconAlertTriangle(class).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		return nil
+	})
+}
+
+// Toast renders a single dismissible notification as an out-of-band swap: htmx
+// inserts it into #toast-container (see layout.templ) regardless of the
+// response's primary hx-target, so any handler can flash one alongside its
+// normal fragment — see render/renderError in handlers_ui.go.
+//
+// level picks the default icon and colour; WithToastIcon and WithToastColor
+// override either independently.
+func Toast(level ToastLevel, message string, opts ...ToastOption) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var2 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var2 == nil {
+			templ_7745c5c3_Var2 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		cfg := resolveToast(level, opts)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div hx-swap-oob=\"afterbegin:#toast-container\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = iconAlertTriangle("w-4 h-4 shrink-0 mt-0.5").Render(ctx, templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var3 = []any{"pointer-events-auto flex items-start gap-2 rounded border bg-bramble-bg-card2 px-3 py-2 text-sm shadow-lg max-w-sm transition-opacity duration-200", toastColorClasses(cfg.color)}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var3...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<span class=\"flex-1 break-words\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div data-toast data-toast-level=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(message)
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(level))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 19, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 110, Col: 35}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span> <button type=\"button\" data-toast-close aria-label=\"Dismiss\" class=\"shrink-0 text-bramble-muted hover:text-bramble-text\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var3).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 1, Col: 0}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><span data-toast-icon=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(cfg.icon))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 113, Col: 43}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"shrink-0 mt-0.5\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = toastIcon(cfg.icon, "w-4 h-4").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span> <span class=\"flex-1 break-words\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(message)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `toast.templ`, Line: 116, Col: 45}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</span> <button type=\"button\" data-toast-close aria-label=\"Dismiss\" class=\"shrink-0 text-bramble-muted hover:text-bramble-text\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -62,7 +235,7 @@ func Toast(message string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</button></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

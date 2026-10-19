@@ -45,7 +45,7 @@ func render(w http.ResponseWriter, r *http.Request, title, active string, page t
 // of which page it happened on.
 func renderError(w http.ResponseWriter, r *http.Request, title, active string, page templ.Component, errMsg string) {
 	if errMsg != "" {
-		page = templ.Join(page, ui.Toast(errMsg))
+		page = templ.Join(page, ui.Toast(ui.ToastError, errMsg))
 	}
 	render(w, r, title, active, page)
 }
