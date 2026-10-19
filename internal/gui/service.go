@@ -521,8 +521,9 @@ func (s *Service) RestartEngine() error {
 // not touch persisted state or reload the engine.
 func (s *Service) FlushCache() int { return flushCache() }
 
-// FlushCacheName drops every cached entry for exactly name (all record types;
-// subdomains are separate names) and returns how many were dropped.
+// FlushCacheName drops every cached entry for name (all record types) plus
+// aliases whose CNAME chain includes it; subdomains are separate names. It
+// returns how many were dropped.
 func (s *Service) FlushCacheName(name string) int { return flushCacheName(name) }
 
 // flushCache/flushCacheName are the process-wide vlancache flushes behind

@@ -173,13 +173,17 @@ func (s *store) clear() int {
 }
 
 // clearName drops every entry (all qtypes, VLAN buckets, scopes, DO/CD
-// variants) whose question name is exactly qname, which must already be
-// canonical. Subdomains are not matched. Returns how many were removed.
+// variants) that depends on qname, which must already be canonical: its
+// question name, or any name in its cached CNAME/DNAME chain (see
+// entry.dependsOn). An alias is therefore cleared when its target is. This
+// can over-flush (a direct CNAME query for the alias also matches), which
+// costs one extra miss. Subdomains are not matched. Returns how many were
+// removed.
 func (s *store) clearName(qname string) int {
 	s.invalidate()
 	n := 0
 	s.direct.Walk(func(items map[uint64]*entry, k uint64) bool {
-		if e := items[k]; e != nil && e.qname == qname {
+		if e := items[k]; e != nil && e.dependsOn(qname) {
 			delete(items, k)
 			n++
 		}
@@ -189,7 +193,7 @@ func (s *store) clearName(qname string) int {
 	for k, entries := range s.scoped {
 		kept := entries[:0]
 		for _, se := range entries {
-			if se.e.qname == qname {
+			if se.e.dependsOn(qname) {
 				n++
 				continue
 			}

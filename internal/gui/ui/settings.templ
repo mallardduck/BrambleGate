@@ -479,7 +479,7 @@ templ Settings(data SettingsData) {
 				<button type="submit" class="px-3 py-1.5 rounded border border-bramble-border text-sm hover:bg-bramble-bg-card2">
 					Clear domain
 				</button>
-				@helpTooltip("Drops cached answers of every record type for exactly this name. Subdomains are separate names and are not cleared.")
+				@helpTooltip("Drops cached answers of every record type for this name, plus aliases (CNAMEs) that point through it. Subdomains are separate names and are not cleared. Only clears BrambleDNS; an upstream that still holds the old record may return it again.")
 			</form>
 		</div>
 	</div>

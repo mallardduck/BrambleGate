@@ -1093,7 +1093,7 @@ func Settings(data SettingsData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = helpTooltip("Drops cached answers of every record type for exactly this name. Subdomains are separate names and are not cleared.").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = helpTooltip("Drops cached answers of every record type for this name, plus aliases (CNAMEs) that point through it. Subdomains are separate names and are not cleared. Only clears BrambleDNS; an upstream that still holds the old record may return it again.").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

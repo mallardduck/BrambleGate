@@ -1,6 +1,7 @@
 package vlancache
 
 import (
+	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -49,6 +50,33 @@ func stripOPT(rrs []dns.RR) []dns.RR {
 		out = append(out, rr)
 	}
 	return out
+}
+
+// dependsOn reports whether name (canonical) is the question name or any name
+// in the cached chain: answer owners plus CNAME/DNAME targets. Targets are
+// checked separately because a chain ending in NODATA/NXDOMAIN has its last
+// name only as a target. Matching is case-insensitive since RR names come
+// from the upstream as-is; subdomains do not match.
+func (e *entry) dependsOn(name string) bool {
+	if e.qname == name {
+		return true
+	}
+	for _, rr := range e.answer {
+		if strings.EqualFold(rr.Header().Name, name) {
+			return true
+		}
+		switch r := rr.(type) {
+		case *dns.CNAME:
+			if strings.EqualFold(r.Target, name) {
+				return true
+			}
+		case *dns.DNAME:
+			if strings.EqualFold(r.Target, name) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // remaining is the entry's remaining lifetime as of now; <= 0 means expired.
