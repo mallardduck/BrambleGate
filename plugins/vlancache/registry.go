@@ -29,13 +29,25 @@ func unregister(vc *VlanCache) {
 	liveMu.Unlock()
 }
 
+// snapshot returns the currently registered instances. Callers walk the
+// result without liveMu held, so a slow clear never stalls register or
+// unregister (e.g. an engine reload). An instance that unregisters mid-walk
+// is merely cleared needlessly; one that registers mid-walk starts empty.
+func snapshot() []*VlanCache {
+	liveMu.Lock()
+	defer liveMu.Unlock()
+	vcs := make([]*VlanCache, 0, len(live))
+	for vc := range live {
+		vcs = append(vcs, vc)
+	}
+	return vcs
+}
+
 // Flush empties the cache of every running vlancache instance and returns
 // the total number of entries dropped.
 func Flush() int {
-	liveMu.Lock()
-	defer liveMu.Unlock()
 	n := 0
-	for vc := range live {
+	for _, vc := range snapshot() {
 		n += vc.store.clear()
 	}
 	return n
@@ -46,10 +58,8 @@ func Flush() int {
 // not affected. Returns the number of entries dropped.
 func FlushName(name string) int {
 	name = dns.CanonicalName(strings.TrimSpace(name))
-	liveMu.Lock()
-	defer liveMu.Unlock()
 	n := 0
-	for vc := range live {
+	for _, vc := range snapshot() {
 		n += vc.store.clearName(name)
 	}
 	return n
