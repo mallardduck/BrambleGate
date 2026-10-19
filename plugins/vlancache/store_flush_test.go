@@ -3,6 +3,7 @@ package vlancache
 import (
 	"net"
 	"testing"
+	"time"
 )
 
 func TestFlushClearsBothTiersOfLiveInstances(t *testing.T) {
@@ -49,4 +50,42 @@ func TestFlushNameMatchesExactNameOnly(t *testing.T) {
 	if len(vc.store.scoped) != 0 {
 		t.Fatal("scoped entry survived")
 	}
+}
+
+// A flush walking a slow store must not block register/unregister: a reload
+// swapping instances would otherwise stall behind the walk.
+func TestFlushDoesNotBlockRegistryDuringWalk(t *testing.T) {
+	slow := &VlanCache{store: newStore(100)}
+	register(slow)
+	defer unregister(slow)
+
+	// Holding the scoped-tier lock makes slow.store.clear() park mid-walk.
+	slow.store.mu.Lock()
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			slow.store.mu.Unlock()
+		}
+	}
+	defer release()
+
+	flushed := make(chan struct{})
+	go func() { Flush(); close(flushed) }()
+	time.Sleep(50 * time.Millisecond) // let Flush reach the blocked clear
+
+	other := &VlanCache{store: newStore(100)}
+	registered := make(chan struct{})
+	go func() { register(other); close(registered) }()
+	defer unregister(other)
+
+	select {
+	case <-registered:
+	case <-time.After(time.Second):
+		release() // let Flush finish so the deferred unregisters can't deadlock
+		t.Fatal("register blocked behind an in-progress Flush walk")
+	}
+
+	release()
+	<-flushed
 }
