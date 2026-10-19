@@ -31,6 +31,15 @@ type store struct {
 
 	mu     sync.RWMutex
 	scoped map[uint64][]*scopedEntry
+
+	// epoch counts flushes. A fetch records it before asking the upstream and
+	// stores its answer through ifCurrent, so an answer that was already in
+	// flight when a flush landed is dropped instead of re-populating the
+	// cache with the data the flush meant to evict. epochMu makes the
+	// check-and-store atomic against a flush: a store either completes
+	// before the flush's walk (and is walked) or sees the new epoch and skips.
+	epochMu sync.RWMutex
+	epoch   uint64
 }
 
 func newStore(capacity int) *store {
@@ -61,6 +70,33 @@ func (s *store) getDirect(key uint64, now time.Time, staleTTL time.Duration) (e 
 
 func (s *store) setDirect(key uint64, e *entry) {
 	s.direct.Add(key, e)
+}
+
+// generation returns the current flush epoch; see store.epoch.
+func (s *store) generation() uint64 {
+	s.epochMu.RLock()
+	defer s.epochMu.RUnlock()
+	return s.epoch
+}
+
+// invalidate starts a new flush epoch. It must run before the flush walks
+// the tiers, so in-flight fetches that finish afterwards skip their store.
+func (s *store) invalidate() {
+	s.epochMu.Lock()
+	s.epoch++
+	s.epochMu.Unlock()
+}
+
+// ifCurrent runs fn (a set*) only if no flush has happened since gen was read
+// from generation, and reports whether it ran.
+func (s *store) ifCurrent(gen uint64, fn func()) bool {
+	s.epochMu.RLock()
+	defer s.epochMu.RUnlock()
+	if s.epoch != gen {
+		return false
+	}
+	fn()
+	return true
 }
 
 // getScoped returns the most specific (longest-prefix) scoped entry under
@@ -119,9 +155,10 @@ func (s *store) setScoped(key uint64, prefix *net.IPNet, e *entry) {
 }
 
 // clear drops every entry from both tiers and returns how many were removed.
-// An in-flight background refresh may repopulate a key afterwards; that's
-// fine, the refreshed answer is fresh by definition.
+// Fetches already in flight are invalidated (see store.epoch) so they can't
+// re-store a pre-flush answer; fetches started afterwards populate normally.
 func (s *store) clear() int {
+	s.invalidate()
 	n := 0
 	s.direct.Walk(func(items map[uint64]*entry, k uint64) bool {
 		delete(items, k)
@@ -141,6 +178,7 @@ func (s *store) clear() int {
 // variants) whose question name is exactly qname, which must already be
 // canonical. Subdomains are not matched. Returns how many were removed.
 func (s *store) clearName(qname string) int {
+	s.invalidate()
 	n := 0
 	s.direct.Walk(func(items map[uint64]*entry, k uint64) bool {
 		if e := items[k]; e != nil && e.qname == qname {
