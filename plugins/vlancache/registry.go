@@ -53,9 +53,10 @@ func Flush() int {
 	return n
 }
 
-// FlushName drops every cached entry for exactly name across all running
-// instances, for every record type. Subdomains are separate names and are
-// not affected. Returns the number of entries dropped.
+// FlushName drops every cached entry that depends on name across all running
+// instances, for every record type: entries for name itself plus aliases whose
+// cached CNAME/DNAME chain passes through it. Subdomains are separate names
+// and are not affected. Returns the number of entries dropped.
 func FlushName(name string) int {
 	name = dns.CanonicalName(strings.TrimSpace(name))
 	n := 0
