@@ -2,8 +2,11 @@ package vlancache
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 func TestFlushClearsBothTiersOfLiveInstances(t *testing.T) {
@@ -88,4 +91,48 @@ func TestFlushDoesNotBlockRegistryDuringWalk(t *testing.T) {
 
 	release()
 	<-flushed
+}
+
+// A fetch already in flight when a flush lands holds a pre-flush answer. The
+// client that asked still gets it, but it must not be stored: the flush was
+// meant to evict exactly that data.
+func TestFlushDiscardsInFlightFetchResult(t *testing.T) {
+	for name, flush := range map[string]func() int{
+		"Flush":     Flush,
+		"FlushName": func() int { return FlushName("slow.example") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			started := make(chan struct{})
+			proceed := make(chan struct{})
+			var once sync.Once
+			next := &stubNext{fn: func(r *dns.Msg) *dns.Msg {
+				once.Do(func() {
+					close(started)
+					<-proceed
+				})
+				m := new(dns.Msg)
+				m.SetReply(r)
+				m.Answer = []dns.RR{aRecord("slow.example.", "300")}
+				return m
+			}}
+			vc := build(t, next)
+			register(vc)
+			defer unregister(vc)
+
+			done := make(chan *dns.Msg)
+			go func() { done <- queryFrom(vc, "192.168.10.5", "slow.example", dns.TypeA) }()
+			<-started
+
+			flush()
+			close(proceed)
+			if got := <-done; got == nil || len(got.Answer) != 1 {
+				t.Fatalf("in-flight client must still receive its answer, got %v", got)
+			}
+
+			queryFrom(vc, "192.168.10.5", "slow.example", dns.TypeA)
+			if next.calls != 2 {
+				t.Fatalf("pre-flush answer was cached after the flush: want 2 upstream calls, got %d", next.calls)
+			}
+		})
+	}
 }
