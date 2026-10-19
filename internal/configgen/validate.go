@@ -97,6 +97,9 @@ func validateHosts(hs model.HostSet) error {
 			if strings.TrimSpace(name) == "" {
 				return fmt.Errorf("hosts entry for %q has an empty alias", h.IP)
 			}
+			if _, err := model.ParseDomainName(name); err != nil {
+				return fmt.Errorf("hosts entry for %q: name %q: %w", h.IP, name, err)
+			}
 			n := model.NormalizedHostName(name)
 			if seenNames[n] {
 				return fmt.Errorf("duplicate hosts name %q (across hostname/aliases, project-wide)", name)
@@ -155,6 +158,9 @@ func validateSuffix(suffix string) error {
 	if suffix == "" {
 		return nil // defaults to OwnedZone
 	}
+	if _, err := model.ParseDomainName(suffix); err != nil {
+		return fmt.Errorf("%q: %w", suffix, err)
+	}
 	s := strings.TrimSuffix(strings.ToLower(suffix), ".")
 	if s != OwnedZone && !strings.HasSuffix(s, "."+OwnedZone) {
 		return fmt.Errorf("%q must be %q or a subdomain of it", suffix, OwnedZone)
@@ -171,6 +177,9 @@ func validateACME(a model.ACME) error {
 	}
 	if strings.TrimSpace(a.Domain) == "" {
 		return errors.New("acme.domain is required when acme.enabled is true")
+	}
+	if _, err := model.ParseDomainName(a.Domain); err != nil {
+		return fmt.Errorf("acme.domain %q: %w", a.Domain, err)
 	}
 	if strings.TrimSpace(a.Email) == "" {
 		return errors.New("acme.email is required when acme.enabled is true")
@@ -307,6 +316,9 @@ func validateRecords(rs model.RecordSet, vlans []model.VLAN, zones []string) err
 		name := r.NormalizedName()
 		if strings.TrimSpace(r.Name) == "" {
 			return errors.New("a record is missing a name")
+		}
+		if _, err := model.ParseDomainName(r.Name); err != nil {
+			return fmt.Errorf("record %q: %w", r.Name, err)
 		}
 		if !inAnyZone(name, zones) {
 			return fmt.Errorf("record %q is outside the owned zones %v", r.Name, zones)
@@ -447,6 +459,9 @@ func validateValue(t model.RecordType, value string) error {
 	case model.TypeCNAME:
 		if strings.TrimSpace(value) == "" {
 			return errors.New("CNAME target is empty")
+		}
+		if _, err := model.ParseDomainName(value); err != nil {
+			return fmt.Errorf("CNAME target %q: %w", value, err)
 		}
 	case model.TypeMDNS:
 		// mdns records carry no static value (it resolves live from the discovery
