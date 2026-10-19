@@ -136,3 +136,143 @@ func TestFlushDiscardsInFlightFetchResult(t *testing.T) {
 		})
 	}
 }
+
+func cnameRR(owner, target string) dns.RR {
+	return &dns.CNAME{Hdr: dns.RR_Header{Name: owner, Rrtype: dns.TypeCNAME, Class: dns.ClassINET}, Target: target}
+}
+
+// FlushName must also drop entries whose cached CNAME chain passes through
+// the flushed name: the alias entry is keyed only by its own question name,
+// so an exact-qname match leaves it serving the old target until TTL.
+func TestFlushNameClearsAliasesWhoseChainIncludesName(t *testing.T) {
+	_, scope, _ := net.ParseCIDR("10.0.0.0/24")
+
+	tests := []struct {
+		name  string
+		flush string
+		want  int
+		// entry key -> whether it should be gone after the flush
+		gone map[uint64]bool
+	}{
+		{
+			name:  "alias cleared when its CNAME target is flushed",
+			flush: "cdn.example.net.",
+			want:  2,
+			gone:  map[uint64]bool{1: true, 2: false, 3: true},
+		},
+		{
+			name:  "two-hop chain cleared by the middle name",
+			flush: "b.example.net.",
+			want:  1,
+			gone:  map[uint64]bool{1: false, 2: true, 3: false},
+		},
+		{
+			name:  "two-hop chain cleared by the last name",
+			flush: "c.example.net.",
+			want:  1,
+			gone:  map[uint64]bool{1: false, 2: true, 3: false},
+		},
+		{
+			name:  "NODATA chain end appears only as a CNAME target",
+			flush: "dead.example.net.",
+			want:  1,
+			gone:  map[uint64]bool{1: false, 2: false, 3: false, 4: true},
+		},
+		{
+			name:  "target match is case-insensitive",
+			flush: "CDN.Example.NET.",
+			want:  2,
+			gone:  map[uint64]bool{1: true, 2: false, 3: true},
+		},
+		{
+			name:  "subdomain of a chain name is not matched",
+			flush: "sub.cdn.example.net.",
+			want:  0,
+			gone:  map[uint64]bool{1: false, 2: false, 3: false, 4: false},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			vc := &VlanCache{store: newStore(100)}
+			register(vc)
+			defer unregister(vc)
+
+			// 1: www -> cdn (direct tier)
+			vc.store.setDirect(1, &entry{qname: "www.example.com.", answer: []dns.RR{
+				cnameRR("www.example.com.", "cdn.example.net."),
+				aRecord("cdn.example.net.", "60"),
+			}})
+			// 2: a -> b -> c (direct tier)
+			vc.store.setDirect(2, &entry{qname: "a.example.com.", answer: []dns.RR{
+				cnameRR("a.example.com.", "b.example.net."),
+				cnameRR("b.example.net.", "c.example.net."),
+				aRecord("c.example.net.", "60"),
+			}})
+			// 3: www2 -> cdn (scoped tier)
+			vc.store.setScoped(3, scope, &entry{qname: "www2.example.com.", answer: []dns.RR{
+				cnameRR("www2.example.com.", "cdn.example.net."),
+				aRecord("cdn.example.net.", "60"),
+			}})
+			// 4: gone -> dead, chain ends in NODATA so dead.example.net. is
+			// never an answer owner.
+			vc.store.setDirect(4, &entry{qname: "gone.example.com.", answer: []dns.RR{
+				cnameRR("gone.example.com.", "dead.example.net."),
+			}})
+
+			if n := FlushName(tc.flush); n != tc.want {
+				t.Fatalf("FlushName(%q) = %d, want %d", tc.flush, n, tc.want)
+			}
+			for k, wantGone := range tc.gone {
+				present := hasEntry(vc.store, k)
+				if wantGone && present {
+					t.Errorf("entry %d survived FlushName(%q)", k, tc.flush)
+				}
+				if !wantGone && !present {
+					t.Errorf("entry %d wrongly removed by FlushName(%q)", k, tc.flush)
+				}
+			}
+		})
+	}
+}
+
+func hasEntry(s *store, key uint64) bool {
+	if _, ok := s.direct.Get(key); ok {
+		return true
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.scoped[key]) > 0
+}
+
+// Black-box: after flushing the CNAME target, the next query for the alias
+// must go back upstream instead of serving the cached chain.
+func TestFlushNameRefetchesAliasThroughServeDNS(t *testing.T) {
+	next := &stubNext{fn: func(r *dns.Msg) *dns.Msg {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Answer = []dns.RR{
+			cnameRR("www.example.", "cdn.example."),
+			aRecord("cdn.example.", "300"),
+		}
+		return m
+	}}
+	vc := build(t, next)
+	register(vc)
+	defer unregister(vc)
+
+	queryFrom(vc, "192.168.10.5", "www.example", dns.TypeA)
+	queryFrom(vc, "192.168.10.5", "www.example", dns.TypeA)
+	if next.calls != 1 {
+		t.Fatalf("second query should be a cache hit: want 1 upstream call, got %d", next.calls)
+	}
+
+	if n := FlushName("cdn.example"); n != 1 {
+		t.Fatalf("FlushName(cdn.example) = %d, want 1 (the www alias)", n)
+	}
+
+	queryFrom(vc, "192.168.10.5", "www.example", dns.TypeA)
+	if next.calls != 2 {
+		t.Fatalf("alias still served from cache after its target was flushed: want 2 upstream calls, got %d", next.calls)
+	}
+}
