@@ -88,15 +88,13 @@ func (s *store) invalidate() {
 }
 
 // ifCurrent runs fn (a set*) only if no flush has happened since gen was read
-// from generation, and reports whether it ran.
-func (s *store) ifCurrent(gen uint64, fn func()) bool {
+// from generation.
+func (s *store) ifCurrent(gen uint64, fn func()) {
 	s.epochMu.RLock()
 	defer s.epochMu.RUnlock()
-	if s.epoch != gen {
-		return false
+	if s.epoch == gen {
+		fn()
 	}
-	fn()
-	return true
 }
 
 // getScoped returns the most specific (longest-prefix) scoped entry under
