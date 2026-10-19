@@ -1012,7 +1012,87 @@ func TestSettingsFlushCacheNameAcceptsValidInput(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if strings.Contains(rec.Body.String(), "data-toast") {
+	if strings.Contains(rec.Body.String(), `data-toast-level="error"`) {
 		t.Fatalf("did not expect an error toast for a valid name, got: %s", rec.Body.String())
+	}
+}
+
+// stubFlush swaps the cache-flush seams (service.go) for the test's duration so
+// handler tests can exercise non-zero counts without a running vlancache.
+func stubFlush(t *testing.T, all func() int, byName func(string) int) {
+	t.Helper()
+	prevAll, prevName := flushCache, flushCacheName
+	flushCache, flushCacheName = all, byName
+	t.Cleanup(func() { flushCache, flushCacheName = prevAll, prevName })
+}
+
+func TestSettingsFlushCacheReportsResult(t *testing.T) {
+	tests := []struct {
+		name      string
+		dropped   int
+		wantLevel string
+		wantMsg   string
+	}{
+		{"many", 42, "success", "Cleared 42 cached entries"},
+		{"one", 1, "success", "Cleared 1 cached entry"},
+		{"none", 0, "info", "DNS cache was already empty"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stubFlush(t, func() int { return tc.dropped }, nil)
+			rec := httptest.NewRecorder()
+			newTestServer(t).ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings/flush-cache", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `data-toast-level="`+tc.wantLevel+`"`) || !strings.Contains(body, tc.wantMsg) {
+				t.Fatalf("want a %s toast %q, got: %s", tc.wantLevel, tc.wantMsg, body)
+			}
+			// The Settings page itself must still be rendered alongside the toast.
+			if !strings.Contains(body, "Admin actions") {
+				t.Fatalf("expected the Settings page to re-render, got: %s", body)
+			}
+		})
+	}
+}
+
+func TestSettingsFlushCacheNameReportsResult(t *testing.T) {
+	tests := []struct {
+		name      string
+		dropped   int
+		wantLevel string
+		wantMsg   string
+	}{
+		{"many", 3, "success", "Cleared 3 cached entries for host.example.com"},
+		{"one", 1, "success", "Cleared 1 cached entry for host.example.com"},
+		{"none", 0, "info", "No cached entries for host.example.com"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			stubFlush(t, nil, func(name string) int { got = name; return tc.dropped })
+			rec := httptest.NewRecorder()
+			newTestServer(t).ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings/flush-cache/name", url.Values{"name": {" Host.Example.com "}}))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if got != "host.example.com." {
+				t.Fatalf("flush received %q, want the canonical name host.example.com.", got)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `data-toast-level="`+tc.wantLevel+`"`) || !strings.Contains(body, tc.wantMsg) {
+				t.Fatalf("want a %s toast %q, got: %s", tc.wantLevel, tc.wantMsg, body)
+			}
+		})
+	}
+}
+
+func TestSettingsFlushCacheNameInvalidInputDoesNotFlush(t *testing.T) {
+	stubFlush(t, nil, func(string) int { t.Fatal("flush must not run for invalid input"); return 0 })
+	rec := httptest.NewRecorder()
+	newTestServer(t).ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings/flush-cache/name", url.Values{"name": {"foo.com:53"}}))
+	if !strings.Contains(rec.Body.String(), `data-toast-level="error"`) {
+		t.Fatalf("expected an error toast, got: %s", rec.Body.String())
 	}
 }
