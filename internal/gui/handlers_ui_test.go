@@ -988,3 +988,31 @@ func TestStaticAssetsServed(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsFlushCacheNameRejectsInvalidInput(t *testing.T) {
+	h := newTestServer(t)
+	for _, in := range []string{"https://foo.com/", "foo.com:53", "192.168.1.10", "foo bar.com", "foo..com"} {
+		t.Run(in, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings/flush-cache/name", url.Values{"name": {in}}))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "data-toast") {
+				t.Fatalf("expected an error toast for %q, got: %s", in, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestSettingsFlushCacheNameAcceptsValidInput(t *testing.T) {
+	h := newTestServer(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, hxRequest(t, http.MethodPost, "/settings/flush-cache/name", url.Values{"name": {"Host.Example.com"}}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "data-toast") {
+		t.Fatalf("did not expect an error toast for a valid name, got: %s", rec.Body.String())
+	}
+}
