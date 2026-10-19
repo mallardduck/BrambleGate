@@ -17,6 +17,7 @@ func TestToastLevels(t *testing.T) {
 		{"error", ui.ToastError, []string{`data-toast-level="error"`, "border-bramble-danger", "text-bramble-danger"}},
 		{"success", ui.ToastSuccess, []string{`data-toast-level="success"`, "border-bramble-success", "text-bramble-success"}},
 		{"info", ui.ToastInfo, []string{`data-toast-level="info"`, "border-bramble-primary", "text-bramble-primary"}},
+		{"warning", ui.ToastWarning, []string{`data-toast-level="warning"`, "border-bramble-warning", "text-bramble-warning"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -51,6 +52,7 @@ func TestToastIcon(t *testing.T) {
 		{"error default", ui.ToastError, nil, "alert-triangle"},
 		{"success default", ui.ToastSuccess, nil, "check"},
 		{"info default", ui.ToastInfo, nil, "info"},
+		{"warning default", ui.ToastWarning, nil, "alert-triangle"},
 		{"override on success", ui.ToastSuccess, []ui.ToastOption{ui.WithToastIcon(ui.ToastIconAlertTriangle)}, "alert-triangle"},
 		{"override on error", ui.ToastError, []ui.ToastOption{ui.WithToastIcon(ui.ToastIconInfo)}, "info"},
 	}
@@ -107,6 +109,13 @@ func TestToastColorOverride(t *testing.T) {
 			wantClass: []string{"border-bramble-success", "text-bramble-success"},
 			notClass:  []string{"bramble-danger"},
 			wantIcon:  "alert-triangle",
+		},
+		{
+			name: "info recoloured as warning keeps the info icon", level: ui.ToastInfo,
+			opts:      []ui.ToastOption{ui.WithToastColor(ui.ToastColorWarning)},
+			wantClass: []string{"border-bramble-warning", "text-bramble-warning"},
+			notClass:  []string{"bramble-primary", "bramble-danger"},
+			wantIcon:  "info",
 		},
 		{
 			name: "colour and icon override together", level: ui.ToastSuccess,

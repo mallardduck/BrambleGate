@@ -249,8 +249,17 @@ func TestHostsCreateShadowingRecordShowsWarning(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "shadows a records.yaml entry") {
-		t.Fatalf("expected shadow warning toast, got: %s", rec.Body.String())
+	body := rec.Body.String()
+	if !strings.Contains(body, "shadows a records.yaml entry") {
+		t.Fatalf("expected shadow warning toast, got: %s", body)
+	}
+	// A shadowing host is a warning, not a failure: it must carry the warning
+	// level (not error styling) and not smuggle its severity in as text.
+	if !strings.Contains(body, `data-toast-level="warning"`) {
+		t.Fatalf("expected a warning-level toast, got: %s", body)
+	}
+	if strings.Contains(body, `data-toast-level="error"`) || strings.Contains(body, "Warning: ") {
+		t.Fatalf("shadow warning must not render as an error / carry a text prefix, got: %s", body)
 	}
 	// The entry must still have been saved despite the warning.
 	hs, err := st.LoadHosts()
